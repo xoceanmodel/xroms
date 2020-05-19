@@ -42,12 +42,14 @@ def roms_dataset(ds, Vtransform=None):
         Zo_w = (ds.hc * ds.s_w + ds.Cs_w * ds.h) / (ds.hc + ds.h)
         z_w = ds.zeta + (ds.zeta + ds.h) * Zo_w
 
-    ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho')
+    ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho',
+                                     transpose_coords=False)
     ds.coords['z_w_u'] = grid.interp(ds.z_w, 'X')
     ds.coords['z_w_v'] = grid.interp(ds.z_w, 'Y')
     ds.coords['z_w_psi'] = grid.interp(ds.z_w_u, 'Y')
 
-    ds.coords['z_rho'] = z_rho.transpose('ocean_time', 's_rho', 'eta_rho', 'xi_rho')
+    ds.coords['z_rho'] = z_rho.transpose('ocean_time', 's_rho', 'eta_rho', 'xi_rho',
+                                     transpose_coords=False)
     ds.coords['z_rho_u'] = grid.interp(ds.z_rho, 'X')
     ds.coords['z_rho_v'] = grid.interp(ds.z_rho, 'Y')
     ds.coords['z_rho_psi'] = grid.interp(ds.z_rho_u, 'Y')
@@ -94,27 +96,17 @@ def open_roms_netcdf_dataset(files, chunks=None):
     if chunks is None:
         chunks = {'ocean_time':1}   # A basic chunking, ok, but maybe not the best
 
-    if isinstance(str, files):   # a string for just a single file
-        files = [files,]         # force to be a sequence for mfdataset
-
-    files.sort()
-
-    ds = xr.open_mfdataset(files, compat='override', combine='by_coords',
+    return xr.open_mfdataset(files, compat='override', combine='by_coords',
                                  data_vars='minimal', coords='minimal', chunks=chunks)
 
 def open_roms_zarr_dataset(files, chunks=None):
     if chunks is None:
         chunks = {'ocean_time':1}   # A basic chunking, ok, but maybe not the best
 
-    if isinstance(str, files):   # a string for just a single file
-        files = [files,]         # force to be a sequence for mfdataset
-
-    files.sort()
-
     opts = {'consolidated': True,
             'chunks': chunks
         }
 
-    ds = xr.concat([xr.open_zarr(file, **opts).drop(['dstart']) for file in files],
+    return xr.concat([xr.open_zarr(file, **opts).drop(['dstart']) for file in files],
                    dim='ocean_time', data_vars='minimal', coords='minimal')
 
