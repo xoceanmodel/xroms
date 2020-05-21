@@ -1,6 +1,6 @@
 import xarray as xr
 import xgcm
-
+from .utilities import to_rho, to_psi
 
 def roms_dataset(ds, Vtransform=None):
     '''Return a dataset that is aware of ROMS coordinatates and an associated xgcm grid object with metrics
@@ -110,3 +110,25 @@ def open_roms_zarr_dataset(files, chunks=None):
     return xr.concat([xr.open_zarr(file, **opts).drop(['dstart']) for file in files],
                    dim='ocean_time', data_vars='minimal', coords='minimal')
 
+
+def hgrad(q, grid, boundary='extend', to=None):
+    cff1 = grid.interp(grid.diff(q, 'X', boundary=boundary), 'Z', boundary=boundary)
+    cff2 = grid.interp(grid.diff(q, 'Z', boundary=boundary), 'X', boundary=boundary)
+    cff3 = grid.interp(grid.diff(ds.z_rho, 'Z', boundary=boundary), 'X', boundary=boundary)
+    cff4 = grid.interp(grid.diff(ds.z_rho, 'X', boundary=boundary), 'Z', boundary=boundary)
+
+    dqdxi = (cff1*cff3 - cff2*cff4) * ds.pm_u / ds.dz_w_u
+
+    cff1 = grid.interp(grid.diff(q, 'Y', boundary=boundary), 'Z', boundary=boundary)
+    cff2 = grid.interp(grid.diff(q, 'Z', boundary=boundary), 'Y', boundary=boundary)
+    cff3 = grid.interp(grid.diff(ds.z_rho, 'Z', boundary=boundary), 'Y', boundary=boundary)
+    cff4 = grid.interp(grid.diff(ds.z_rho, 'Y', boundary=boundary), 'Z', boundary=boundary)
+
+    dqdeta = (cff1*cff3 - cff2*cff4) * ds.pn_v / ds.dz_w_v
+
+    if to == 'rho':
+        return to_rho(dqdxi, grid), to_rho(dqdeta, grid)
+    if to == 'psi':
+        return to_psi(dqdxi), to_psi(dqdeta)
+    else:
+        return dqdxi, dqdeta
