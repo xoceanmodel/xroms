@@ -93,6 +93,19 @@ def roms_dataset(ds, Vtransform=None):
     return ds, grid
 
 def open_roms_netcdf_dataset(files, chunks=None):
+    '''Return an xarray.DataSet based on a list of netCDF files
+
+    Inputs:
+    files       A list of netCDF files
+
+    Output:
+    ds          An xarray.Dataset
+
+    Options:
+    chunks      The specified chunks for the DataSet.
+                Default: chunks = {'ocean_time':1}
+    '''
+
     if chunks is None:
         chunks = {'ocean_time':1}   # A basic chunking, ok, but maybe not the best
 
@@ -100,6 +113,18 @@ def open_roms_netcdf_dataset(files, chunks=None):
                                  data_vars='minimal', coords='minimal', chunks=chunks)
 
 def open_roms_zarr_dataset(files, chunks=None):
+    '''Return an xarray.DataSet based on a list of zarr files
+
+    Inputs:
+    files       A list of zarr files
+
+    Output:
+    ds          An xarray.Dataset
+
+    Options:
+    chunks      The specified chunks for the DataSet.
+                Default: chunks = {'ocean_time':1}
+    '''
     if chunks is None:
         chunks = {'ocean_time':1}   # A basic chunking, ok, but maybe not the best
 
@@ -112,19 +137,46 @@ def open_roms_zarr_dataset(files, chunks=None):
 
 
 def hgrad(q, grid, boundary='extend', to=None):
-    cff1 = grid.interp(grid.diff(q, 'X', boundary=boundary), 'Z', boundary=boundary)
-    cff2 = grid.interp(grid.diff(q, 'Z', boundary=boundary), 'X', boundary=boundary)
-    cff3 = grid.interp(grid.diff(ds.z_rho, 'Z', boundary=boundary), 'X', boundary=boundary)
-    cff4 = grid.interp(grid.diff(ds.z_rho, 'X', boundary=boundary), 'Z', boundary=boundary)
+    '''Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions
 
-    dqdxi = (cff1*cff3 - cff2*cff4) * ds.pm_u / ds.dz_w_u
+    Inputs:
+    ------
 
-    cff1 = grid.interp(grid.diff(q, 'Y', boundary=boundary), 'Z', boundary=boundary)
-    cff2 = grid.interp(grid.diff(q, 'Z', boundary=boundary), 'Y', boundary=boundary)
-    cff3 = grid.interp(grid.diff(ds.z_rho, 'Z', boundary=boundary), 'Y', boundary=boundary)
-    cff4 = grid.interp(grid.diff(ds.z_rho, 'Y', boundary=boundary), 'Z', boundary=boundary)
+    q               DataArray, Property to take gradients of
 
-    dqdeta = (cff1*cff3 - cff2*cff4) * ds.pn_v / ds.dz_w_v
+    grid            xgcm object, Grid object associated with DataArray q
+
+    Outputs:
+    -------
+
+    dqdxi, dqdeta   Gradients of q in the xi- and eta-directions
+
+
+    Options:
+    -------
+
+    to              By default, gradient values are located at the midpoints between q points
+                    in each direction of the gradient. Optionally, these can be interpolated
+                    to either rho- or psi-points passing `rho` or `psi`
+
+    boundary        The Jacobian used to calculate the derivatives requires interpolation to
+                    get the components on the same grid. This value is passed to instances of
+                    grid.interp. Default value is `extend`
+    '''
+
+    dqdx = grid.interp(grid.derivative(q, 'X', boundary=boundary), 'Z', boundary=boundary)
+    dqdz = grid.interp(grid.derivative(q, 'Z', boundary=boundary), 'X', boundary=boundary)
+    dzdx = grid.interp(grid.derivative(z, 'X', boundary=boundary), 'Z', boundary=boundary)
+    dzdz = grid.interp(grid.derivative(z, 'Z', boundary=boundary), 'X', boundary=boundary)
+
+    dqdxi = dqdx*dzdz - dqdz*dzdx
+
+    dqdy = grid.interp(grid.derivative(q, 'Y', boundary=boundary), 'Z', boundary=boundary)
+    dqdz = grid.interp(grid.derivative(q, 'Z', boundary=boundary), 'Y', boundary=boundary)
+    dzdy = grid.interp(grid.derivative(z, 'Y', boundary=boundary), 'Z', boundary=boundary)
+    dzdz = grid.interp(grid.derivative(z, 'Z', boundary=boundary), 'Y', boundary=boundary)
+
+    dqdeta = dqdy*dzdz - dqdz*dzdy
 
     if to == 'rho':
         return to_rho(dqdxi, grid), to_rho(dqdeta, grid)
