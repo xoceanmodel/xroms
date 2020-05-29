@@ -136,7 +136,7 @@ def open_roms_zarr_dataset(files, chunks=None):
                    dim='ocean_time', data_vars='minimal', coords='minimal')
 
 
-def hgrad(q, grid, boundary='extend', to=None):
+def hgrad(q, grid, z=None, boundary='extend', to=None):
     '''Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions
 
     Inputs:
@@ -155,6 +155,9 @@ def hgrad(q, grid, boundary='extend', to=None):
     Options:
     -------
 
+    z               DataArray. The vertical depths associated with q. Default is to find the
+                    coordinate of q that starts with 'z_', and use that.
+
     to              By default, gradient values are located at the midpoints between q points
                     in each direction of the gradient. Optionally, these can be interpolated
                     to either rho- or psi-points passing `rho` or `psi`
@@ -163,6 +166,11 @@ def hgrad(q, grid, boundary='extend', to=None):
                     get the components on the same grid. This value is passed to instances of
                     grid.interp. Default value is `extend`
     '''
+
+    if z is None:
+        coords = list(q.coords)
+        z_coord_name = coords[[coord[:2] == 'z_' for coord in coords].index(True)]
+        z = q[z_coord_name]
 
     dqdx = grid.interp(grid.derivative(q, 'X', boundary=boundary), 'Z', boundary=boundary)
     dqdz = grid.interp(grid.derivative(q, 'Z', boundary=boundary), 'X', boundary=boundary)
