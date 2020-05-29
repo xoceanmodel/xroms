@@ -1,3 +1,4 @@
+import numpy as np
 
 def density(T, S, Z):
     '''Return the density based on T, S, and Z. EOS based on ROMS Nonlinear/rho_eos.F
