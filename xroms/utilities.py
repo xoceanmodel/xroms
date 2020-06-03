@@ -58,3 +58,31 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     varu = (varu*zc).sum(coord)
 
     return varl - propl*(varu-varl)/(propu-propl)
+
+
+def salt_variance(ds, salt):
+    '''Returns the three volume-averaged terms for the decomposition of salinity variance: 
+    total, vertical, and horizontal variance. See Li et al. (2018) JPO for details.
+    Inputs:
+    ----
+    ds: DataArray
+    salt: DataArray
+    Outputs:
+    ----
+    svar: total salinity variance
+    svert: vertical salinity variance
+    shorz: horizontal salinity variance
+    '''
+    
+    dV = ds.dx*ds.dy*ds.dz
+    V = dV.sum(dim = ['eta_rho','xi_rho','s_rho'])
+    z = ds.dz.sum(dim = 's_rho')
+
+    sbar = ((salt*dV).sum(dim = ['eta_rho','xi_rho','s_rho']))/V
+
+    svar = (((salt-sbar)**2*dV).sum(dim = ['eta_rho','xi_rho','s_rho']))/V
+
+    svbar = ((salt*ds.dz).sum(dim = ['s_rho']))/z
+    svert = (((salt-svbar)**2*dV).sum(dim = ['eta_rho','xi_rho','s_rho']))/V
+    shorz = (svar-svert)
+    return svar, svert, shorz
