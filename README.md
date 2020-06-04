@@ -4,8 +4,8 @@
 
     ds = open_roms_netcdf_dataset(files, chunks)
     ds = open_roms_zarr_dataset(files, chunks)
-    
-`chunks` defaults to `chunks = {'ocean_time':1}`, which is only intended as a passable first guess. 
+
+`chunks` defaults to `chunks = {'ocean_time':1}`, which is only intended as a passable first guess.
 
 Vertical coordinates are appended to the dataset, and an xgcm grid object is created, using
 
@@ -13,6 +13,6 @@ Vertical coordinates are appended to the dataset, and an xgcm grid object is cre
 
 By default, `Vtransform` will be read from the dataset, and the appropriate transformation for the vertical coordinate `z` will be applied.
 
-The `xroms.roms_seawater` subpackage contains an equation of state based on the one in ROMS, `density`, the related `buoyancy`, and a function that calculates N<sup>2</sup>, `stratification_frequency`. 
+The `xroms.roms_seawater` subpackage contains an equation of state based on the one in ROMS, `density`, the related `buoyancy`, and a function that calculates N<sup>2</sup>, `stratification_frequency`.
 
 The `xroms.utilities` subpackage contains a function to calculate horizontal gradients on an s-grid, and some helper functions to interpolate to either rho- or psi-points.
