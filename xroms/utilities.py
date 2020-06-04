@@ -33,7 +33,7 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     Output:
     iso_values:      xarray.DataArray: values of projected_array on the isosurface
     '''
-    Nm = len(iso_array.coord) - 1
+    Nm = len(iso_array[coord]) - 1
 
     lslice = {coord: slice(None, -1)}
     uslice = {coord: slice(1, None)}
