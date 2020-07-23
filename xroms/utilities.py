@@ -1,4 +1,29 @@
 import xarray as xr
+import numpy as np
+
+
+def sel2d(ds, lon0, lat0):
+    '''`sel` in lon and lat simultaneously.
+    
+    Return ds subsetted to grid node nearest lon0, lat0 calculating in 2D.
+    '''
+    
+    import cartopy
+    proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
+    pc = cartopy.crs.PlateCarree()
+
+    # convert grid points from lon/lat to a reasonable projection for calculating distances
+    x, y = proj.transform_points( pc, ds.lon_rho.values, ds.lat_rho.values )[...,:2].T
+
+    # convert point of interest
+    x0, y0 = proj.transform_point( lon0, lat0, pc )
+
+    # calculate distance from point of interest
+    dist = np.sqrt( (x - x0)**2 + (y - y0)**2 )
+
+    ix, iy = np.where(dist==dist.min())
+
+    return ds.isel(xi_rho=ix, eta_rho=iy)
 
 
 def to_rho(var, grid, boundary='extend'):
