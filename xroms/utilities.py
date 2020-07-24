@@ -2,14 +2,22 @@ import xarray as xr
 import numpy as np
 
 
-def sel2d(ds, lon0, lat0):
+def argsel2d(ds, lon0, lat0, proj=None):
+
+    return sel2d(ds, lon0, lat0, proj=proj, argsel=True)
+
+
+def sel2d(ds, lon0, lat0, proj=None, argsel=False):
     '''`sel` in lon and lat simultaneously.
     
     Return ds subsetted to grid node nearest lon0, lat0 calculating in 2D.
+    Also return the x and y indices for the nearest grid node.
     '''
     
     import cartopy
-    proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
+    
+    if proj is None:
+        proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
     pc = cartopy.crs.PlateCarree()
 
     # convert grid points from lon/lat to a reasonable projection for calculating distances
@@ -22,8 +30,14 @@ def sel2d(ds, lon0, lat0):
     dist = np.sqrt( (x - x0)**2 + (y - y0)**2 )
 
     ix, iy = np.where(dist==dist.min())
-
-    return ds.isel(xi_rho=ix, eta_rho=iy)
+    
+    # if being called from argsel2d, return indices instead
+    if argsel:
+        return ix, iy
+        
+    # normal scenario
+    else:
+        return ds.isel(xi_rho=ix, eta_rho=iy)
 
 
 def to_rho(var, grid, boundary='extend'):
@@ -46,18 +60,59 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     '''Calculate an isosurface
 
     This function calculates the value of projected_array on
-    an isosurface in the array iso_array defined by iso_val.
-
+    an isosurface in the array iso_array defined by iso_value. 
+    
+    Note that `xisoslice` 
+    requires that iso_array be monotonic. If iso_value is not monotonic it will  
+    still run but values may be incorrect where not monotonic.
+    
+    Performs lazy evaluation.
+        
+    
     Inputs:
     iso_array:       xarray.DataArray in which the isosurface is defined
     iso_value:       float: value of the isosurface in iso_array
-    projected_array: xarray.DataArray in which to project values on the isosurface
-                     Needs to have the same dimensions and shape as iso_array
+    projected_array: xarray.DataArray in which to project values on the isosurface.
+                     This can have multiple time outputs.
+                     Needs to be broadcastable from iso_array?
     coord:           string: coordinate associated with the dimension along which to project
 
     Output:
     iso_values:      xarray.DataArray: values of projected_array on the isosurface
+    
+    
+    Examples:
+    
+    Calculate lat-z slice of salinity along a constant longitude value (-91.5):
+        sl = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.salt, 'xi_rho')
+    
+    Calculate a lon-lat slice at a constant z value (-10):
+        sl = xroms.utilities.xisoslice(ds.z_rho, -10, ds.temp, 's_rho')
+    
+    Calculate the depth of a specific isohaline (33):
+        sl = xroms.utilities.xisoslice(ds.salt, 33, ds.z_rho, 's_rho')
+    
+    In addition to calculating the slices themselves, you may need to calculate 
+    related coordinates for plotting. For example, to accompany the lat-z slice, 
+    you may want the following:
+
+        # calculate z values (s_rho)
+        slz = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.z_rho, 'xi_rho')
+
+        # calculate latitude values (eta_rho)
+        sllat = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.lat_rho, 'xi_rho')
+
+        # assign these as coords to be used in plot
+        sl = sl.assign_coords(z=slz, lat=sllat)
+
+        # points that should be masked
+        slmask = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.mask_rho, 'xi_rho')
+
+        # drop masked values
+        sl = sl.where(slmask==1, drop=True)
+
     '''
+    
     Nm = len(iso_array[coord]) - 1
 
     lslice = {coord: slice(None, -1)}
