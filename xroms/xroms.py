@@ -92,8 +92,8 @@ def roms_dataset(ds, Vtransform=None):
 
     return ds, grid
 
-def open_roms_netcdf_dataset(files, chunks=None):
-    '''Return an xarray.DataSet based on a list of netCDF files
+def open_netcdf(files, chunks=None):
+    '''Return an xarray.Dataset based on a list of netCDF files
 
     Inputs:
     files       A list of netCDF files
@@ -107,13 +107,14 @@ def open_roms_netcdf_dataset(files, chunks=None):
     '''
 
     if chunks is None:
-        chunks = {'ocean_time':1}   # A basic chunking, ok, but maybe not the best
+        chunks = {'ocean_time':1}   # A basic chunking option
 
     return xr.open_mfdataset(files, compat='override', combine='by_coords',
                                  data_vars='minimal', coords='minimal', chunks=chunks)
 
-def open_roms_zarr_dataset(files, chunks=None):
-    '''Return an xarray.DataSet based on a list of zarr files
+
+def open_zarr(files, chunks=None):
+    '''Return an xarray.Dataset based on a list of zarr files
 
     Inputs:
     files       A list of zarr files
@@ -126,15 +127,14 @@ def open_roms_zarr_dataset(files, chunks=None):
                 Default: chunks = {'ocean_time':1}
     '''
     if chunks is None:
-        chunks = {'ocean_time':1}   # A basic chunking, ok, but maybe not the best
+        chunks = {'ocean_time':1}   # A basic chunking option
 
     opts = {'consolidated': True,
-            'chunks': chunks
-        }
-
-    return xr.concat([xr.open_zarr(file, **opts).drop(['dstart']) for file in files],
-                   dim='ocean_time', data_vars='minimal', coords='minimal')
-
+            'chunks': chunks, 'drop_variables': 'dstart'}
+    return xr.concat(
+        [xr.open_zarr(file, **opts) for file in files],
+        dim='ocean_time', data_vars='minimal', coords='minimal')
+    
 
 def hgrad(q, grid, z=None, boundary='extend', to=None):
     '''Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions

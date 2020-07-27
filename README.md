@@ -2,8 +2,8 @@
 
 `xroms` contains functions for commonly used scripts for working with ROMS output in xarray. The first two read in netCDF and zarr output:
 
-    ds = open_roms_netcdf_dataset(files, chunks)
-    ds = open_roms_zarr_dataset(files, chunks)
+    ds = open_netcdf(files, chunks)
+    ds = open_zarr(files, chunks)
     
 `chunks` defaults to `chunks = {'ocean_time':1}`, which is only intended as a passable first guess. 
 
