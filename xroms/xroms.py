@@ -163,9 +163,7 @@ def hgrad(q, grid, z=None, boundary='extend', to=None):
                     in each direction of the gradient. Optionally, these can be interpolated
                     to either rho- or psi-points passing `rho` or `psi`
 
-    boundary        The Jacobian used to calculate the derivatives requires interpolation to
-                    get the components on the same grid. This value is passed to instances of
-                    grid.interp. Default value is `extend`
+    boundary        Passed to `grid` method calls. Default is `extend`
     '''
 
     if z is None:
@@ -195,12 +193,56 @@ def hgrad(q, grid, z=None, boundary='extend', to=None):
         return dqdxi, dqdeta
 
 
+def relative_vorticity(ds, grid, boundary='extend', to='rho'):
+    '''Return the relative vorticity on rho-points
+    
+    
+    Inputs:
+    ------
+    ds              ROMS dataset, needs to include grid metrics: dz_rho_u, dz_rho_v
+    
+    grid            xgcm object, Grid object associated with DataArray phi
+    
+    
+    Outputs:
+    -------
+    rel_vort        The relative vorticity, v_x - u_y, on rho-points.
+
+
+    Options:
+    -------
+    boundary        Passed to `grid` method calls. Default is `extend`
+    
+    to              Grid to interpolate to, default is horizontal and vertical rho-points, 
+                    otherwise on horizontal psi-points, vertical w-points.
+    '''
+
+    dvdx = grid.interp(grid.derivative(ds.v, 'X', boundary=boundary), 'Z', boundary=boundary)
+    dvdz = grid.interp(grid.derivative(ds.v, 'Z', boundary=boundary), 'X', boundary=boundary)
+    dzdx = grid.interp(grid.derivative(ds.z_rho_v, 'X', boundary=boundary), 'Z', boundary=boundary)
+    dzdz = grid.interp(grid.derivative(ds.z_rho_v, 'Z', boundary=boundary), 'X', boundary=boundary)
+
+    dvdxi = dvdx*dzdz - dvdz*dzdx
+
+    dudy = grid.interp(grid.derivative(ds.u, 'Y', boundary=boundary), 'Z', boundary=boundary)
+    dudz = grid.interp(grid.derivative(ds.u, 'Z', boundary=boundary), 'Y', boundary=boundary)
+    dzdy = grid.interp(grid.derivative(ds.z_rho_u, 'Y', boundary=boundary), 'Z', boundary=boundary)
+    dzdz = grid.interp(grid.derivative(ds.z_rho_u, 'Z', boundary=boundary), 'Y', boundary=boundary)
+
+    dudeta = dudy*dzdz - dudz*dzdy
+
+    if to == 'rho':
+        return ( to_rho(grid.interp(dvdxi, 'Z', boundary=boundary), grid) - 
+                 to_rho(grid.interp(dudeta, 'Z', boundary=boundary), grid) )
+    else:
+        return dvdxi - dudeta
+
+
 def ertel(ds, grid, tracer=None, boundary='extend'):
     '''Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions
 
     Inputs:
     ------
-    
     ds              ROMS dataset
     
     grid            xgcm object, Grid object associated with DataArray phi
@@ -208,23 +250,15 @@ def ertel(ds, grid, tracer=None, boundary='extend'):
     
     Outputs:
     -------
-
-    epv             The ertel potential vorticity defined on horizontal 
-                    rho-points, vertical w-points.
-    
+    epv             The ertel potential vorticity
                     epv = -v_z * phi_x + u_z * phi_y + (f + v_x - u_y) * phi_z
-
 
     Options:
     -------
+    tracer          The tracer to use in calculating EPV. Default is buoyancy. 
+                    Buoyancy calculated from salt and temp if rho is not present.
 
-    tracer          The tracer to use in calculating EPV. Default is buoyancy. Density will
-                    be calculated from temperature and salinity if density variable is not
-                    present in the dataset.
-    
-    boundary        The Jacobian used to calculate the derivatives requires interpolation to
-                    get the components on the same grid. This value is passed to instances of
-                    grid.interp. Default value is `extend`
+    boundary        Passed to `grid` method calls. Default is `extend`
     '''
     
     # load appropriate tracer into 'phi', defalut rho. Use EOS if necessary
@@ -238,24 +272,30 @@ def ertel(ds, grid, tracer=None, boundary='extend'):
     
     # get the components of the grad(phi)
     phi_xi, phi_eta = hgrad(phi, grid, to='rho', boundary=boundary)
+    phi_xi = grid.interp(phi_xi, 'Z', boundary=boundary)
+    phi_eta = grid.interp(phi_eta, 'Z', boundary=boundary)
+    
     phi_z = grid.derivative(phi, 'Z', boundary=boundary)
+    phi_z = grid.interp(phi_z, 'Z', boundary=boundary)
     
     # vertical shear (horizontal components of vorticity)
-    v_z = grid.interp(grid.derivative(ds.v, 'Z', boundary=boundary), 'Y', boundary=boundary)
-    u_z = grid.interp(grid.derivative(ds.u, 'Z', boundary=boundary), 'X', boundary=boundary)
+    v_z = grid.derivative(ds.v, 'Z', boundary=boundary)
+    v_z = grid.interp(grid.interp(v_z, 'Y', boundary=boundary), 'Z', boundary=boundary)
     
+    u_z = grid.derivative(ds.u, 'Z', boundary=boundary)
+    u_z = grid.interp(grid.interp(u_z, 'X', boundary=boundary), 'Z', boundary=boundary)
+
     # vertical component of vorticity
-    v_x = to_rho(grid.interp(grid.derivative(ds.v, 'X', boundary=boundary), 'Z', boundary=boundary), grid)
-    u_y = to_rho(grid.interp(grid.derivative(ds.u, 'Y', boundary=boundary), 'Z', boundary=boundary), grid)
+    rel_vort = relative_vorticity(ds, grid)
     
-    return -v_z * phi_xi + u_z * phi_eta + (ds.f + v_x - u_y) * phi_z
+    # combine terms to get the ertel potential vorticity
+    epv = -v_z * phi_xi + u_z * phi_eta + (ds.f + rel_vort) * phi_z
     
-    
-    
-    
-    
-    
-    
-        
-    
-    
+    # add coordinates
+    try:
+        epv.coords['lon_rho'] = ds.coords['lon_rho']
+        epv.coords['lat_rho'] = ds.coords['lat_rho']
+        epv.coords['z_rho'] = ds.coords['z_rho']
+        epv.coords['ocean_time'] = ds.coords['ocean_time']
+
+    return epv
