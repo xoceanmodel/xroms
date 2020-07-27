@@ -26,3 +26,6 @@ You can install this locally and so that it is editable (`-e`), and with the req
     cd xroms
     pip install -r requirements.txt -e .
 
+Or:
+
+    pip install git+git://github.com/hetland/xroms
