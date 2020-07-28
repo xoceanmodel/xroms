@@ -1,0 +1,7 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "ocean_time"
+    ],
+    "calendar": "proleptic_gregorian",
+    "units": "hours since 2013-12-17 02:00:00"
+}
