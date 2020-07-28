@@ -1,6 +1,8 @@
 from .xroms import (roms_dataset,
                     open_netcdf,
                     open_zarr,
-                    hgrad)
+                    hgrad,
+                    relative_vorticity,
+                    ertel)
 from .roms_seawater import density, buoyancy
 from .utilities import to_rho, to_psi, xisoslice
