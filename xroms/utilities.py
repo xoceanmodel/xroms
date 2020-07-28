@@ -2,16 +2,31 @@ import xarray as xr
 import numpy as np
 
 
-def argsel2d(ds, lon0, lat0, proj=None):
+def argsel2d(ds, lon0, lat0, whichgrid='rho', proj=None):
+    '''Return the indices that select nearest grid node.
+    
+    The order of the indices is first the y or latitude axes, 
+    then x or longitude.'''
 
-    return sel2d(ds, lon0, lat0, proj=proj, argsel=True)
+    return sel2d(ds, lon0, lat0, proj=proj, whichgrid=whichgrid, argsel=True)
 
 
-def sel2d(ds, lon0, lat0, proj=None, argsel=False):
+def sel2d(ds, lon0, lat0, proj=None, whichgrid='rho', argsel=False):
     '''`sel` in lon and lat simultaneously.
     
-    Return ds subsetted to grid node nearest lon0, lat0 calculating in 2D.
-    Also return the x and y indices for the nearest grid node.
+    Inputs:
+    ds: xarray Dataset with model output
+    lon0, lat0: Point of interest in longitude/latitude
+    proj (optional): cartopy projection for converting from geographic to 
+      projected coordinates. If not input, a Lambert Conformal Conic 
+      projection centered at lon0, lat0 will be used for the conversion.
+    whichgrid (optional): Which ROMS grid to find node for. Default is 'rho' grid.
+      Options are 'rho', 'psi', 'u', 'v', 'vert'.
+    argsel (optional): This option is available so that function `argsel2d` 
+      is possible as a wrapper to this function.
+    
+    Return ds subsetted to grid node nearest lon0, lat0 calculated in 2D 
+    for grid `whichgrid`.
     '''
     
     import cartopy
@@ -19,9 +34,15 @@ def sel2d(ds, lon0, lat0, proj=None, argsel=False):
     if proj is None:
         proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
     pc = cartopy.crs.PlateCarree()
-
+    
+    # which grid? rho, u, v, etc
+    grids = ['rho', 'u', 'v', 'psi', 'vert']
+    err = 'whichgrid must be a str of one of: ' + ', '.join(grids)
+    assert whichgrid in grids, err
+    lon = ds['lon_' + whichgrid].values; lat = ds['lat_' + whichgrid].values
+    
     # convert grid points from lon/lat to a reasonable projection for calculating distances
-    x, y = proj.transform_points( pc, ds.lon_rho.values, ds.lat_rho.values )[...,:2].T
+    x, y = proj.transform_points(pc, lon, lat)[...,:2].T
 
     # convert point of interest
     x0, y0 = proj.transform_point( lon0, lat0, pc )
@@ -29,15 +50,19 @@ def sel2d(ds, lon0, lat0, proj=None, argsel=False):
     # calculate distance from point of interest
     dist = np.sqrt( (x - x0)**2 + (y - y0)**2 )
 
-    ix, iy = np.where(dist==dist.min())
+    iy, ix = np.where(dist==dist.min())
     
     # if being called from argsel2d, return indices instead
     if argsel:
-        return ix, iy
+        return iy, ix
         
     # normal scenario
     else:
-        return ds.isel(xi_rho=ix, eta_rho=iy)
+        # xidim, etadim are like xi_rho, eta_rho, for whichever grid
+        xidim = 'xi_' + whichgrid
+        etadim = 'eta_' + whichgrid
+        indexer = {xidim: ix, etadim: iy}
+        return ds.isel(indexer) 
 
 
 def to_rho(var, grid, boundary='extend'):
