@@ -1,5 +1,7 @@
 import xarray as xr
 import xgcm
+from warnings import warn
+
 from .utilities import to_rho, to_psi
 from .roms_seawater import buoyancy
 
@@ -297,5 +299,7 @@ def ertel(ds, grid, tracer=None, boundary='extend'):
         epv.coords['lat_rho'] = ds.coords['lat_rho']
         epv.coords['z_rho'] = ds.coords['z_rho']
         epv.coords['ocean_time'] = ds.coords['ocean_time']
+    except:
+        warn('Could not append coordinates')
 
     return epv
