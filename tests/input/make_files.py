@@ -65,7 +65,7 @@ def output(to='netcdf'):
     ts = [startdate + it*pd.Timedelta(dt) for it in range(tl)]
     
     # Make velocity fields
-    u = 0.1*np.ones((tl,N,yl,xl-1)) 
+    u = np.ones((tl,N,yl,xl-1))*(np.arange(xl-1)/10)  # increases with xi
     v = np.zeros((tl,N,yl-1,xl))
 
     # Save file, starting from grid file
@@ -93,3 +93,9 @@ def output(to='netcdf'):
         out1.to_zarr(fname1, mode='w', consolidated=True)
         out2.to_zarr(fname2, mode='w', consolidated=True)
     
+    
+    
+if __name__ == "__main__":
+    grid()
+    output(to='netcdf')
+    output(to='zarr')
