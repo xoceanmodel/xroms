@@ -1,12 +1,17 @@
 import xarray as xr
 import xgcm
 from warnings import warn
+import cartopy
+
 
 from .utilities import to_rho, to_psi
 from .roms_seawater import buoyancy
 
-def roms_dataset(ds, Vtransform=None):
+
+def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     '''Return a dataset that is aware of ROMS coordinatates and an associated xgcm grid object with metrics
+    
+    Note that this could be very slow if dask is not on.
 
     Input
     -----
@@ -39,11 +44,17 @@ def roms_dataset(ds, Vtransform=None):
         z_rho = Zo_rho + ds.zeta * (1 + Zo_rho/ds.h)
         Zo_w = ds.hc * (ds.s_w - ds.Cs_w) + ds.Cs_w * ds.h
         z_w = Zo_w + ds.zeta * (1 + Zo_w/ds.h)
+        # also include z coordinates with mean sea level (constant over time)
+        z_rho0 = Zo_rho
+        z_w0 = Zo_w
     elif Vtransform == 2:
         Zo_rho = (ds.hc * ds.s_rho + ds.Cs_r * ds.h) / (ds.hc + ds.h)
         z_rho = ds.zeta + (ds.zeta + ds.h) * Zo_rho
         Zo_w = (ds.hc * ds.s_w + ds.Cs_w * ds.h) / (ds.hc + ds.h)
         z_w = ds.zeta + (ds.zeta + ds.h) * Zo_w
+        # also include z coordinates with mean sea level (constant over time)
+        z_rho0 = ds.h * Zo_rho
+        z_w0 = ds.h * Zo_w
 
     ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho',
                                      transpose_coords=False)
@@ -56,6 +67,35 @@ def roms_dataset(ds, Vtransform=None):
     ds.coords['z_rho_u'] = grid.interp(ds.z_rho, 'X')
     ds.coords['z_rho_v'] = grid.interp(ds.z_rho, 'Y')
     ds.coords['z_rho_psi'] = grid.interp(ds.z_rho_u, 'Y')
+    # also include z coordinates with mean sea level (constant over time)
+    ds.coords['z_rho0'] = z_rho0.transpose('s_rho', 'eta_rho', 'xi_rho',
+                                     transpose_coords=False)
+    ds.coords['z_rho_u0'] = grid.interp(ds.z_rho0, 'X')
+    ds.coords['z_rho_v0'] = grid.interp(ds.z_rho0, 'Y')
+    ds.coords['z_rho_psi0'] = grid.interp(ds.z_rho_u0, 'Y')
+    ds.coords['z_w0'] = z_w0.transpose('s_w', 'eta_rho', 'xi_rho',
+                                     transpose_coords=False) 
+    ds.coords['z_w_u0'] = grid.interp(ds.z_w0, 'X')
+    ds.coords['z_w_v0'] = grid.interp(ds.z_w0, 'Y')
+    ds.coords['z_w_psi0'] = grid.interp(ds.z_w_u0, 'Y')
+    
+    # add vert grid, esp for plotting pcolormesh
+    if add_verts:
+        import pygridgen
+        if proj is None:
+            proj = cartopy.crs.LambertConformal(central_longitude=-98,    central_latitude=30)
+        pc = cartopy.crs.PlateCarree()
+        # project points for this calculation
+        xr, yr = proj.transform_points(pc, ds.lon_rho.values, ds.lat_rho.values)[...,:2].T
+        xr = xr.T; yr = yr.T
+        # calculate vert locations
+        xv, yv = pygridgen.grid.rho_to_vert(xr, yr, ds.pm, ds.pn, ds.angle)
+        # project back
+        lon_vert, lat_vert = pc.transform_points(proj, xv, yv)[...,:2].T
+        lon_vert = lon_vert.T; lat_vert = lat_vert.T
+        # add new coords to ds
+        ds.coords['lon_vert'] = (('eta_vert', 'xi_vert'), lon_vert)
+        ds.coords['lat_vert'] = (('eta_vert', 'xi_vert'), lat_vert)
 
     ds['pm_v'] = grid.interp(ds.pm, 'Y')
     ds['pn_u'] = grid.interp(ds.pn, 'X')
@@ -83,6 +123,16 @@ def roms_dataset(ds, Vtransform=None):
     ds['dz_psi'] = grid.interp(ds.dz_v, 'X')
     ds['dz_w_psi'] = grid.interp(ds.dz_w_v, 'X')
 
+    # also include z coordinates with mean sea level (constant over time)
+    ds['dz0'] = grid.diff(ds.z_w0, 'Z')
+    ds['dz_w0'] = grid.diff(ds.z_rho0, 'Z', boundary='fill')
+    ds['dz_u0'] = grid.interp(ds.dz0, 'X')
+    ds['dz_w_u0'] = grid.interp(ds.dz_w0, 'X')
+    ds['dz_v0'] = grid.interp(ds.dz0, 'Y')
+    ds['dz_w_v0'] = grid.interp(ds.dz_w0, 'Y')
+    ds['dz_psi0'] = grid.interp(ds.dz_v0, 'X')
+    ds['dz_w_psi0'] = grid.interp(ds.dz_w_v0, 'X')
+
     ds['dA'] = ds.dx * ds.dy
 
     metrics = {
@@ -94,6 +144,7 @@ def roms_dataset(ds, Vtransform=None):
     grid = xgcm.Grid(ds, coords=coords, metrics=metrics, periodic=[])
 
     return ds, grid
+
 
 def open_netcdf(files, chunks=None):
     '''Return an xarray.Dataset based on a list of netCDF files
