@@ -5,5 +5,5 @@
         "eta_u",
         "xi_u"
     ],
-    "coordinates": "lat_u lon_u"
+    "coordinates": "lon_u lat_u"
 }
