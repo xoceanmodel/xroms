@@ -74,13 +74,40 @@ def output(to='netcdf'):
     out1['ocean_time'] = ts[:2]
     out1['u'] = (('ocean_time','s_rho','eta_u','xi_u'), u[:2])
     out1['v'] = (('ocean_time','s_rho','eta_v','xi_v'), v[:2])
+    out1['zeta'] = (('ocean_time','eta_rho','xi_rho'), np.zeros((2,yl,xl)))
+    out1['salt'] = (('ocean_time','eta_rho','xi_rho'), np.ones((2,yl,xl)))
+    out1['temp'] = (('ocean_time','s_rho','eta_rho','xi_rho'), np.ones((2,N,yl,xl)))
     out1 = out1.assign_coords(s_rho=s_rho, lat_u=grid.lat_u, lon_u=grid.lon_u, lat_v=grid.lat_v, lon_v=grid.lon_v, lat_rho=grid.lat_rho, lon_rho=grid.lon_rho)
+    out1['s_rho'] = s_rho
+    out1['s_w'] = s_w
+    out1['hc'] = hc
+    out1['Cs_r'] = (('s_rho'), Cs_r)
+    out1['Cs_w'] = (('s_w'), Cs_w)
+    out1['theta_b'] = theta_b
+    out1['hmin'] = hmin
+    out1['theta_s'] = theta_s
+    out1['tcline'] = tcline
+    
     # 2nd file
     out2 = xr.open_dataset('grid.nc')
     out2['ocean_time'] = ts[2:]
     out2['u'] = (('ocean_time','s_rho','eta_u','xi_u'), u[2:])
     out2['v'] = (('ocean_time','s_rho','eta_v','xi_v'), v[2:])
+    out2['zeta'] = (('ocean_time','eta_rho','xi_rho'), np.zeros((2,yl,xl)))
+    out2['salt'] = (('ocean_time','eta_rho','xi_rho'), np.ones((2,yl,xl)))
+    out2['temp'] = (('ocean_time','s_rho','eta_rho','xi_rho'), np.ones((2,N,yl,xl)))
     out2 = out2.assign_coords(s_rho=s_rho, lat_u=grid.lat_u, lon_u=grid.lon_u, lat_v=grid.lat_v, lon_v=grid.lon_v, lat_rho=grid.lat_rho, lon_rho=grid.lon_rho)
+    out2['s_rho'] = s_rho
+    out2['s_w'] = s_w
+    out2['hc'] = hc
+    out2['Cs_r'] = (('s_rho'), Cs_r)
+    out2['Cs_w'] = (('s_w'), Cs_w)
+    out2['theta_b'] = theta_b
+    out2['hmin'] = hmin
+    out2['theta_s'] = theta_s
+    out2['tcline'] = tcline
+    
+    
     
     fname1 = 'ocean_his_0001'
     fname2 = 'ocean_his_0002'
