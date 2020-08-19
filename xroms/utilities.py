@@ -99,7 +99,7 @@ def to_psi(var, grid, boundary='extend'):
     return var
 
 
-def xisoslice(iso_array, iso_value, projected_array, coord):
+def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
     '''Calculate an isosurface
 
     This function calculates the value of projected_array on
@@ -108,6 +108,9 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     Note that `xisoslice` 
     requires that iso_array be monotonic. If iso_value is not monotonic it will  
     still run but values may be incorrect where not monotonic.
+    If iso_value is exactly in iso_array or the value is passed twice in iso_array, 
+    a message will be printed. iso_value is changed a tiny amount in this case to
+    account for it being in iso_array exactly. The latter case is not deal with.
     
     Performs lazy evaluation.
         
@@ -119,6 +122,9 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
                      This can have multiple time outputs.
                      Needs to be broadcastable from iso_array?
     coord:           string: coordinate associated with the dimension along which to project
+    printwarning:    boolean (False): set to True to have warning returned if iso_value is
+                     exactly equal to a value in iso_array, in which case an extra 
+                     step is taken.
 
     Output:
     iso_values:      xarray.DataArray: values of projected_array on the isosurface
@@ -187,6 +193,29 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     # value, so that the isovalue occurs between those two values.
     zc = xr.where((propu*propl)<=0.0, 1.0, 0.0)
 
+    # if condition is True, either iso_value exactly matches at least one entry in iso_array
+    # or iso_value is passed more than once (iso_array is not monotonic)
+    if (zc.sum(coord) == 2).sum() > 0:
+        if printwarning:
+            words = '''either iso_value exactly matches at least one entry in iso_array or 
+                        iso_value is passed more than once (iso_array is not monotonic. 
+                        iso_value is being adjusted slightly to account for the former case 
+                        with an approximation.'''
+            print(words)
+        if iso_value == 0:
+            iso_value = 0.000000001
+        else:
+            iso_value *= 1.000000001
+        # redo these calculations
+        prop = iso_array - iso_value
+        # propl are the prop values in the lower slice
+        propl = prop.isel(**lslice)
+        propl.coords[coord] = np.arange(Nm)
+        # propu in the upper slice
+        propu = prop.isel(**uslice)
+        propu.coords[coord] = np.arange(Nm)
+        zc = xr.where((propu*propl)<=0.0, 1.0, 0.0)
+
     # Get the upper and lower slices of the array that will be projected
     # on the isosurface
     varl = projected_array.isel(**lslice)
@@ -204,18 +233,4 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     # A linear fit to of the projected array to the isosurface.
     out =  varl - propl*(varu-varl)/(propu-propl)
 
-    # find places iso_value is exactly represented in iso_array and replace with exact projected value
-    
-    # iso_value is exactly in iso_array where prop==0:
-    iexact = (prop==0).sum(coord)  # 0s with 1s where iso_value is exact somewhere in projected array
-
-    # if there is at least one exact iso_value in iso_array, account for it
-    # Not sure if this works if there are multiple matching values that aren't all in the same
-    # e.g. sigma layer
-    if iexact.sum() > 0:
-        out2 = xr.where(iexact, 
-                        projected_array.where(prop==0, drop=True).squeeze(), 
-                        out)
-        return out2
-    else:  # no need to replace value
-        return out
+    return out
