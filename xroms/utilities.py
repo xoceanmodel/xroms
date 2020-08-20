@@ -99,6 +99,14 @@ def to_psi(var, grid, boundary='extend'):
     return var
 
 
+def to_s_rho():
+    '''Convert from s_w to s_rho vertical grid.'''
+    
+    
+def to_s_w():
+    '''Convert from s_rho to s_w vertical grid.'''
+
+
 def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
     '''Calculate an isosurface
 
@@ -192,29 +200,35 @@ def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
     # projected dimension. zc==1 means the prop changed signs crossing this
     # value, so that the isovalue occurs between those two values.
     zc = xr.where((propu*propl)<=0.0, 1.0, 0.0)
+    
+    # saving these comments for now in case want to switch back, but this approach is 
+    # more accurate when it works but doesn't always work 
+#     # if condition is True, either iso_value exactly matches at least one entry in iso_array
+#     # or iso_value is passed more than once (iso_array is not monotonic)
+#     if (zc.sum(coord) == 2).sum() > 0:
+#         if printwarning:
+#             words = '''either iso_value exactly matches at least one entry in iso_array or 
+#                         iso_value is passed more than once (iso_array is not monotonic. 
+#                         iso_value is being adjusted slightly to account for the former case 
+#                         with an approximation.'''
+#             print(words)
+#         if iso_value == 0:
+#             iso_value = 0.00001
+#         else:
+#             iso_value *= 1.00001
+#         # redo these calculations
+#         prop = iso_array - iso_value
+#         # propl are the prop values in the lower slice
+#         propl = prop.isel(**lslice)
+#         propl.coords[coord] = np.arange(Nm)
+#         # propu in the upper slice
+#         propu = prop.isel(**uslice)
+#         propu.coords[coord] = np.arange(Nm)
+# #         zc = xr.where((propu*propl)<=0.0, 1.0, 0.0)
+#         test = (propu*propl)
+#         cond = (test<=0.0) + np.isclose(test,np.zeros_like(test))
+#         zc = xr.where(cond, 1.0, 0.0)
 
-    # if condition is True, either iso_value exactly matches at least one entry in iso_array
-    # or iso_value is passed more than once (iso_array is not monotonic)
-    if (zc.sum(coord) == 2).sum() > 0:
-        if printwarning:
-            words = '''either iso_value exactly matches at least one entry in iso_array or 
-                        iso_value is passed more than once (iso_array is not monotonic. 
-                        iso_value is being adjusted slightly to account for the former case 
-                        with an approximation.'''
-            print(words)
-        if iso_value == 0:
-            iso_value = 0.000000001
-        else:
-            iso_value *= 1.000000001
-        # redo these calculations
-        prop = iso_array - iso_value
-        # propl are the prop values in the lower slice
-        propl = prop.isel(**lslice)
-        propl.coords[coord] = np.arange(Nm)
-        # propu in the upper slice
-        propu = prop.isel(**uslice)
-        propu.coords[coord] = np.arange(Nm)
-        zc = xr.where((propu*propl)<=0.0, 1.0, 0.0)
 
     # Get the upper and lower slices of the array that will be projected
     # on the isosurface
@@ -232,5 +246,16 @@ def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
 
     # A linear fit to of the projected array to the isosurface.
     out =  varl - propl*(varu-varl)/(propu-propl)
+    
+    check = (zc.sum(coord) == 2)
+    if check.sum() > 0:
+        if printwarning:
+            words = '''either iso_value exactly matches at least one entry in iso_array or 
+                        iso_value is passed more than once (iso_array is not monotonic. 
+                        iso_value is being adjusted slightly to account for the former case 
+                        with an approximation.'''
+            print(words)
+        # where iso_value is located in iso_array, divide result by 2
+        out = xr.where(check, out/2, out)
 
     return out
