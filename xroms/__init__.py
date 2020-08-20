@@ -10,4 +10,6 @@ from .xroms import (roms_dataset,
                     relative_vorticity,
                     ertel)
 from .roms_seawater import density, buoyancy
-from .utilities import to_rho, to_psi, xisoslice
+from .utilities import to_rho, to_psi, xisoslice, sel2d, argsel2d
+# from .interp import setup, ll2xe, calc_zslices, interp
+import xroms.interp

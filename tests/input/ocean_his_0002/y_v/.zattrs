@@ -3,6 +3,6 @@
         "eta_v",
         "xi_v"
     ],
-    "coordinates": "lat_v lon_v",
+    "coordinates": "lon_v lat_v",
     "units": "meters"
 }
