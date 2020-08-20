@@ -83,29 +83,30 @@ def sel2d(ds, lon0, lat0, proj=None, whichgrid='rho', argsel=False):
         return ds.isel(indexer) 
 
 
-def to_rho(var, grid, boundary='extend'):
-    if var.dims[-1] != 'xi_rho':
-        var = grid.interp(var, 'X', to='center', boundary=boundary)
-    if var.dims[-2] != 'eta_rho':
-        var = grid.interp(var, 'Y', to='center', boundary=boundary)
+def to_rho(var, grid, boundary="extend"):
+    if var.dims[-1] != "xi_rho":
+        var = grid.interp(var, "X", to="center", boundary=boundary)
+    if var.dims[-2] != "eta_rho":
+        var = grid.interp(var, "Y", to="center", boundary=boundary)
     return var
 
 
-def to_psi(var, grid, boundary='extend'):
-    if var.dims[-1] != 'xi_u':
-        var = grid.interp(var, 'X', to='inner', boundary=boundary)
-    if var.dims[-2] != 'eta_v':
-        var = grid.interp(var, 'Y', to='inner', boundary=boundary)
+def to_psi(var, grid, boundary="extend"):
+    if var.dims[-1] != "xi_u":
+        var = grid.interp(var, "X", to="inner", boundary=boundary)
+    if var.dims[-2] != "eta_v":
+        var = grid.interp(var, "Y", to="inner", boundary=boundary)
     return var
 
 
 def to_s_rho():
     '''Convert from s_w to s_rho vertical grid.'''
+    return None
     
     
 def to_s_w():
     '''Convert from s_rho to s_w vertical grid.'''
-
+    return None
 
 def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
     '''Calculate an isosurface
@@ -243,7 +244,6 @@ def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
     propu = (propu*zc).sum(coord)
     varl = (varl*zc).sum(coord)
     varu = (varu*zc).sum(coord)
-
     # A linear fit to of the projected array to the isosurface.
     out =  varl - propl*(varu-varl)/(propu-propl)
     

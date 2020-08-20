@@ -1,4 +1,10 @@
 from setuptools import setup
 
-setup(name='xroms',
-      packages=['xroms'])
+
+setup(
+    use_scm_version={
+        "write_to": "xroms/_version.py",
+        "write_to_template": '__version__ = "{version}"',
+        "tag_regex": r"^(?P<prefix>v)?(?P<version>[^\+]+)(?P<suffix>.*)?$",
+    }
+)

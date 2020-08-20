@@ -1,3 +1,8 @@
+try:
+    from ._version import __version__
+except ImportError:
+    __version__ = "unknown"
+
 from .xroms import (roms_dataset,
                     open_netcdf,
                     open_zarr,
