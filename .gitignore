@@ -1,0 +1,9 @@
+*.egg-info
+.coverage
+.ipynb_checkpoints/
+.mypy_cache/
+.pytest_cache/
+.vscode/
+build/
+xroms/_version.py
+dist/
