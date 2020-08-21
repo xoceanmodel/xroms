@@ -99,12 +99,22 @@ def to_psi(var, grid, boundary='extend'):
     return var
 
 
-def to_s_rho():
+def to_s_rho(var, grid, boundary='extend'):
     '''Convert from s_w to s_rho vertical grid.'''
     
+    # only change if not already on s_rho
+    if 's_rho' not in var.dims:
+        var = grid.interp(var, 'Z', to='center', boundary=boundary)
+    return var
     
-def to_s_w():
+    
+def to_s_w(var, grid, boundary='extend'):
     '''Convert from s_rho to s_w vertical grid.'''
+    
+    # only change if not already on s_w
+    if 's_w' not in var.dims:
+        var = grid.interp(var, 'Z', to='outer', boundary=boundary)
+    return var
 
 
 def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):

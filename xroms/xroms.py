@@ -55,6 +55,9 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
         # also include z coordinates with mean sea level (constant over time)
         z_rho0 = ds.h * Zo_rho
         z_w0 = ds.h * Zo_w
+        
+    else:
+        print('Need a Vtransform of 1 or 2.')
 
     ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho',
                                      transpose_coords=False)
@@ -190,8 +193,11 @@ def open_zarr(files, chunks=None):
         dim='ocean_time', data_vars='minimal', coords='minimal')
     
 
-def hgrad(q, grid, z=None, boundary='extend', to=None):
+def hgrad(q, grid, which='both', z=None, boundary='extend'):
     '''Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions
+    
+    The main purpose of this it to account for the fact that ROMS vertical coordinates are 
+    sigma coordinates.
 
     Inputs:
     ------
@@ -208,6 +214,9 @@ def hgrad(q, grid, z=None, boundary='extend', to=None):
 
     Options:
     -------
+    
+    which           string ('both'). 'both': return both components of hgrad. 'xi': return only 
+                     xi-direction. 'eta': return only eta-direction.
 
     z               DataArray. The vertical depths associated with q. Default is to find the
                     coordinate of q that starts with 'z_', and use that.
@@ -217,37 +226,64 @@ def hgrad(q, grid, z=None, boundary='extend', to=None):
                     to either rho- or psi-points passing `rho` or `psi`
 
     boundary        Passed to `grid` method calls. Default is `extend`
+    changesgrid     Interpolate down a half a grid cell in the sigma direction
+                    for example from s_w to s_rho or from s_rho to s_w with boundary
+                    filling the outermost s_w points.
     '''
 
     if z is None:
         coords = list(q.coords)
         z_coord_name = coords[[coord[:2] == 'z_' for coord in coords].index(True)]
         z = q[z_coord_name]
+        
+    if which in ['both','xi']:
 
-    dqdx = grid.interp(grid.derivative(q, 'X', boundary=boundary), 'Z', boundary=boundary)
-    dqdz = grid.interp(grid.derivative(q, 'Z', boundary=boundary), 'X', boundary=boundary)
-    dzdx = grid.interp(grid.derivative(z, 'X', boundary=boundary), 'Z', boundary=boundary)
-    dzdz = grid.interp(grid.derivative(z, 'Z', boundary=boundary), 'X', boundary=boundary)
+        dqdx = grid.interp(grid.derivative(q, 'X', boundary=boundary), 'Z', boundary=boundary)
+        dqdz = grid.interp(grid.derivative(q, 'Z', boundary=boundary), 'X', boundary=boundary)
+        dzdx = grid.interp(grid.derivative(z, 'X', boundary=boundary), 'Z', boundary=boundary)
+        dzdz = grid.interp(grid.derivative(z, 'Z', boundary=boundary), 'X', boundary=boundary)
 
-    dqdxi = dqdx*dzdz - dqdz*dzdx
+        dqdxi = dqdx*dzdz - dqdz*dzdx
 
-    dqdy = grid.interp(grid.derivative(q, 'Y', boundary=boundary), 'Z', boundary=boundary)
-    dqdz = grid.interp(grid.derivative(q, 'Z', boundary=boundary), 'Y', boundary=boundary)
-    dzdy = grid.interp(grid.derivative(z, 'Y', boundary=boundary), 'Z', boundary=boundary)
-    dzdz = grid.interp(grid.derivative(z, 'Z', boundary=boundary), 'Y', boundary=boundary)
+#         if to == 'rho':
+#             dqdxi = to_rho(dqdxi, grid)
+#         elif to == 'psi':
+#             dqdxi = to_psi(dqdxi)
+            
+#         if changesgrid:
+#             dqdxi = grid.interp(dqdxi, 'Z', boundary=boundary)
 
-    dqdeta = dqdy*dzdz - dqdz*dzdy
+    if which in ['both','eta']:
+        
+        dqdy = grid.interp(grid.derivative(q, 'Y', boundary=boundary), 'Z', boundary=boundary)
+        dqdz = grid.interp(grid.derivative(q, 'Z', boundary=boundary), 'Y', boundary=boundary)
+        dzdy = grid.interp(grid.derivative(z, 'Y', boundary=boundary), 'Z', boundary=boundary)
+        dzdz = grid.interp(grid.derivative(z, 'Z', boundary=boundary), 'Y', boundary=boundary)
 
-    if to == 'rho':
-        return to_rho(dqdxi, grid), to_rho(dqdeta, grid)
-    if to == 'psi':
-        return to_psi(dqdxi), to_psi(dqdeta)
-    else:
+        dqdeta = dqdy*dzdz - dqdz*dzdy
+
+#         if to == 'rho':
+#             dqdeta = to_rho(dqdeta, grid)
+#         elif to == 'psi':
+#             dqdeta = to_psi(dqdeta)
+            
+#         if changesgrid:
+#             dqdeta = grid.interp(dqdeta, 'Z', boundary=boundary)
+    
+    if which == 'both':
         return dqdxi, dqdeta
+    elif which == 'xi':
+        return dqdxi
+    elif which == 'eta':
+        return dqdeta
+    else:
+        print('nothing being returned from hgrad')
+    
+    
 
 
-def relative_vorticity(ds, grid, boundary='extend', to='rho'):
-    '''Return the relative vorticity on rho-points
+def relative_vorticity(ds, grid, boundary='extend'):
+    '''Return the vertical component of the relative vorticity on rho-points
     
     
     Inputs:
@@ -266,91 +302,73 @@ def relative_vorticity(ds, grid, boundary='extend', to='rho'):
     -------
     boundary        Passed to `grid` method calls. Default is `extend`
     
-    to              Grid to interpolate to, default is horizontal and vertical rho-points, 
-                    otherwise on horizontal psi-points, vertical w-points.
-    '''
-
-    dvdx = grid.interp(grid.derivative(ds.v, 'X', boundary=boundary), 'Z', boundary=boundary)
-    dvdz = grid.interp(grid.derivative(ds.v, 'Z', boundary=boundary), 'X', boundary=boundary)
-    dzdx = grid.interp(grid.derivative(ds.z_rho_v, 'X', boundary=boundary), 'Z', boundary=boundary)
-    dzdz = grid.interp(grid.derivative(ds.z_rho_v, 'Z', boundary=boundary), 'X', boundary=boundary)
-
-    dvdxi = dvdx*dzdz - dvdz*dzdx
-
-    dudy = grid.interp(grid.derivative(ds.u, 'Y', boundary=boundary), 'Z', boundary=boundary)
-    dudz = grid.interp(grid.derivative(ds.u, 'Z', boundary=boundary), 'Y', boundary=boundary)
-    dzdy = grid.interp(grid.derivative(ds.z_rho_u, 'Y', boundary=boundary), 'Z', boundary=boundary)
-    dzdz = grid.interp(grid.derivative(ds.z_rho_u, 'Z', boundary=boundary), 'Y', boundary=boundary)
-
-    dudeta = dudy*dzdz - dudz*dzdy
-
-    if to == 'rho':
-        return ( to_rho(grid.interp(dvdxi, 'Z', boundary=boundary), grid) - 
-                 to_rho(grid.interp(dudeta, 'Z', boundary=boundary), grid) )
-    else:
-        return dvdxi - dudeta
-
-
-def ertel(ds, grid, tracer=None, boundary='extend'):
-    '''Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions
-
-    Inputs:
-    ------
-    ds              ROMS dataset
-    
-    grid            xgcm object, Grid object associated with DataArray phi
-    
-    
-    Outputs:
-    -------
-    epv             The ertel potential vorticity
-                    epv = -v_z * phi_x + u_z * phi_y + (f + v_x - u_y) * phi_z
-
-    Options:
-    -------
-    tracer          The tracer to use in calculating EPV. Default is buoyancy. 
-                    Buoyancy calculated from salt and temp if rho is not present.
-
-    boundary        Passed to `grid` method calls. Default is `extend`
     '''
     
-    # load appropriate tracer into 'phi', defalut rho. Use EOS if necessary
-    if tracer is None:
-        if 'rho' in ds.variables:
-            phi =  -9.8 * ds.rho/1000.0 
-        else:
-            phi = buoyancy(ds.temp, ds.salt, 0)
-    else:
-        phi = ds[tracer]
-    
-    # get the components of the grad(phi)
-    phi_xi, phi_eta = hgrad(phi, grid, to='rho', boundary=boundary)
-    phi_xi = grid.interp(phi_xi, 'Z', boundary=boundary)
-    phi_eta = grid.interp(phi_eta, 'Z', boundary=boundary)
-    
-    phi_z = grid.derivative(phi, 'Z', boundary=boundary)
-    phi_z = grid.interp(phi_z, 'Z', boundary=boundary)
-    
-    # vertical shear (horizontal components of vorticity)
-    v_z = grid.derivative(ds.v, 'Z', boundary=boundary)
-    v_z = grid.interp(grid.interp(v_z, 'Y', boundary=boundary), 'Z', boundary=boundary)
-    
-    u_z = grid.derivative(ds.u, 'Z', boundary=boundary)
-    u_z = grid.interp(grid.interp(u_z, 'X', boundary=boundary), 'Z', boundary=boundary)
+    dvdxi = hgrad(ds.v, grid, which='xi', boundary=boundary)
+    dudeta = hgrad(ds.u, grid, which='eta', boundary=boundary)
 
-    # vertical component of vorticity
-    rel_vort = relative_vorticity(ds, grid)
-    
-    # combine terms to get the ertel potential vorticity
-    epv = -v_z * phi_xi + u_z * phi_eta + (ds.f + rel_vort) * phi_z
-    
-    # add coordinates
-    try:
-        epv.coords['lon_rho'] = ds.coords['lon_rho']
-        epv.coords['lat_rho'] = ds.coords['lat_rho']
-        epv.coords['z_rho'] = ds.coords['z_rho']
-        epv.coords['ocean_time'] = ds.coords['ocean_time']
-    except:
-        warn('Could not append coordinates')
+    return dvdxi - dudeta
 
-    return epv
+
+# def ertel(ds, grid, tracer=None, boundary='extend'):
+#     '''Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions
+
+#     Inputs:
+#     ------
+#     ds              ROMS dataset
+    
+#     grid            xgcm object, Grid object associated with DataArray phi
+    
+    
+#     Outputs:
+#     -------
+#     epv             The ertel potential vorticity
+#                     epv = -v_z * phi_x + u_z * phi_y + (f + v_x - u_y) * phi_z
+
+#     Options:
+#     -------
+#     tracer          The tracer to use in calculating EPV. Default is buoyancy. 
+#                     Buoyancy calculated from salt and temp if rho is not present.
+
+#     boundary        Passed to `grid` method calls. Default is `extend`
+#     '''
+    
+#     # load appropriate tracer into 'phi', defalut rho. Use EOS if necessary
+#     if tracer is None:
+#         if 'rho' in ds.variables:
+#             phi =  -9.8 * ds.rho/1000.0 
+#         else:
+#             phi = buoyancy(ds.temp, ds.salt, 0)
+#     else:
+#         phi = ds[tracer]
+        
+#     # add phi to ds so that properties of ds are known to phi too
+#     ds['phi'] = phi
+    
+#     # get the components of the grad(phi)
+#     ds['phi_xi'], ds['phi_eta'] = hgrad(ds.phi, grid, boundary=boundary)
+#     phi_xi = ds.xroms.grids(ds['phi_xi'], hcoord, scoord)
+    
+#     phi_z = ds.xroms.ddz(phi, 'dphidz', boundary=boundary)
+#     phi_z = ds.xroms.grids(phi_z, hcoord, scoord)
+    
+#     # vertical shear (horizontal components of vorticity)
+#     u_z = ds.xroms.dudz('rho', 's_rho')
+#     v_z = ds.xroms.dvdz('rho', 's_rho')
+
+#     # vertical component of vorticity on rho grid
+#     vort = ds.xroms.vort('rho', 's_rho')
+    
+#     # combine terms to get the ertel potential vorticity
+#     epv = -v_z * phi_xi + u_z * phi_eta + (ds.f + vort) * phi_z
+    
+#     # add coordinates
+#     try:
+#         epv.coords['lon_rho'] = ds.coords['lon_rho']
+#         epv.coords['lat_rho'] = ds.coords['lat_rho']
+#         epv.coords['z_rho'] = ds.coords['z_rho']
+#         epv.coords['ocean_time'] = ds.coords['ocean_time']
+#     except:
+#         warn('Could not append coordinates')
+
+#     return epv
