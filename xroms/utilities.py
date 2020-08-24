@@ -84,17 +84,17 @@ def sel2d(ds, lon0, lat0, proj=None, whichgrid='rho', argsel=False):
 
 
 def to_rho(var, grid, boundary='extend'):
-    if var.dims[-1] != 'xi_rho':
+    if 'xi_rho' not in var.dims:
         var = grid.interp(var, 'X', to='center', boundary=boundary)
-    if var.dims[-2] != 'eta_rho':
+    if 'eta_rho' not in var.dims:
         var = grid.interp(var, 'Y', to='center', boundary=boundary)
     return var
 
 
 def to_psi(var, grid, boundary='extend'):
-    if var.dims[-1] != 'xi_u':
+    if 'xi_u' not in var.dims:
         var = grid.interp(var, 'X', to='inner', boundary=boundary)
-    if var.dims[-2] != 'eta_v':
+    if 'eta_v' not in var.dims:
         var = grid.interp(var, 'Y', to='inner', boundary=boundary)
     return var
 
