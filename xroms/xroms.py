@@ -29,7 +29,18 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
              includes ROMS metrics
     '''
     
-    ds = ds.rename({'eta_u': 'eta_rho', 'xi_v': 'xi_rho', 'xi_psi': 'xi_u', 'eta_psi': 'eta_v'})
+    rename = {}
+    if 'eta_u' in ds.dims:
+        rename['eta_u'] = 'eta_rho'
+    if 'xi_v' in ds.dims:
+        rename['xi_v'] = 'xi_rho'
+    if 'xi_psi' in ds.dims:
+        rename['xi_psi'] = 'xi_u'
+    if 'eta_psi' in ds.dims:
+        rename['eta_psi'] = 'eta_v'
+    ds = ds.rename(rename)
+    
+#     ds = ds.rename({'eta_u': 'eta_rho', 'xi_v': 'xi_rho', 'xi_psi': 'xi_u', 'eta_psi': 'eta_v'})
 
     coords={'X':{'center':'xi_rho', 'inner':'xi_u'},
         'Y':{'center':'eta_rho', 'inner':'eta_v'},
@@ -167,8 +178,16 @@ def open_netcdf(files, chunks=None):
     if chunks is None:
         chunks = {'ocean_time':1}   # A basic chunking option
 
-    return xr.open_mfdataset(files, compat='override', combine='by_coords',
-                                 data_vars='minimal', coords='minimal', chunks=chunks)
+    if isinstance(files, list):
+        ds = xr.open_mfdataset(files, compat='override', combine='by_coords',
+                                     data_vars='minimal', coords='minimal', chunks=chunks)
+    elif isinstance(files, str):
+        ds = xr.open_dataset(files, chunks=chunks)
+    
+    ds, grid = roms_dataset(ds)
+#     ds['grid'] = grid   # can't store and retrieve from dataset
+
+    return ds
 
 
 def open_zarr(files, chunks=None):
@@ -189,9 +208,14 @@ def open_zarr(files, chunks=None):
 
     opts = {'consolidated': True,
             'chunks': chunks, 'drop_variables': 'dstart'}
-    return xr.concat(
+    ds = xr.concat(
         [xr.open_zarr(file, **opts) for file in files],
         dim='ocean_time', data_vars='minimal', coords='minimal')
+    
+    ds, grid = roms_dataset(ds)
+#     ds['grid'] = grid   # can't store and retrieve from dataset
+    
+    return ds
     
 
 def hgrad(q, grid, which='both', z=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):

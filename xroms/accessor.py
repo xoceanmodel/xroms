@@ -11,8 +11,9 @@ import numpy as np
 # vargrid['temp'] = {'s': 's_rho', 'eta': 'eta_rho', 'xi': 'xi_rho', 
 #                    'grid': 'rho', 'z': 'z_rho', 'z0': 'z_rho0'}
 # vargrid['salt'] = vargrid['temp']
-
-
+    
+    
+    
 @xr.register_dataset_accessor("xroms")
 class xromsDatasetAccessor:
     def __init__(self, ds, proj=None):
@@ -22,65 +23,95 @@ class xromsDatasetAccessor:
             self.proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
         else:
             self.proj = proj
+        
         self.ds, grid = xroms.roms_dataset(self.ds, add_verts=True, proj=self.proj)
         self.grid = grid
     
     
     def ddz(self, varname, sboundary='extend', sfill_value=np.nan):
-        '''Calculate d/dz for a variable.'''
+        '''Calculate d/dz for a variable.
+
+        Inputs:
+        varname    string. Name of variable to change that is available in self.
         
-        res = self.grid.derivative(self.ds[varname], 'Z', boundary=sboundary, fill_value=sfill_value)
-        return res
+        Example usage:
+        > ds.xroms.ddz('salt')
+        '''
+        
+        return xroms.ddz(self.ds[varname], self.grid, sboundary=sboundary, sfill_value=sfill_value)
     
     
     def to_grid(self, varname, hcoord=None, scoord=None):
-        '''Implement grid changes using input strings.'''
+        '''Implement grid changes to variable in Dataset using input strings.
         
-        var = self.ds[varname]
-        
-        if hcoord is not None:
-            if hcoord == 'rho':
-                var = xroms.to_rho(var, self.grid)
-            elif hcoord == 'psi':
-                var = xroms.to_psi(var, self.grid)
-            else:
-                print('no change to horizontal grid')
-                
-        if scoord is not None:
-            if scoord == 's_rho':
-                var = xroms.to_s_rho(var, self.grid)
-            elif scoord == 's_w':
-                var = xroms.to_s_w(var, self.grid)
-            else:
-                print('no change to vertical grid')
+        Inputs:
+        varname    string. Name of variable to change that is available in self.
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   varname to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   varname to. Options are 's_rho' and 's_w'.
+                   
+        Example usage:
+        Change 'salt' variable in Dataset ds to be on psi horizontal and s_w vertical grids
+        > ds.xroms.to_grid('salt', 'psi', 's_w')  
+        '''
+
+        return xroms.to_grid(self.ds[varname], self.grid, hcoord=hcoord, scoord=scoord)
             
-        return var
-        
         
     def calc_ddz(self, varname, outname=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
-        '''Wrap ddz and to_grid and name.'''
+        '''Wrap ddz and to_grid and name.
+        
+        Inputs:
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   to. Options are 's_rho' and 's_w'.
+        
+        '''
 
-        var = self.ddz(varname, sboundary=sboundary, sfill_value=sfill_value)
-        var = self.to_grid(varname, hcoord, scoord)
-        if outname is not None:
-            var.name = outname
-        return var
-
+        return xroms.calc_ddz(self.ds[varname], self.grid, outname=outname, hcoord=hcoord, 
+                              scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
+    
     
     def dudz(self, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
-        '''Calculate dudz from ds.'''
+        '''Calculate dudz from ds.
+        
+        Inputs:
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   to. Options are 's_rho' and 's_w'.
+        
+        '''
 
         return self.calc_ddz('u', 'dudz', hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
 
     
     def dvdz(self, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
-        '''Calculate dvdz from ds.'''
+        '''Calculate dvdz from ds.
+        
+        Inputs:
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   to. Options are 's_rho' and 's_w'.
+        
+        '''
 
         return self.calc_ddz('v', 'dvdz', hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
     
     
     def vort(self, hcoord=None, scoord=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
-        '''Calculate vertical relative vorticity from ds.'''
+        '''Calculate vertical relative vorticity from ds.
+        
+        Inputs:
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   to. Options are 's_rho' and 's_w'.
+        
+        '''
 
         var = xroms.relative_vorticity(self.ds, self.grid, hboundary=hboundary, hfill_value=hfill_value,
                                                            sboundary=sboundary, sfill_value=sfill_value)
@@ -106,6 +137,10 @@ class xromsDatasetAccessor:
 
         Options:
         -------
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   to. Options are 's_rho' and 's_w'.
         tracer          The tracer to use in calculating EPV. Default is buoyancy. 
                         Buoyancy calculated from salt and temp if rho is not present.
 
@@ -141,13 +176,21 @@ class xromsDatasetAccessor:
 
     
     def get_rho(self, hcoord=None, scoord=None):
-        '''Return existing rho or calculate from salt/temp.'''
+        '''Return existing rho or calculate from salt/temp.
+        
+        Inputs:
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   to. Options are 's_rho' and 's_w'.
+        
+        '''
         
         if 'rho' in self.ds.variables:
             var = self.ds.rho
         else:
             var = xroms.density(self.ds.temp, self.ds.salt, self.ds.z_rho)
-        var = self.to_grid(var, hcoord, scoord)
+        var = var.xroms.to_grid(self.grid, hcoord, scoord)  # var is now DataArray
         return var
     
     
@@ -155,8 +198,7 @@ class xromsDatasetAccessor:
         '''Calculate buoyancy frequency squared.'''
         
         rho = self.get_rho(hcoord, scoord)
-        drhodz = self.calc_ddz(rho, 'drhodz', hcoord, scoord, hboundary=hboundary, hfill_value=hfill_value,
-                                                              sboundary=sboundary, sfill_value=sfill_value)
+        drhodz = rho.xroms.calc_ddz(self.grid, 'drhodz', hcoord, scoord, sboundary=sboundary, sfill_value=sfill_value)
         g = 9.81
         return -g/self.ds.rho0*drhodz
     
@@ -170,41 +212,40 @@ class xromsDataArrayAccessor:
         
 
     def ddz(self, grid, sboundary='extend', sfill_value=np.nan):
-        '''Calculate d/dz for a variable.'''
+        '''Calculate d/dz for a variable.
+
+        Inputs:
+        grid       xgcm grid object
         
-        res = grid.derivative(self.da, 'Z', boundary=sboundary, fill_value=sfill_value)
-        return res
+        Example usage:
+        > ds.salt.xroms.ddz(ds.xroms.grid)
+        '''
+        
+        return xroms.ddz(self.da, grid, sboundary=sboundary, sfill_value=sfill_value)
     
     
     def to_grid(self, grid, hcoord=None, scoord=None):
-        '''Implement grid changes using input strings.'''
+        '''Implement grid changes to DataArray using input strings.
         
-        var = self.da
+        Inputs:
+        grid       xgcm grid object with metrics that apply to this DataArray.
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   varname to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   varname to. Options are 's_rho' and 's_w'.
+                   
+        Example usage:
+        Change 'salt' variable in Dataset ds to be on psi horizontal and s_w vertical grids
+        > ds.salt.xroms.to_grid(ds.xroms.grid, 'psi', 's_w')  
+        '''
         
-        if hcoord is not None:
-            if hcoord == 'rho':
-                var = xroms.to_rho(var, grid)
-            elif hcoord == 'psi':
-                var = xroms.to_psi(var, grid)
-            else:
-                print('no change to horizontal grid')
-                
-        if scoord is not None:
-            if scoord == 's_rho':
-                var = xroms.to_s_rho(var, grid)
-            elif scoord == 's_w':
-                var = xroms.to_s_w(var, grid)
-            else:
-                print('no change to vertical grid')
-            
-        return var
+        return xroms.to_grid(self.da, grid, hcoord=hcoord, scoord=scoord)
         
         
     def calc_ddz(self, grid, outname=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
         '''Wrap ddz and to_grid and name.'''
 
-        var = self.ddz(grid, sboundary=sboundary, sfill_value=sfill_value)
-        var = self.to_grid(grid, hcoord, scoord)
-        if outname is not None:
-            var.name = outname
-        return var
+        return xroms.calc_ddz(self.da, grid, outname=outname, hcoord=hcoord, 
+                              scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
+
+#ds.salt.xroms.isel(xi=, eta=)

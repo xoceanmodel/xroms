@@ -92,6 +92,7 @@ def to_rho(var, grid, boundary='extend'):
 
 
 def to_psi(var, grid, boundary='extend'):
+
     if 'xi_u' not in var.dims:
         var = grid.interp(var, 'X', to='inner', boundary=boundary)
     if 'eta_v' not in var.dims:
@@ -117,6 +118,69 @@ def to_s_w(var, grid, boundary='extend'):
     return var
 
 
+def to_grid(var, grid, hcoord=None, scoord=None):
+    '''Implement grid changes to variable var using input strings.
+
+    Inputs:
+    var        DataArray
+    hcoord     string (None). Name of horizontal grid to interpolate variable
+               to. Options are 'rho' and 'psi'.
+    scoord     string (None). Name of vertical grid to interpolate variable
+               to. Options are 's_rho' and 's_w'.
+
+    Example usage:
+    Change 'salt' variable in Dataset ds to be on psi horizontal and s_w vertical grids
+    > xroms.to_grid(ds.salt, grid, 'psi', 's_w')
+    '''
+    
+    name = var.name
+
+    if hcoord is not None:
+        if hcoord == 'rho':
+            var = to_rho(var, grid)
+        elif hcoord == 'psi':
+            var = to_psi(var, grid)
+        else:
+            print('no change to horizontal grid')
+
+    if scoord is not None:
+        if scoord == 's_rho':
+            var = to_s_rho(var, grid)
+        elif scoord == 's_w':
+            var = to_s_w(var, grid)
+        else:
+            print('no change to vertical grid')
+
+    var.name = name
+    
+    return var
+
+
+def ddz(var, grid, sboundary='extend', sfill_value=np.nan):
+    '''Calculate d/dz for a variable.
+    
+    Inputs:
+    var        DataArray
+    grid       xgcm grid object
+        
+    Example usage:
+    > xroms.ddz(ds.salt, grid)
+    '''
+
+    return grid.derivative(var, 'Z', boundary=sboundary, fill_value=sfill_value)
+
+
+def calc_ddz(var, grid, outname=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
+    '''Wrap ddz and to_grid and name.
+    '''
+
+    var = ddz(var, grid, sboundary=sboundary, sfill_value=sfill_value)
+    var = to_grid(var, grid, hcoord, scoord)
+    if outname is not None:
+        var.name = outname
+    return var
+
+    
 def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
     '''Calculate an isosurface
 
