@@ -51,6 +51,9 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     if 'Vtransform' in ds.variables.keys():
         Vtransform = ds.Vtransform
 
+    assert Vtransform is not None, 'Need a Vtransform of 1 or 2, either in the Dataset or input to the function.'
+        
+        
     if Vtransform == 1:
         Zo_rho = ds.hc * (ds.s_rho - ds.Cs_r) + ds.Cs_r * ds.h
         z_rho = Zo_rho + ds.zeta * (1 + Zo_rho/ds.h)
@@ -68,9 +71,6 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
         z_rho0 = ds.h * Zo_rho
         z_w0 = ds.h * Zo_w
         
-    else:
-        print('Need a Vtransform of 1 or 2.')
-
     ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho',
                                      transpose_coords=False)
     ds.coords['z_w_u'] = grid.interp(ds.z_w, 'X')
@@ -161,7 +161,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     return ds, grid
 
 
-def open_netcdf(files, chunks=None):
+def open_netcdf(files, chunks=None, Vtransform=None):
     '''Return an xarray.Dataset based on a list of netCDF files
 
     Inputs:
@@ -184,13 +184,13 @@ def open_netcdf(files, chunks=None):
     elif isinstance(files, str):
         ds = xr.open_dataset(files, chunks=chunks)
     
-    ds, grid = roms_dataset(ds)
+    ds, grid = roms_dataset(ds, Vtransform=Vtransform)
 #     ds['grid'] = grid   # can't store and retrieve from dataset
 
     return ds
 
 
-def open_zarr(files, chunks=None):
+def open_zarr(files, chunks=None, Vtransform=None):
     '''Return an xarray.Dataset based on a list of zarr files
 
     Inputs:
@@ -212,7 +212,7 @@ def open_zarr(files, chunks=None):
         [xr.open_zarr(file, **opts) for file in files],
         dim='ocean_time', data_vars='minimal', coords='minimal')
     
-    ds, grid = roms_dataset(ds)
+    ds, grid = roms_dataset(ds, Vtransform=Vtransform)
 #     ds['grid'] = grid   # can't store and retrieve from dataset
     
     return ds
