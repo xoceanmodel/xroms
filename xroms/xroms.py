@@ -10,7 +10,7 @@ from .roms_seawater import buoyancy
 
 def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     '''Return a dataset that is aware of ROMS coordinatates and an associated xgcm grid object with metrics
-    
+
     Note that this could be very slow if dask is not on.
 
     Input
@@ -28,7 +28,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     grid:    xgcm grid object
              includes ROMS metrics
     '''
-    
+
     rename = {}
     if 'eta_u' in ds.dims:
         rename['eta_u'] = 'eta_rho'
@@ -39,7 +39,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     if 'eta_psi' in ds.dims:
         rename['eta_psi'] = 'eta_v'
     ds = ds.rename(rename)
-    
+
 #     ds = ds.rename({'eta_u': 'eta_rho', 'xi_v': 'xi_rho', 'xi_psi': 'xi_u', 'eta_psi': 'eta_v'})
 
     coords={'X':{'center':'xi_rho', 'inner':'xi_u'},
@@ -48,15 +48,15 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
 
     grid = xgcm.Grid(ds, coords=coords, periodic=[])
 
-    if 'Vtransform' in ds.variables.keys():
+    if "Vtransform" in ds.variables.keys():
         Vtransform = ds.Vtransform
 
     assert Vtransform is not None, 'Need a Vtransform of 1 or 2, either in the Dataset or input to the function.'
-        
-        
+
+
     if Vtransform == 1:
         Zo_rho = ds.hc * (ds.s_rho - ds.Cs_r) + ds.Cs_r * ds.h
-        z_rho = Zo_rho + ds.zeta * (1 + Zo_rho/ds.h)
+        z_rho = Zo_rho + ds.zeta * (1 + Zo_rho / ds.h)
         Zo_w = ds.hc * (ds.s_w - ds.Cs_w) + ds.Cs_w * ds.h
         z_w = Zo_w + ds.zeta * (1 + Zo_w/ds.h)
         # also include z coordinates with mean sea level (constant over time)
@@ -70,7 +70,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
         # also include z coordinates with mean sea level (constant over time)
         z_rho0 = ds.h * Zo_rho
         z_w0 = ds.h * Zo_w
-        
+
     ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho',
                                      transpose_coords=False)
     ds.coords['z_w_u'] = grid.interp(ds.z_w, 'X')
@@ -89,11 +89,11 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     ds.coords['z_rho_v0'] = grid.interp(ds.z_rho0, 'Y')
     ds.coords['z_rho_psi0'] = grid.interp(ds.z_rho_u0, 'Y')
     ds.coords['z_w0'] = z_w0.transpose('s_w', 'eta_rho', 'xi_rho',
-                                     transpose_coords=False) 
+                                     transpose_coords=False)
     ds.coords['z_w_u0'] = grid.interp(ds.z_w0, 'X')
     ds.coords['z_w_v0'] = grid.interp(ds.z_w0, 'Y')
     ds.coords['z_w_psi0'] = grid.interp(ds.z_w_u0, 'Y')
-    
+
     # add vert grid, esp for plotting pcolormesh
     if add_verts:
         import pygridgen
@@ -151,10 +151,19 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     ds['dA'] = ds.dx * ds.dy
 
     metrics = {
-        ('X',): ['dx', 'dx_u', 'dx_v', 'dx_psi'], # X distances
-        ('Y',): ['dy', 'dy_u', 'dy_v', 'dy_psi'], # Y distances
-        ('Z',): ['dz', 'dz_u', 'dz_v', 'dz_w', 'dz_w_u', 'dz_w_v', 'dz_psi', 'dz_w_psi'], # Z distances
-        ('X', 'Y'): ['dA'] # Areas
+        ("X",): ["dx", "dx_u", "dx_v", "dx_psi"],  # X distances
+        ("Y",): ["dy", "dy_u", "dy_v", "dy_psi"],  # Y distances
+        ("Z",): [
+            "dz",
+            "dz_u",
+            "dz_v",
+            "dz_w",
+            "dz_w_u",
+            "dz_w_v",
+            "dz_psi",
+            "dz_w_psi",
+        ],  # Z distances
+        ("X", "Y"): ["dA"],  # Areas
     }
     grid = xgcm.Grid(ds, coords=coords, metrics=metrics, periodic=[])
 
@@ -176,14 +185,14 @@ def open_netcdf(files, chunks=None, Vtransform=None):
     '''
 
     if chunks is None:
-        chunks = {'ocean_time':1}   # A basic chunking option
+        chunks = {"ocean_time": 1}  # A basic chunking, ok, but maybe not the best
 
     if isinstance(files, list):
         ds = xr.open_mfdataset(files, compat='override', combine='by_coords',
                                      data_vars='minimal', coords='minimal', chunks=chunks)
     elif isinstance(files, str):
         ds = xr.open_dataset(files, chunks=chunks)
-    
+
     ds, grid = roms_dataset(ds, Vtransform=Vtransform)
 #     ds['grid'] = grid   # can't store and retrieve from dataset
 
@@ -204,6 +213,7 @@ def open_zarr(files, chunks=None, Vtransform=None):
                 Default: chunks = {'ocean_time':1}
     '''
     if chunks is None:
+
         chunks = {'ocean_time':1}   # A basic chunking option
 
     opts = {'consolidated': True,
@@ -211,17 +221,17 @@ def open_zarr(files, chunks=None, Vtransform=None):
     ds = xr.concat(
         [xr.open_zarr(file, **opts) for file in files],
         dim='ocean_time', data_vars='minimal', coords='minimal')
-    
+
     ds, grid = roms_dataset(ds, Vtransform=Vtransform)
 #     ds['grid'] = grid   # can't store and retrieve from dataset
-    
+
     return ds
-    
+
 
 def hgrad(q, grid, which='both', z=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
     '''Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions
-    
-    The main purpose of this it to account for the fact that ROMS vertical coordinates are 
+
+    The main purpose of this it to account for the fact that ROMS vertical coordinates are
     sigma coordinates.
 
     Inputs:
@@ -239,8 +249,8 @@ def hgrad(q, grid, which='both', z=None, hboundary='extend', hfill_value=None, s
 
     Options:
     -------
-    
-    which           string ('both'). 'both': return both components of hgrad. 'xi': return only 
+
+    which           string ('both'). 'both': return both components of hgrad. 'xi': return only
                      xi-direction. 'eta': return only eta-direction.
 
     z               DataArray. The vertical depths associated with q. Default is to find the
@@ -252,9 +262,9 @@ def hgrad(q, grid, which='both', z=None, hboundary='extend', hfill_value=None, s
 
     if z is None:
         coords = list(q.coords)
-        z_coord_name = coords[[coord[:2] == 'z_' for coord in coords].index(True)]
+        z_coord_name = coords[[coord[:2] == "z_" for coord in coords].index(True)]
         z = q[z_coord_name]
-        
+
     if which in ['both','xi']:
 
         dqdx = grid.interp(grid.derivative(q, 'X', boundary=hboundary, fill_value=hfill_value), 'Z', boundary=sboundary, fill_value=sfill_value)
@@ -265,14 +275,14 @@ def hgrad(q, grid, which='both', z=None, hboundary='extend', hfill_value=None, s
         dqdxi = dqdx*dzdz - dqdz*dzdx
 
     if which in ['both','eta']:
-        
+
         dqdy = grid.interp(grid.derivative(q, 'Y', boundary=hboundary, fill_value=hfill_value), 'Z', boundary=sboundary, fill_value=sfill_value)
         dqdz = grid.interp(grid.derivative(q, 'Z', boundary=sboundary, fill_value=sfill_value), 'Y', boundary=hboundary, fill_value=hfill_value)
         dzdy = grid.interp(grid.derivative(z, 'Y', boundary=hboundary, fill_value=hfill_value), 'Z', boundary=sboundary, fill_value=sfill_value)
         dzdz = grid.interp(grid.derivative(z, 'Z', boundary=sboundary, fill_value=sfill_value), 'Y', boundary=hboundary, fill_value=hfill_value)
 
         dqdeta = dqdy*dzdz - dqdz*dzdy
-    
+
     if which == 'both':
         return dqdxi, dqdeta
     elif which == 'xi':
@@ -281,19 +291,19 @@ def hgrad(q, grid, which='both', z=None, hboundary='extend', hfill_value=None, s
         return dqdeta
     else:
         print('nothing being returned from hgrad')
-    
+
 
 def relative_vorticity(ds, grid, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
     '''Return the vertical component of the relative vorticity on rho-points
-    
-    
+
+
     Inputs:
     ------
     ds              ROMS dataset, needs to include grid metrics: dz_rho_u, dz_rho_v
-    
+
     grid            xgcm object, Grid object associated with DataArray phi
-    
-    
+
+
     Outputs:
     -------
     rel_vort        The relative vorticity, v_x - u_y, on rho-points.
@@ -302,12 +312,12 @@ def relative_vorticity(ds, grid, hboundary='extend', hfill_value=None, sboundary
     Options:
     -------
     hboundary        Passed to `grid` method calls. Default is `extend`
-    
+
     '''
-    
-    dvdxi = hgrad(ds.v, grid, which='xi', hboundary=hboundary, hfill_value=hfill_value, 
+
+    dvdxi = hgrad(ds.v, grid, which='xi', hboundary=hboundary, hfill_value=hfill_value,
                                           sboundary=sboundary, sfill_value=sfill_value)
-    dudeta = hgrad(ds.u, grid, which='eta', hboundary=hboundary, hfill_value=hfill_value, 
+    dudeta = hgrad(ds.u, grid, which='eta', hboundary=hboundary, hfill_value=hfill_value,
                                             sboundary=sboundary, sfill_value=sfill_value)
 
     return dvdxi - dudeta
