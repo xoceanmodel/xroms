@@ -277,7 +277,7 @@ class xromsDataArrayAccessor:
         '''Wrapper for xarray `interp` without needing to specify grid.
         
         Example usage:
-        > ds.salt.xroms.interp(xi=slice(20,25), eta=35, t=slice('2020-1-1','2020-1-2'))
+        > ds.salt.xroms.interp(xi=20.5, eta=35.5, t='2020-1-1')
         '''
         
         indexer = xroms.build_indexer(self.da, xi, eta, s, t)
