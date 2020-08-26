@@ -115,8 +115,8 @@ class xromsDatasetAccessor:
 
         var = xroms.relative_vorticity(self.ds, self.grid, hboundary=hboundary, hfill_value=hfill_value,
                                                            sboundary=sboundary, sfill_value=sfill_value)
-        var = var.xroms.to_grid(self.grid, hcoord, scoord)  # now DataArray
         var.name = 'vort'
+        var = var.xroms.to_grid(self.grid, hcoord, scoord)  # now DataArray
         return var
     
     

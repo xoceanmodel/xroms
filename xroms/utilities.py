@@ -6,7 +6,23 @@ def argsel2d(ds, lon0, lat0, whichgrid='rho', proj=None):
     '''Return the indices that select nearest grid node.
 
     The order of the indices is first the y or latitude axes,
-    then x or longitude.'''
+    then x or longitude.
+
+    Inputs:
+    ds: xarray Dataset with model output
+    lon0, lat0: Point(s) of interest in longitude/latitude. lon0, lat0
+        can be scalars or they can be lists or arrays, but can only have one dimension if they are arrays.
+    proj (optional): cartopy projection for converting from geographic to
+      projected coordinates. If not input, a Lambert Conformal Conic
+      projection centered at lon0, lat0 will be used for the conversion.
+    whichgrid (optional): Which ROMS grid to find node for. Default is 'rho' grid.
+      Options are 'rho', 'psi', 'u', 'v', 'vert'.
+
+    Example usage:
+    Return the indices of the nearest grid node:
+    > lon0, lat0 = -96, 27
+    > iy, ix = xroms.argsel2d(ds, lon0, lat0, 'rho', proj)
+    '''
 
     return sel2d(ds, lon0, lat0, proj=proj, whichgrid=whichgrid, argsel=True)
 
@@ -28,6 +44,11 @@ def sel2d(ds, lon0, lat0, proj=None, whichgrid='rho', argsel=False):
 
     Return ds subsetted to grid node nearest lon0, lat0 calculated in 2D
     for grid `whichgrid`.
+    
+    Example usage:
+    Find the model output at the grid node nearest the point (lon0, lat0).
+    > lon0, lat0 = -96, 27
+    > ds = xroms.sel2d(ds, lon0, lat0, proj=None)  # to use default projection
     '''
 
     import cartopy
@@ -102,7 +123,6 @@ def to_psi(var, grid, boundary='extend'):
 
 def to_s_rho(var, grid, boundary='extend'):
     '''Convert from s_w to s_rho vertical grid.'''
-    return None
 
     # only change if not already on s_rho
     if 's_rho' not in var.dims:
