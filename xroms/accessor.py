@@ -248,4 +248,38 @@ class xromsDataArrayAccessor:
         return xroms.calc_ddz(self.da, grid, outname=outname, hcoord=hcoord, 
                               scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
 
-#ds.salt.xroms.isel(xi=, eta=)
+    
+    def isel(self, xi=None, eta=None, s=None, t=None, **kwargs):
+        '''Wrapper for xarray `isel` without needing to specify grid.
+        
+        Example usage:
+        > ds.salt.xroms.isel(xi=slice(20,25), eta=slice(30,40), s=10, t=1)
+        '''
+                
+        indexer = xroms.build_indexer(self.da, xi, eta, s, t)
+        
+        return self.da.isel(indexer, **kwargs)
+    
+    
+    def sel(self, xi=None, eta=None, s=None, t=None, **kwargs):
+        '''Wrapper for xarray `sel` without needing to specify grid.
+        
+        Example usage:
+        > ds.salt.xroms.sel(xi=slice(20,25), eta=35, t=slice('2020-1-1','2020-1-2'))
+        '''
+        
+        indexer = xroms.build_indexer(self.da, xi, eta, s, t)
+        
+        return self.da.sel(indexer, **kwargs)
+    
+    
+    def interp(self, xi=None, eta=None, s=None, t=None):
+        '''Wrapper for xarray `interp` without needing to specify grid.
+        
+        Example usage:
+        > ds.salt.xroms.interp(xi=slice(20,25), eta=35, t=slice('2020-1-1','2020-1-2'))
+        '''
+        
+        indexer = xroms.build_indexer(self.da, xi, eta, s, t)
+        
+        return self.da.interp(indexer)

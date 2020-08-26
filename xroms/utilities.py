@@ -202,6 +202,32 @@ def calc_ddz(var, grid, outname=None, hcoord=None, scoord=None, sboundary='exten
     return var
 
 
+def build_indexer(da, xi=None, eta=None, s=None, t=None):
+    '''Build indexer for use with `sel`, `isel`, `interp`.'''
+    
+    indexer = {}
+
+    if xi is not None:
+        # find the name of the xi dimension, this is a string
+        xikey = da.dims[[dim[:2] == "xi" for dim in da.dims].index(True)]
+        # build up indexer by passing through what was entered to this function
+        indexer[xikey] = xi
+
+    if eta is not None:
+        etakey = da.dims[[dim[:3] == "eta" for dim in da.dims].index(True)]
+        indexer[etakey] = eta
+
+    if s is not None:
+        skey = da.dims[[dim[:2] == "s_" for dim in da.dims].index(True)]
+        indexer[skey] = s
+
+    if t is not None:
+        tkey = da.dims[["time" in dim for dim in da.dims].index(True)]
+        indexer[tkey] = t
+
+    return indexer
+
+
 def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
     '''Calculate an isosurface
 
