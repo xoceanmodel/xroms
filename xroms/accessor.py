@@ -273,13 +273,13 @@ class xromsDataArrayAccessor:
         return self.da.sel(indexer, **kwargs)
     
     
-    def interp(self, xi=None, eta=None, s=None, t=None):
-        '''Wrapper for xarray `interp` without needing to specify grid.
+#     def interp(self, xi=None, eta=None, s=None, t=None):
+#         '''Wrapper for xarray `interp` without needing to specify grid.
         
-        Example usage:
-        > ds.salt.xroms.interp(xi=20.5, eta=35.5, t='2020-1-1')
-        '''
+#         Example usage:
+#         > ds.salt.xroms.interp(xi=20.5, eta=35.5, t='2020-1-1')
+#         '''
         
-        indexer = xroms.build_indexer(self.da, xi, eta, s, t)
+#         indexer = xroms.build_indexer(self.da, xi, eta, s, t)
         
-        return self.da.interp(indexer)
+#         return self.da.interp(indexer)
