@@ -13,7 +13,7 @@ from .roms_seawater import density, buoyancy
 from .utilities import (to_rho, to_psi, to_s_w, to_s_rho,
                         to_grid, ddz, calc_ddz,
                         xisoslice, sel2d, argsel2d,
-                       build_indexer)
+                       build_indexer, id_grid)
 # from .interp import setup, ll2xe, calc_zslices, interp
 import xroms.interp
 import xroms.accessor

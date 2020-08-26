@@ -26,6 +26,7 @@ class xromsDatasetAccessor:
         
         self.ds, grid = xroms.roms_dataset(self.ds, add_verts=True, proj=self.proj)
         self.grid = grid
+        self._tris = None
     
     
     def ddz(self, varname, sboundary='extend', sfill_value=np.nan):
@@ -201,6 +202,58 @@ class xromsDatasetAccessor:
         drhodz = rho.xroms.calc_ddz(self.grid, 'drhodz', hcoord, scoord, sboundary=sboundary, sfill_value=sfill_value)
         g = 9.81
         return -g/self.ds.rho0*drhodz
+
+#     @property
+#     def idgrid(self):
+#         '''Return string name of grid DataArray is on.
+    
+#         Examples usage:
+#         > xroms.id_grid(ds.salt)
+#         returns 
+#         'rho'
+#         '''
+#         if self._idgrid is None:
+#             self._idgrid = xroms.id_grid(self.da)
+#         return self._idgrid
+
+    @property
+    def tris(self):
+        
+        # triangulation calculations
+        if self._tris is None:
+            self._tris = xroms.interp.setup(self.ds)  # setup for all grids
+        return self._tris
+        
+    def llzslice(self, varname, lon0, lat0, z0s=None, zetaconstant=False, triplets=False):
+        
+        self.tris
+        da = self.ds[varname]
+        idgrid = xroms.id_grid(da)
+        tri = self.tris[idgrid]
+        return xroms.interp.llzslice(da, tri, lon0, lat0, z0s=z0s, zetaconstant=zetaconstant, triplets=triplets)
+        
+        
+    def llzt(self, varname, lon0, lat0, z0s=None, t0s=None, zetaconstant=False):
+        
+        self.tris
+        da = self.ds[varname]
+        idgrid = xroms.id_grid(da)
+        tri = self.tris[idgrid]
+        return xroms.interp.llzt(da, tri, lon0, lat0, z0s=z0s, t0s=t0s, zetaconstant=zetaconstant)
+    
+    
+    def calc_zslices(self, varname, z0s, zetaconstant=False):
+        
+        da = self.ds[varname]
+        return xroms.interp.calc_zslices(da, z0s, zetaconstant=False)    
+    
+    
+    def ll2xe(self, whichgrid, lon0, lat0, dims=None):
+        
+        tri = self.tris[whichgrid]
+        return xroms.interp.ll2xe(tri, lon0, lat0, dims=None)
+    
+    
     
     
     
@@ -209,6 +262,8 @@ class xromsDataArrayAccessor:
     def __init__(self, da):
 
         self.da = da
+        self._idgrid = None
+        self._tri = None
         
 
     def ddz(self, grid, sboundary='extend', sfill_value=np.nan):
@@ -283,3 +338,45 @@ class xromsDataArrayAccessor:
 #         indexer = xroms.build_indexer(self.da, xi, eta, s, t)
         
 #         return self.da.interp(indexer)
+
+    @property
+    def idgrid(self):
+        '''Return string name of grid DataArray is on.
+    
+        Examples usage:
+        > xroms.id_grid(ds.salt)
+        returns 
+        'rho'
+        '''
+        if self._idgrid is None:
+            self._idgrid = xroms.id_grid(self.da)
+        return self._idgrid
+
+    @property
+    def tri(self):
+        
+        # triangulation calculations
+        if self._tri is None:
+            self._tri = xroms.interp.setup(self.da, self.idgrid)[self.idgrid]  # setup for this variable da
+        return self._tri
+        
+    def llzslice(self, lon0, lat0, z0s=None, zetaconstant=False, triplets=False):
+        
+        self.tri
+        return xroms.interp.llzslice(self.da, self.tri, lon0, lat0, z0s=z0s, zetaconstant=zetaconstant, triplets=triplets)
+        
+        
+    def llzt(self, lon0, lat0, z0s=None, t0s=None, zetaconstant=False):
+        
+        self.tri
+        return xroms.interp.llzt(self.da, self.tri, lon0, lat0, z0s=z0s, t0s=t0s, zetaconstant=zetaconstant)
+    
+    
+    def calc_zslices(self, z0s, zetaconstant=False):
+        
+        return xroms.interp.calc_zslices(self.da, z0s, zetaconstant=False)
+    
+    
+    def ll2xe(self, lon0, lat0, dims=None):
+        
+        return xroms.interp.ll2xe(self.tri, lon0, lat0, dims=None)

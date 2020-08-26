@@ -228,6 +228,30 @@ def build_indexer(da, xi=None, eta=None, s=None, t=None):
     return indexer
 
 
+def id_grid(da):
+    '''Identify grid that DataArray uses.
+    
+    Examples usage:
+    > xroms.id_grid(ds.salt)
+    returns 
+    'rho'
+    '''
+    
+    if da.dims.count('eta_rho') + da.dims.count('xi_rho') == 2:
+        return 'rho'
+    elif (da.dims.count('eta_rho') + da.dims.count('xi_u') == 2) or \
+         (da.dims.count('eta_u') + da.dims.count('xi_u') == 2):
+        return 'u'
+    elif (da.dims.count('eta_v') + da.dims.count('xi_rho') == 2) or \
+         (da.dims.count('eta_v') + da.dims.count('xi_v') == 2):
+        return 'v'
+    elif (da.dims.count('eta_v') + da.dims.count('xi_u') == 2) or \
+         (da.dims.count('eta_psi') + da.dims.count('xi_psi') == 2):
+        return 'psi'
+    elif (da.dims.count('eta_vert') + da.dims.count('xi_vert') == 2):
+        return 'vert'
+
+
 def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
     '''Calculate an isosurface
 

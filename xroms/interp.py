@@ -17,12 +17,16 @@ def setup(ds, whichgrids=None):
     
     Usage is demonstrated in ll2xe().
     '''    
+
+    if isinstance(whichgrids, str):
+        whichgrids = [whichgrids]
+    
     tris = {}
     # Set up Delaunay triangulation of grid space in lon/lat coordinates
     
     if whichgrids is None:
         whichgrids = ['rho', 'u', 'v', 'psi']
-        
+
     for whichgrid in whichgrids:
         lonkey = 'lon_' + whichgrid
         latkey = 'lat_' + whichgrid
