@@ -148,7 +148,21 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     ds['dz_psi0'] = grid.interp(ds.dz_v0, 'X')
     ds['dz_w_psi0'] = grid.interp(ds.dz_w_v0, 'X')
 
+    # grid areas
     ds['dA'] = ds.dx * ds.dy
+    ds['dA_u'] = ds.dx_u * ds.dy_u
+    ds['dA_v'] = ds.dx_v * ds.dy_v
+    ds['dA_psi'] = ds.dx_psi * ds.dy_psi
+    
+    # volume
+    ds['dV'] = ds.dx * ds.dy * ds.dz  # rho vertical, rho horizontal
+    ds['dV_w'] = ds.dx * ds.dy * ds.dz_w  # w vertical, rho horizontal
+    ds['dV_u'] = ds.dx_u * ds.dy_u * ds.dz_u  # rho vertical, u horizontal
+    ds['dV_w_u'] = ds.dx_u * ds.dy_u * ds.dz_w_u  # w vertical, u horizontal
+    ds['dV_v'] = ds.dx_v * ds.dy_v * ds.dz_v  # rho vertical, v horizontal
+    ds['dV_w_v'] = ds.dx_v * ds.dy_v * ds.dz_w_v  # w vertical, v horizontal
+    ds['dV_psi'] = ds.dx_psi * ds.dy_psi * ds.dz_psi  # rho vertical, psi horizontal
+    ds['dV_w_psi'] = ds.dx_psi * ds.dy_psi * ds.dz_w_psi  # w vertical, psi horizontal
 
     metrics = {
         ("X",): ["dx", "dx_u", "dx_v", "dx_psi"],  # X distances
