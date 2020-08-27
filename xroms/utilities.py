@@ -1,5 +1,6 @@
 import xarray as xr
 import numpy as np
+import xroms
 
 
 def argsel2d(ds, lon0, lat0, whichgrid='rho', proj=None):
@@ -147,7 +148,7 @@ def to_grid(var, grid, hcoord=None, scoord=None):
     hcoord     string (None). Name of horizontal grid to interpolate variable
                to. Options are 'rho' and 'psi'.
     scoord     string (None). Name of vertical grid to interpolate variable
-               to. Options are 's_rho' and 's_w'.
+               to. Options are 's_rho', 'rho', 's_w', and 'w'.
 
     Example usage:
     Change 'salt' variable in Dataset ds to be on psi horizontal and s_w vertical grids
@@ -157,45 +158,88 @@ def to_grid(var, grid, hcoord=None, scoord=None):
     name = var.name
 
     if hcoord is not None:
+        assert hcoord in ['rho','psi'], 'hcoord should be "rho" or "psi" but is "%s"' % hcoord
         if hcoord == 'rho':
             var = to_rho(var, grid)
         elif hcoord == 'psi':
             var = to_psi(var, grid)
-        else:
-            print('no change to horizontal grid')
 
     if scoord is not None:
-        if scoord == 's_rho':
+        assert scoord in ['s_rho','rho','s_w','w'], 'scoord should be "s_rho", "rho", "s_w", or "w" but is "%s"' % scoord
+        if scoord in ['s_rho','rho']:
             var = to_s_rho(var, grid)
-        elif scoord == 's_w':
+        elif scoord in ['s_w','w']:
             var = to_s_w(var, grid)
-        else:
-            print('no change to vertical grid')
 
     var.name = name
 
     return var
 
 
-def ddz(var, grid, sboundary='extend', sfill_value=np.nan):
+def ddz(var, grid, outname=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
     '''Calculate d/dz for a variable.
 
     Inputs:
     var        DataArray
     grid       xgcm grid object
+    hcoord     string (None). Name of horizontal grid to interpolate variable
+               to. Options are 'rho' and 'psi'.
+    scoord     string (None). Name of vertical grid to interpolate variable
+               to. Options are 's_rho' and 's_w'.
 
     Example usage:
     > xroms.ddz(ds.salt, grid)
     '''
 
-    return grid.derivative(var, 'Z', boundary=sboundary, fill_value=sfill_value)
+    var =  grid.derivative(var, 'Z', boundary=sboundary, fill_value=sfill_value)
+    var = to_grid(var, grid, hcoord, scoord)
+    if outname is not None:
+        var.name = outname
+    return var
 
 
-def calc_ddz(var, grid, outname=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
-    '''Wrap ddz and to_grid and name.
+def ddxi(var, grid, outname=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
+    '''Calculate d/dxi for a variable.
+
+    Inputs:
+    var        DataArray
+    grid       xgcm grid object
+    hcoord     string (None). Name of horizontal grid to interpolate variable
+               to. Options are 'rho' and 'psi'.
+    scoord     string (None). Name of vertical grid to interpolate variable
+               to. Options are 's_rho' and 's_w'.
+    z          DataArray. The vertical depths associated with q. Default is to find the
+               coordinate of var that starts with 'z_', and use that.
+
+    Example usage:
+    > xroms.ddxi(ds.salt, grid)
     '''
+    
+    var = xroms.hgrad(var, grid, which='xi', z=z, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
+    var = to_grid(var, grid, hcoord, scoord)
+    if outname is not None:
+        var.name = outname
+    return var
 
-    var = ddz(var, grid, sboundary=sboundary, sfill_value=sfill_value)
+
+def ddeta(var, grid, outname=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
+    '''Calculate d/deta for a variable.
+
+    Inputs:
+    var        DataArray
+    grid       xgcm grid object
+    hcoord     string (None). Name of horizontal grid to interpolate variable
+               to. Options are 'rho' and 'psi'.
+    scoord     string (None). Name of vertical grid to interpolate variable
+               to. Options are 's_rho' and 's_w'.
+    z          DataArray. The vertical depths associated with q. Default is to find the
+               coordinate of var that starts with 'z_', and use that.
+
+    Example usage:
+    > xroms.ddeta(ds.salt, grid)
+    '''
+    
+    var = xroms.hgrad(var, grid, which='eta', z=z, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     var = to_grid(var, grid, hcoord, scoord)
     if outname is not None:
         var.name = outname

@@ -11,7 +11,7 @@ from .xroms import (roms_dataset,
 #                     ertel)
 from .roms_seawater import density, buoyancy
 from .utilities import (to_rho, to_psi, to_s_w, to_s_rho,
-                        to_grid, ddz, calc_ddz,
+                        to_grid, ddz, ddxi, ddeta,
                         xisoslice, sel2d, argsel2d,
                        build_indexer, id_grid)
 # from .interp import setup, ll2xe, calc_zslices, interp
