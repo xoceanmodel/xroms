@@ -3,14 +3,6 @@ import cartopy
 import xroms
 import numpy as np
 
-# vargrid = {}
-# vargrid['u'] = {'s': 's_rho', 'eta': 'eta_rho', 'xi': 'xi_u', 
-#                 'grid': 'u', 'z': 'z_rho_u', 'z0': 'z_rho_u0'}
-# vargrid['v'] = {'s': 's_rho', 'eta': 'eta_v', 'xi': 'xi_rho', 
-#                 'grid': 'v', 'z': 'z_rho_v', 'z0': 'z_rho_v0'}
-# vargrid['temp'] = {'s': 's_rho', 'eta': 'eta_rho', 'xi': 'xi_rho', 
-#                    'grid': 'rho', 'z': 'z_rho', 'z0': 'z_rho0'}
-# vargrid['salt'] = vargrid['temp']
     
 g = 9.81  # m^2/s
     
@@ -27,9 +19,6 @@ class xromsDatasetAccessor:
         self.ds, grid = xroms.roms_dataset(self.ds, add_verts=True, proj=self.proj)
         self.grid = grid
         self._tris = None
-        
-        self._rho = None
-        self.rho
     
     
     def to_grid(self, varname, hcoord=None, scoord=None):
@@ -46,33 +35,37 @@ class xromsDatasetAccessor:
         Change 'salt' variable in Dataset ds to be on psi horizontal and s_w vertical grids
         > ds.xroms.to_grid('salt', 'psi', 's_w')  
         '''
-
+        assert isinstance(varname, str), 'varname should be a string of the name of a variable stored in the Dataset'
         return xroms.to_grid(self.ds[varname], self.grid, hcoord=hcoord, scoord=scoord)
     
     
-    def ddz(self, varname, outname=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
+    def ddz(self, varname, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
         '''Calculate d/dz for a variable.
 
         Inputs:
         varname    string. Name of variable to change that is available in self.
+        attrs      dictionary (None). Metadata to replace what is assumed for resultant DataArray.
+                   For example, `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
         hcoord     string (None). Name of horizontal grid to interpolate variable
                    to. Options are 'rho' and 'psi'.
         scoord     string (None). Name of vertical grid to interpolate variable
                    to. Options are 's_rho' and 's_w'.
         
         Example usage:
-        > ds.xroms.ddz('salt', outname='dsaltdz', hcoord='psi', scoord='w')
+        > ds.xroms.ddz('salt', hcoord='psi', scoord='w')
         '''
-        
-        return xroms.ddz(self.ds[varname], self.grid, outname=outname, hcoord=hcoord, 
+        assert isinstance(varname, str), 'varname should be a string of the name of a variable stored in the Dataset'
+        return xroms.ddz(self.ds[varname], self.grid, attrs=attrs, hcoord=hcoord, 
                          scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
     
     
-    def ddxi(self, varname, outname=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
+    def ddxi(self, varname, attrs=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
         '''Calculate d/dxi for a variable.
 
         Inputs:
         varname    string. Name of variable to change that is available in self.
+        attrs      dictionary (None). Metadata to replace what is assumed for resultant DataArray.
+                   For example, `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
         hcoord     string (None). Name of horizontal grid to interpolate variable
                    to. Options are 'rho' and 'psi'.
         scoord     string (None). Name of vertical grid to interpolate variable
@@ -81,19 +74,21 @@ class xromsDatasetAccessor:
                    coordinate of var that starts with 'z_', and use that.
         
         Example usage:
-        > ds.xroms.ddxi('salt', outname='dsaltdxi', hcoord='psi', scoord='w')
+        > ds.xroms.ddxi('salt', hcoord='psi', scoord='w')
         '''
-        
-        return xroms.ddxi(self.ds[varname], self.grid, outname=outname, hcoord=hcoord, scoord=scoord, 
+        assert isinstance(varname, str), 'varname should be a string of the name of a variable stored in the Dataset'
+        return xroms.ddxi(self.ds[varname], self.grid, attrs=attrs, hcoord=hcoord, scoord=scoord, 
                           hboundary=hboundary, hfill_value=hfill_value, 
                           sboundary=sboundary, sfill_value=sfill_value, z=z)
 
 
-    def ddeta(self, varname, outname=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
+    def ddeta(self, varname, attrs=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
         '''Calculate d/deta for a variable.
 
         Inputs:
         varname    string. Name of variable to change that is available in self.
+        attrs      dictionary (None). Metadata to replace what is assumed for resultant DataArray.
+                   For example, `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
         hcoord     string (None). Name of horizontal grid to interpolate variable
                    to. Options are 'rho' and 'psi'.
         scoord     string (None). Name of vertical grid to interpolate variable
@@ -102,10 +97,10 @@ class xromsDatasetAccessor:
                    coordinate of var that starts with 'z_', and use that.
         
         Example usage:
-        > ds.xroms.ddeta('salt', outname='dsaltdeta', hcoord='psi', scoord='w')
+        > ds.xroms.ddeta('salt', hcoord='psi', scoord='w')
         '''
-        
-        return xroms.ddeta(self.ds[varname], self.grid, outname=outname, hcoord=hcoord, scoord=scoord, 
+        assert isinstance(varname, str), 'varname should be a string of the name of a variable stored in the Dataset'
+        return xroms.ddeta(self.ds[varname], self.grid, attrs=attrs, hcoord=hcoord, scoord=scoord, 
                           hboundary=hboundary, hfill_value=hfill_value, 
                           sboundary=sboundary, sfill_value=sfill_value, z=z)
 
@@ -120,8 +115,8 @@ class xromsDatasetAccessor:
                    to. Options are 's_rho' and 's_w'.
         
         '''
-
-        return self.ddz('u', 'dudz', hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
+        attrs = {'name': 'dudz', 'long_name': 'u component of vertical shear', 'units': '1/s'}
+        return self.ddz('u', attrs=attrs, hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
 
     
     def dvdz(self, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
@@ -134,8 +129,8 @@ class xromsDatasetAccessor:
                    to. Options are 's_rho' and 's_w'.
         
         '''
-
-        return self.ddz('v', 'dvdz', hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
+        attrs = {'name': 'dvdz', 'long_name': 'v component of vertical shear', 'units': '1/s'}
+        return self.ddz('v', attrs=attrs, hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
     
     
     def vort(self, hcoord=None, scoord=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
@@ -151,8 +146,9 @@ class xromsDatasetAccessor:
 
         var = xroms.relative_vorticity(self.ds, self.grid, hboundary=hboundary, hfill_value=hfill_value,
                                                            sboundary=sboundary, sfill_value=sfill_value)
-        var.name = 'vort'
         var = var.xroms.to_grid(self.grid, hcoord, scoord)  # now DataArray
+        attrs = {'name': 'vort', 'long_name': 'vertical component of vorticity', 'units': '1/s'}
+        var.attrs = attrs
         return var
     
     
@@ -208,11 +204,13 @@ class xromsDatasetAccessor:
         # combine terms to get the ertel potential vorticity
         epv = -v_z * phi_xi + u_z * phi_eta + (self.ds.f + vort) * phi_z
 
+        attrs = {'name': 'ertel', 'long_name': 'ertel potential vorticity', 'units': 'tracer/(m.s)'}
+        var.attrs = attrs
+
         return epv
 
     
-    @property
-    def rho(self, hcoord=None, scoord=None):
+    def rho(self, hcoord=None, scoord=None, z=None):
         '''Return existing rho or calculate from salt/temp.
         
         Inputs:
@@ -220,23 +218,49 @@ class xromsDatasetAccessor:
                    to. Options are 'rho' and 'psi'.
         scoord     string (None). Name of vertical grid to interpolate variable
                    to. Options are 's_rho' and 's_w'.
+        z          DataArray or int. The vertical depths associated with density. Default is to 
+                   use the z_rho coordinates, but could instead input 0 to get
+                   potential density.
         
         '''
         
-        if self._rho is None:
-            if 'rho' in self.ds.variables:
-                self._rho = self.ds.rho
-            else:
-                self._rho = xroms.density(self.ds.temp, self.ds.salt, self.ds.z_rho)
-            self._rho = self._rho.xroms.to_grid(self.grid, hcoord, scoord)  # var is now DataArray
-        return self._rho
+        if z is None:
+            z = self.ds.z_rho
+        
+        if 'rho' in self.ds.variables:
+            var = self.ds.rho
+        else:
+            var = xroms.density(self.ds.temp, self.ds.salt, z)
+        var = var.xroms.to_grid(self.grid, hcoord, scoord)  # var is now DataArray
+        attrs = {'name': 'rho', 'long_name': 'density', 'units': 'kg/m^3'}
+        var.attrs = attrs
+        return var
+
+    
+    def sig0(self, hcoord=None, scoord=None):
+        '''Calculate potential density from salt/temp.
+        
+        Inputs:
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   to. Options are 's_rho' and 's_w'.        
+        '''
+        
+        var = self.rho(hcoord=None, scoord=None, z=0)
+        attrs = {'name': 'sig0', 'long_name': 'potential density', 'units': 'kg/m^3'}
+        var.attrs = attrs
+        return var
     
     
     def N2(self, hcoord=None, scoord='s_w', hboundary='extend', hfill_value=None, sboundary='fill', sfill_value=np.nan):
         '''Calculate buoyancy frequency squared, or vertical buoyancy gradient.'''
         
         drhodz = self.rho.xroms.ddz(self.grid, 'drhodz', hcoord, scoord, sboundary=sboundary, sfill_value=sfill_value)
-        return -g*drhodz/self.ds.rho0
+        var = -g*drhodz/self.ds.rho0
+        attrs = {'name': 'N2', 'long_name': 'buoyancy frequency squared, or vertical buoyancy gradient', 'units': '1/s^2'}
+        var.attrs = attrs
+        return var
     
     
     def M2(self, hcoord=None, scoord='s_w', hboundary='extend', hfill_value=None, sboundary='fill', sfill_value=np.nan, z=None):
@@ -253,8 +277,10 @@ class xromsDatasetAccessor:
         drhodeta = self.rho.xroms.ddeta(self.grid, outname=None, hcoord=hcoord, scoord=scoord, 
                                       hboundary=hboundary, hfill_value=hfill_value, 
                                       sboundary=sboundary, sfill_value=sfill_value, z=None)
-        
-        return np.sqrt(drhodxi**2 + drhodeta**2) * g/self.ds.rho0
+        var = np.sqrt(drhodxi**2 + drhodeta**2) * g/self.ds.rho0
+        attrs = {'name': 'M2', 'long_name': 'horizontal buoyancy gradient', 'units': '1/s^2'}
+        var.attrs = attrs
+        return var
         
 
 #     @property
@@ -338,25 +364,33 @@ class xromsDataArrayAccessor:
         return xroms.to_grid(self.da, grid, hcoord=hcoord, scoord=scoord)
         
 
-    def ddz(self, grid, outname=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
+    def ddz(self, grid, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
         '''Calculate d/dz for a variable.
 
         Inputs:
         grid       xgcm grid object
+        attrs      dictionary (None). Metadata to replace what is assumed for resultant DataArray.
+                   For example, `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   varname to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   varname to. Options are 's_rho' and 's_w'.
         
         Example usage:
-        > ds.salt.xroms.ddz(ds.xroms.grid, outname='dsaltdz', hcoord='rho', scoord='rho')
+        > ds.salt.xroms.ddz(ds.xroms.grid, hcoord='rho', scoord='rho')
         '''
         
-        return xroms.ddz(self.da, grid, outname=outname, hcoord=hcoord, 
+        return xroms.ddz(self.da, grid, attrs=attrs, hcoord=hcoord, 
                               scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
     
     
-    def ddxi(self, grid, outname=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
+    def ddxi(self, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
         '''Calculate d/dxi for a variable.
 
         Inputs:
         grid       xgcm grid object
+        attrs      dictionary (None). Metadata to replace what is assumed for resultant DataArray.
+                   For example, `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
         hcoord     string (None). Name of horizontal grid to interpolate variable
                    to. Options are 'rho' and 'psi'.
         scoord     string (None). Name of vertical grid to interpolate variable
@@ -365,19 +399,21 @@ class xromsDataArrayAccessor:
                    coordinate of var that starts with 'z_', and use that.
         
         Example usage:
-        > ds.xroms.ddxi('salt', outname='dsaltdxi', hcoord='psi', scoord='w')
+        > ds.xroms.ddxi('salt', hcoord='psi', scoord='w')
         '''
         
-        return xroms.ddxi(self.da, grid, outname=outname, hcoord=hcoord, scoord=scoord, 
+        return xroms.ddxi(self.da, grid, attrs=attrs, hcoord=hcoord, scoord=scoord, 
                           hboundary=hboundary, hfill_value=hfill_value, 
                           sboundary=sboundary, sfill_value=sfill_value, z=z)
     
     
-    def ddeta(self, grid, outname=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
+    def ddeta(self, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
         '''Calculate d/deta for a variable.
 
         Inputs:
         grid       xgcm grid object
+        attrs      dictionary (None). Metadata to replace what is assumed for resultant DataArray.
+                   For example, `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
         hcoord     string (None). Name of horizontal grid to interpolate variable
                    to. Options are 'rho' and 'psi'.
         scoord     string (None). Name of vertical grid to interpolate variable
@@ -386,10 +422,10 @@ class xromsDataArrayAccessor:
                    coordinate of var that starts with 'z_', and use that.
         
         Example usage:
-        > ds.xroms.ddeta('salt', outname='dsaltdeta', hcoord='psi', scoord='w')
+        > ds.xroms.ddeta('salt', hcoord='psi', scoord='w')
         '''
         
-        return xroms.ddxi(self.da, grid, outname=outname, hcoord=hcoord, scoord=scoord, 
+        return xroms.ddxi(self.da, grid, attrs=attrs, hcoord=hcoord, scoord=scoord, 
                           hboundary=hboundary, hfill_value=hfill_value, 
                           sboundary=sboundary, sfill_value=sfill_value, z=z)
         

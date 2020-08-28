@@ -176,7 +176,7 @@ def to_grid(var, grid, hcoord=None, scoord=None):
     return var
 
 
-def ddz(var, grid, outname=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
+def ddz(var, grid, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
     '''Calculate d/dz for a variable.
 
     Inputs:
@@ -186,24 +186,34 @@ def ddz(var, grid, outname=None, hcoord=None, scoord=None, sboundary='extend', s
                to. Options are 'rho' and 'psi'.
     scoord     string (None). Name of vertical grid to interpolate variable
                to. Options are 's_rho' and 's_w'.
+    attrs      dictionary (None). Metadata to replace what is assumed for resultant DataArray.
+               For example, `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
 
     Example usage:
     > xroms.ddz(ds.salt, grid)
     '''
+    
+    if attrs is None:
+        if not 'name' in var.attrs: var.attrs['name'] = 'var'
+        if not 'long_name' in var.attrs: var.attrs['long_name'] = 'var'
+        if not 'units' in var.attrs: var.attrs['units'] = 'units'            
+        attrs = {'name': 'd' + var.name + 'dz', 'long_name': 'vertical derivative of ' + var.long_name, 
+                 'units': '1/m * ' + var.units}
 
     var =  grid.derivative(var, 'Z', boundary=sboundary, fill_value=sfill_value)
     var = to_grid(var, grid, hcoord, scoord)
-    if outname is not None:
-        var.name = outname
+    var.attrs = attrs
     return var
 
 
-def ddxi(var, grid, outname=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
+def ddxi(var, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
     '''Calculate d/dxi for a variable.
 
     Inputs:
     var        DataArray
     grid       xgcm grid object
+    attrs      dictionary (None). Metadata to replace what is assumed for resultant DataArray.
+               For example, `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
     hcoord     string (None). Name of horizontal grid to interpolate variable
                to. Options are 'rho' and 'psi'.
     scoord     string (None). Name of vertical grid to interpolate variable
@@ -215,19 +225,27 @@ def ddxi(var, grid, outname=None, hcoord=None, scoord=None, hboundary='extend', 
     > xroms.ddxi(ds.salt, grid)
     '''
     
+    if attrs is None:
+        if not 'name' in var.attrs: var.attrs['name'] = 'var'
+        if not 'long_name' in var.attrs: var.attrs['long_name'] = 'var'
+        if not 'units' in var.attrs: var.attrs['units'] = 'units'            
+        attrs = {'name': 'd' + var.name + 'dxi', 'long_name': 'horizontal xi derivative of ' + var.long_name, 
+                 'units': '1/m * ' + var.units}
+    
     var = xroms.hgrad(var, grid, which='xi', z=z, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     var = to_grid(var, grid, hcoord, scoord)
-    if outname is not None:
-        var.name = outname
+    var.attrs = attrs
     return var
 
 
-def ddeta(var, grid, outname=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
+def ddeta(var, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
     '''Calculate d/deta for a variable.
 
     Inputs:
     var        DataArray
     grid       xgcm grid object
+    attrs      dictionary (None). Metadata to replace what is assumed for resultant DataArray.
+               For example, `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
     hcoord     string (None). Name of horizontal grid to interpolate variable
                to. Options are 'rho' and 'psi'.
     scoord     string (None). Name of vertical grid to interpolate variable
@@ -239,10 +257,16 @@ def ddeta(var, grid, outname=None, hcoord=None, scoord=None, hboundary='extend',
     > xroms.ddeta(ds.salt, grid)
     '''
     
+    if attrs is None:
+        if not 'name' in var.attrs: var.attrs['name'] = 'var'
+        if not 'long_name' in var.attrs: var.attrs['long_name'] = 'var'
+        if not 'units' in var.attrs: var.attrs['units'] = 'units'            
+        attrs = {'name': 'd' + var.name + 'deta', 'long_name': 'horizontal eta derivative of ' + var.long_name, 
+                 'units': '1/m * ' + var.units}
+    
     var = xroms.hgrad(var, grid, which='eta', z=z, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     var = to_grid(var, grid, hcoord, scoord)
-    if outname is not None:
-        var.name = outname
+    var.attrs = attrs
     return var
 
 
