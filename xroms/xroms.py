@@ -2,9 +2,10 @@ import xarray as xr
 import xgcm
 from warnings import warn
 import cartopy
+import numpy as np
 
 
-from .utilities import to_rho, to_psi
+from .utilities import to_rho, to_psi, xisoslice
 from .roms_seawater import buoyancy
 
 
@@ -70,26 +71,47 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
         # also include z coordinates with mean sea level (constant over time)
         z_rho0 = ds.h * Zo_rho
         z_w0 = ds.h * Zo_w
+        
+    # the dims present in this process could be different depending on the output sent in with the Dataset
+    dims_rho = list(ds.salt.dims)
+    dims_rho0 = dims_rho.copy()
+    if np.sum(['time' in dim for dim in dims_rho0]):
+        dims_rho0.pop(['time' in dim for dim in dims_rho0].index(True))
+    dims_w = dims_rho.copy()
+    # if s_rho is included in dims for this Dataset, rename it to s_w for dims_w
+    if dims_w.count('s_rho'):
+        dims_w[dims_w.index('s_rho')] = 's_w'
+    dims_w0 = dims_w.copy()
+    if np.sum(['time' in dim for dim in dims_w0]):
+        dims_w0.pop(['time' in dim for dim in dims_w0].index(True))
 
-    ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho',
+    ds.coords['z_w'] = z_w.transpose(*dims_w,
                                      transpose_coords=False)
+#     ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho',
+#                                      transpose_coords=False)
     ds.coords['z_w_u'] = grid.interp(ds.z_w, 'X')
     ds.coords['z_w_v'] = grid.interp(ds.z_w, 'Y')
     ds.coords['z_w_psi'] = grid.interp(ds.z_w_u, 'Y')
 
-    ds.coords['z_rho'] = z_rho.transpose('ocean_time', 's_rho', 'eta_rho', 'xi_rho',
+    ds.coords['z_rho'] = z_rho.transpose(*dims_rho,
                                      transpose_coords=False)
+#     ds.coords['z_rho'] = z_rho.transpose('ocean_time', 's_rho', 'eta_rho', 'xi_rho',
+#                                      transpose_coords=False)
     ds.coords['z_rho_u'] = grid.interp(ds.z_rho, 'X')
     ds.coords['z_rho_v'] = grid.interp(ds.z_rho, 'Y')
     ds.coords['z_rho_psi'] = grid.interp(ds.z_rho_u, 'Y')
     # also include z coordinates with mean sea level (constant over time)
-    ds.coords['z_rho0'] = z_rho0.transpose('s_rho', 'eta_rho', 'xi_rho',
+    ds.coords['z_rho0'] = z_rho0.transpose(*dims_rho0,
                                      transpose_coords=False)
+#     ds.coords['z_rho0'] = z_rho0.transpose('s_rho', 'eta_rho', 'xi_rho',
+#                                      transpose_coords=False)
     ds.coords['z_rho_u0'] = grid.interp(ds.z_rho0, 'X')
     ds.coords['z_rho_v0'] = grid.interp(ds.z_rho0, 'Y')
     ds.coords['z_rho_psi0'] = grid.interp(ds.z_rho_u0, 'Y')
-    ds.coords['z_w0'] = z_w0.transpose('s_w', 'eta_rho', 'xi_rho',
+    ds.coords['z_w0'] = z_w0.transpose(*dims_w0,
                                      transpose_coords=False)
+#     ds.coords['z_w0'] = z_w0.transpose('s_w', 'eta_rho', 'xi_rho',
+#                                      transpose_coords=False)
     ds.coords['z_w_u0'] = grid.interp(ds.z_w0, 'X')
     ds.coords['z_w_v0'] = grid.interp(ds.z_w0, 'Y')
     ds.coords['z_w_psi0'] = grid.interp(ds.z_w_u0, 'Y')
@@ -335,3 +357,46 @@ def relative_vorticity(ds, grid, hboundary='extend', hfill_value=None, sboundary
                                             sboundary=sboundary, sfill_value=sfill_value)
 
     return dvdxi - dudeta
+
+
+def mld(sig0, h, mask, z=None, thresh=0.03):
+    '''Calculate the mixed layer depth.
+    
+    Mixed layer depth is based on the fixed Potential Density (PD) threshold.
+    
+    Inputs:
+    sig0       DataArray. Potential density.
+    h          depths [m].
+    mask       mask to match sig0
+    z          DataArray (None). The vertical depths associated with sig0. Should be on 'rho'
+               grid horizontally and vertically. Use coords associated with DataArray sig0
+               if not input.
+    thresh     float (0.03). In kg/m^3
+    
+    Converted to xroms by K. Thyng Aug 2020 from:
+    
+    Update history:
+    v1.0 DL 2020Jun07
+        
+    References:
+    ncl mixed_layer_depth function at https://github.com/NCAR/ncl/blob/ed6016bf579f8c8e8f77341503daef3c532f1069/ni/src/lib/nfpfort/ocean.f
+    de Boyer Montégut, C., Madec, G., Fischer, A. S., Lazar, A., & Iudicone, D. (2004). Mixed layer depth over the global ocean: An examination of profile data and a profile‐based climatology. Journal of  Geophysical Research: Oceans, 109(C12).
+    '''
+    
+    if h.mean() > 0:  # if depths are positive, change to negative
+        h = -h
+    
+    # xisoslice will operate over the relevant s dimension
+    skey = sig0.dims[[dim[:2] == "s_" for dim in sig0.dims].index(True)]
+    
+    if z is None:
+        z = sig0.z_rho
+    
+    # the mixed layer depth is the isosurface of depth where the potential density equals the surface + a threshold
+    mld = xisoslice(sig0 - sig0.isel(s_rho=-1) + thresh, 0.0, z, skey)
+    
+    # Replace nan's that are not masked with the depth of the water column.
+    cond = (mld.isnull()) & (mask == 1)
+    mld = mld.where(~cond, h)
+
+    return mld
