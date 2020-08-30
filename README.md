@@ -16,6 +16,7 @@ There are functions to...
   * interpolating in all dimensions, given `dask` chunks, sigma coordinates, and the fact that your grid might be curvilinear
   * changing time sampling
   * calculating climatologies
+* provide meta data along with calculated variables
 
 
 ### Installation
