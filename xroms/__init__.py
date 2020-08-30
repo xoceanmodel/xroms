@@ -10,7 +10,8 @@ from .xroms import (roms_dataset,
                     relative_vorticity, mld)#,
 #                     ertel)
 from .roms_seawater import density, buoyancy
-from .utilities import (to_rho, to_psi, to_s_w, to_s_rho,
+from .utilities import (to_rho, to_psi, to_u, to_v,
+                        to_s_w, to_s_rho,
                         to_grid, ddz, ddxi, ddeta,
                         xisoslice, sel2d, argsel2d,
                        build_indexer, id_grid)

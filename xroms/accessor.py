@@ -27,7 +27,7 @@ class xromsDatasetAccessor:
         Inputs:
         varname    string. Name of variable to change that is available in self.
         hcoord     string (None). Name of horizontal grid to interpolate variable
-                   varname to. Options are 'rho' and 'psi'.
+                   varname to. Options are 'rho', 'psi', 'u', 'v'.
         scoord     string (None). Name of vertical grid to interpolate variable
                    varname to. Options are 's_rho' and 's_w'.
                    
@@ -175,7 +175,7 @@ class xromsDatasetAccessor:
         
         Inputs:
         hcoord     string (None). Name of horizontal grid to interpolate variable
-                   to. Options are 'rho' and 'psi'.
+                   to. Options are 'rho', 'psi', 'u', 'v'.
         scoord     string (None). Name of vertical grid to interpolate variable
                    to. Options are 's_rho' and 's_w'.
         
@@ -410,7 +410,7 @@ class xromsDataArrayAccessor:
         Inputs:
         grid       xgcm grid object with metrics that apply to this DataArray.
         hcoord     string (None). Name of horizontal grid to interpolate variable
-                   varname to. Options are 'rho' and 'psi'.
+                   varname to. Options are 'rho', 'psi', 'u', 'v'.
         scoord     string (None). Name of vertical grid to interpolate variable
                    varname to. Options are 's_rho' and 's_w'.
                    

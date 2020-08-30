@@ -122,6 +122,22 @@ def to_psi(var, grid, boundary='extend'):
     return var
 
 
+def to_u(var, grid, boundary='extend'):
+    if 'xi_u' not in var.dims:
+        var = grid.interp(var, 'X', to='inner', boundary=boundary)
+    if 'eta_rho' not in var.dims:
+        var = grid.interp(var, 'Y', to='center', boundary=boundary)
+    return var
+
+
+def to_v(var, grid, boundary='extend'):
+    if 'xi_rho' not in var.dims:
+        var = grid.interp(var, 'X', to='center', boundary=boundary)
+    if 'eta_v' not in var.dims:
+        var = grid.interp(var, 'Y', to='inner', boundary=boundary)
+    return var
+
+
 def to_s_rho(var, grid, boundary='extend'):
     '''Convert from s_w to s_rho vertical grid.'''
 
@@ -146,7 +162,7 @@ def to_grid(var, grid, hcoord=None, scoord=None):
     Inputs:
     var        DataArray
     hcoord     string (None). Name of horizontal grid to interpolate variable
-               to. Options are 'rho' and 'psi'.
+               to. Options are 'rho', 'psi', 'u', 'v'.
     scoord     string (None). Name of vertical grid to interpolate variable
                to. Options are 's_rho', 'rho', 's_w', and 'w'.
 
@@ -158,11 +174,15 @@ def to_grid(var, grid, hcoord=None, scoord=None):
     name = var.name
 
     if hcoord is not None:
-        assert hcoord in ['rho','psi'], 'hcoord should be "rho" or "psi" but is "%s"' % hcoord
+        assert hcoord in ['rho','psi','u','v'], 'hcoord should be "rho" or "psi" or "u" or "v" but is "%s"' % hcoord
         if hcoord == 'rho':
             var = to_rho(var, grid)
         elif hcoord == 'psi':
             var = to_psi(var, grid)
+        elif hcoord == 'u':
+            var = to_u(var, grid)
+        elif hcoord == 'v':
+            var = to_v(var, grid)
 
     if scoord is not None:
         assert scoord in ['s_rho','rho','s_w','w'], 'scoord should be "s_rho", "rho", "s_w", or "w" but is "%s"' % scoord
