@@ -9,7 +9,7 @@ from .utilities import to_rho, to_psi, xisoslice
 from .roms_seawater import buoyancy
 
 
-def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
+def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     '''Return a dataset that is aware of ROMS coordinatates and an associated xgcm grid object with metrics
 
     Note that this could be very slow if dask is not on.
@@ -206,7 +206,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     return ds, grid
 
 
-def open_netcdf(files, chunks=None, Vtransform=None):
+def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None):
     '''Return an xarray.Dataset based on a list of netCDF files
 
     Inputs:
@@ -229,13 +229,13 @@ def open_netcdf(files, chunks=None, Vtransform=None):
     elif isinstance(files, str):
         ds = xr.open_dataset(files, chunks=chunks)
 
-    ds, grid = roms_dataset(ds, Vtransform=Vtransform)
+    ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
 #     ds['grid'] = grid   # can't store and retrieve from dataset
 
     return ds
 
 
-def open_zarr(files, chunks=None, Vtransform=None):
+def open_zarr(files, chunks=None, Vtransform=None, add_verts=False, proj=None):
     '''Return an xarray.Dataset based on a list of zarr files
 
     Inputs:
@@ -258,7 +258,7 @@ def open_zarr(files, chunks=None, Vtransform=None):
         [xr.open_zarr(file, **opts) for file in files],
         dim='ocean_time', data_vars='minimal', coords='minimal')
 
-    ds, grid = roms_dataset(ds, Vtransform=Vtransform)
+    ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
 #     ds['grid'] = grid   # can't store and retrieve from dataset
 
     return ds
