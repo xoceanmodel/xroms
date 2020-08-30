@@ -103,6 +103,27 @@ class xromsDatasetAccessor:
         return xroms.ddeta(self.ds[varname], self.grid, attrs=attrs, hcoord=hcoord, scoord=scoord, 
                           hboundary=hboundary, hfill_value=hfill_value, 
                           sboundary=sboundary, sfill_value=sfill_value, z=z)
+        
+    
+#     def isel(self, **kwargs):
+#         '''Wrapper for xarray `isel`.
+        
+#         Example usage:
+#         > ds.xroms.isel(xi_rho=slice(20,25), eta_rho=slice(30,40), s_rho=10, ocean_time=1)
+#         '''
+        
+#         self.ds = self.ds.isel(**kwargs)
+#         return self.ds
+    
+    
+#     def sel(self, **kwargs):
+#         '''Wrapper for xarray `sel`.
+        
+#         Example usage:
+#         > ds.xroms.sel(xi_rho=slice(20,25), eta_rho=35, ocean_time=slice('2020-1-1','2020-1-2'))
+#         '''
+        
+#         return self.sel(**kwargs)
 
 
     def dudz(self, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
@@ -131,6 +152,22 @@ class xromsDatasetAccessor:
         '''
         attrs = {'name': 'dvdz', 'long_name': 'v component of vertical shear', 'units': '1/s'}
         return self.ddz('v', attrs=attrs, hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
+    
+    
+    def speed(self, hcoord=None, scoord=None):
+        '''Calculate horizontal speed from u and v components.
+        
+        Inputs:
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   to. Options are 's_rho' and 's_w'.
+        
+        '''
+        attrs = {'name': 's', 'long_name': 'horizontal speed', 'units': 'm/s'}
+        var = np.sqrt(self.ds.u**2 + self.ds.v**2)
+        var.attrs = attrs
+        return var
     
     
     def vort(self, hcoord=None, scoord=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
@@ -281,8 +318,29 @@ class xromsDatasetAccessor:
         attrs = {'name': 'M2', 'long_name': 'horizontal buoyancy gradient', 'units': '1/s^2'}
         var.attrs = attrs
         return var
+    
+    
+    def mld(self, hcoord=None, scoord=None):
+        '''Calculate vertical relative vorticity from ds.
         
+        Inputs:
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   to. Options are 's_rho' and 's_w'.
+                   
+        Example usage:
+        > ds.xroms.mld().isel(ocean_time=0).plot(vmin=-20, vmax=0)
+        '''
 
+        var = xroms.mld(self.sig0(), self.ds.h, self.ds.mask_rho, thresh=0.03)
+
+        var = var.xroms.to_grid(self.grid, hcoord, scoord)  # now DataArray
+        attrs = {'name': 'mld', 'long_name': 'mixed layer depth', 'units': 'm'}
+        var.attrs = attrs
+        return var
+    
+    
 #     @property
 #     def idgrid(self):
 #         '''Return string name of grid DataArray is on.
