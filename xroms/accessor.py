@@ -8,7 +8,7 @@ g = 9.81  # m^2/s
     
 @xr.register_dataset_accessor("xroms")
 class xromsDatasetAccessor:
-    def __init__(self, ds, proj=None):
+    def __init__(self, ds, add_verts=False, proj=None):
 
         self.ds = ds
         if proj is None:
@@ -16,7 +16,7 @@ class xromsDatasetAccessor:
         else:
             self.proj = proj
         
-        self.ds, grid = xroms.roms_dataset(self.ds, add_verts=True, proj=self.proj)
+        self.ds, grid = xroms.roms_dataset(self.ds, add_verts=add_verts, proj=self.proj)
         self.grid = grid
         self._tris = None
     
