@@ -385,6 +385,16 @@ def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
 
     Calculate the depth of a specific isohaline (33):
         sl = xroms.utilities.xisoslice(ds.salt, 33, ds.z_rho, 's_rho')
+        
+    Calculate the salt 10 meters above the seabed. Either do this on the vertical
+    rho grid, or first change to the w grid and then use `xisoslice`. You may prefer
+    to do the latter if there is a possibility that the distance above the seabed you are 
+    interpolating to (10 m) could be below the deepest rho grid depth.
+      on rho grid directly:
+        sl = xroms.xisoslice(ds.z_rho + ds.h, 10., ds.salt, 's_rho')
+      on w grid:
+        var_w = xroms.to_s_w(ds.salt, ds.xroms.grid)
+        sl = xroms.xisoslice(ds.z_w + ds.h, 10., var_w, 's_w')
 
     In addition to calculating the slices themselves, you may need to calculate
     related coordinates for plotting. For example, to accompany the lat-z slice,
