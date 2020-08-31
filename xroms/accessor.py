@@ -2,6 +2,7 @@ import xarray as xr
 import cartopy
 import xroms
 import numpy as np
+from xgcm import grid as xgrid
 
     
 g = 9.81  # m^2/s
@@ -341,6 +342,28 @@ class xromsDatasetAccessor:
         return var
     
     
+    def KE(self, hcoord=None, scoord=None):
+        '''Calculate vertical relative vorticity from ds.
+        
+        Inputs:
+        hcoord     string (None). Name of horizontal grid to interpolate variable
+                   to. Options are 'rho' and 'psi'.
+        scoord     string (None). Name of vertical grid to interpolate variable
+                   to. Options are 's_rho' and 's_w'.
+                   
+        Example usage:
+        > ds.xroms.KE()
+        '''
+
+        var = xroms.KE(self.rho(), self.speed())
+
+        var = var.xroms.to_grid(self.grid, hcoord, scoord)  # now DataArray
+        attrs = {'name': 'KE', 'long_name': 'kinetic energy', 'units': 'kg/(m*s^2)'}
+        var.attrs = attrs
+        return var
+     
+    
+    
 #     @property
 #     def idgrid(self):
 #         '''Return string name of grid DataArray is on.
@@ -418,7 +441,7 @@ class xromsDataArrayAccessor:
         Change 'salt' variable in Dataset ds to be on psi horizontal and s_w vertical grids
         > ds.salt.xroms.to_grid(ds.xroms.grid, 'psi', 's_w')  
         '''
-        
+        assert isinstance(grid, xgrid.Grid), '1st input should be `xgcm` grid object'
         return xroms.to_grid(self.da, grid, hcoord=hcoord, scoord=scoord)
         
 

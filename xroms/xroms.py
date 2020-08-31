@@ -400,3 +400,11 @@ def mld(sig0, h, mask, z=None, thresh=0.03):
     mld = mld.where(~cond, h)
 
     return mld
+
+
+def KE(rho, speed):
+    '''Calculate kinetic energy [kg/(m*s^2)].'''
+    
+    var = 0.5*rho*speed**2
+    
+    return var
