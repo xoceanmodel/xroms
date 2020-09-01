@@ -10,7 +10,7 @@
         "id": "blosc",
         "shuffle": 1
     },
-    "dtype": ">f8",
+    "dtype": "<f8",
     "fill_value": "NaN",
     "filters": null,
     "order": "C",

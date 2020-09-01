@@ -48,8 +48,8 @@ def test_sel2d():
     
     lon0, lat0 = -94.8, 28.0
     
-    assert xroms.utilities.sel2d(ds, lon0, lat0, whichgrid='u').u.isel(s_rho=0, ocean_time=0) == 0.7
-    assert xroms.utilities.sel2d(ds, lon0, lat0, whichgrid='v').v.isel(s_rho=0, ocean_time=0) == 0.0
+    assert xroms.sel2d(ds, lon0, lat0, whichgrid='u').u.isel(s_rho=0, ocean_time=0) == 0.7
+    assert np.allclose(xroms.sel2d(ds, lon0, lat0, whichgrid='v').v.isel(s_rho=0, ocean_time=0), 0.042857)
     
     
 def test_sel2d_list():
@@ -58,7 +58,7 @@ def test_sel2d_list():
     lon0, lat0 = [-95.7,-94.8], [27.4,28.0]
     
     assert (xroms.sel2d(ds, lon0, lat0, whichgrid='u').u.isel(s_rho=0, ocean_time=0) == [0.1, 0.7]).all()
-    assert (xroms.sel2d(ds, lon0, lat0, whichgrid='v').v.isel(s_rho=0, ocean_time=0) == [0.0, 0.0]).all()
+    assert np.allclose(xroms.sel2d(ds, lon0, lat0, whichgrid='v').v.isel(s_rho=0, ocean_time=0), [-0.071429,  0.042857])
 
 
 def test_xisoslice():

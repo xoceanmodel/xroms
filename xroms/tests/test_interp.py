@@ -7,12 +7,14 @@ import cartopy
 
 
 grid = xr.open_dataset('xroms/tests/input/grid.nc')
-ds = xr.open_dataset('xroms/tests/input/ocean_his_0001.nc')
+ds = xroms.open_netcdf('xroms/tests/input/ocean_his_0001.nc', chunks={})
+# ds = xr.open_dataset('xroms/tests/input/ocean_his_0001.nc')
 # combine the two:
 ds = ds.merge(grid, overwrite_vars=True, compat='override')
-ds, grid = xroms.roms_dataset(ds, Vtransform=2)
+# ds, grid = xroms.roms_dataset(ds, Vt)
 tris = xroms.interp.setup(ds, whichgrids=['u'])
 ie, ix = 2, 3
+
 
 def test_llzslice_1coord():
     '''Test llzslice with 1 input coord in several forms.'''
@@ -104,18 +106,6 @@ def test_llzslice_2coord():
     z0s = varin.isel(indexer).z_rho_u.mean(('eta_rho','xi_u')).values
     varout = xroms.interp.llzslice(varin, tris['u'], lon0, lat0, z0s)
     assert np.allclose(varout, varin.isel(indexer))    
-    
-    # test subset of gridnodes at multiple known s_rho values
-    # take mean of resultant z0s for s_rho levels to check 3 depths instead of full array
-    indexerll = {'eta_rho': slice(ie, ie+2), 'xi_u': slice(ix, ix+3)}
-    indexer = {'eta_rho': slice(ie, ie+2), 'xi_u': slice(ix, ix+3), 's_rho': slice(1,3)}
-    lon0 = ds.lon_u.isel(indexerll)
-    lat0 = ds.lat_u.isel(indexerll)
-    varin = ds.u.isel(ocean_time=0)
-    # take mean across neighboring nodes for depths to calculate at for testing purposes
-    z0s = varin.isel(indexer).z_rho_u.mean(('eta_rho','xi_u')).values
-    varout = xroms.interp.llzslice(varin, tris['u'], lon0, lat0, z0s)
-    assert np.allclose(varout, varin.isel(indexer))
 
     # test 1 gridnode at known s_rho values
     indexerll = {'eta_rho': ie, 'xi_u': ix}
@@ -141,7 +131,7 @@ def test_llzslice_2coord():
     # test 2d array of lon/lat locations (not consecutive grid nodes) at 1 depth
     # z0s as DataArray output
     indexerll = {'eta_rho': [ie,ie*ie], 'xi_u': [ix,ix*ix]}
-    indexer = {'eta_rho': [ie,ie*ie], 'xi_u': [ix,ix*ix], 's_rho': 0}
+    indexer = {'eta_rho': [ie,ie*ie], 'xi_u': [ix,ix*ix], 's_rho': 1}
     lon0 = ds.lon_u.isel(indexerll).values
     lat0 = ds.lat_u.isel(indexerll).values
     varin = ds.u.isel(ocean_time=0)
@@ -152,7 +142,7 @@ def test_llzslice_2coord():
     # test 2d array of lon/lat locations (not consecutive grid nodes) at 1 depth
     # z0s as float
     indexerll = {'eta_rho': [ie,ie*ie], 'xi_u': [ix,ix*ix]}
-    indexer = {'eta_rho': [ie,ie*ie], 'xi_u': [ix,ix*ix], 's_rho': 2}
+    indexer = {'eta_rho': [ie,ie*ie], 'xi_u': [ix,ix*ix], 's_rho': 1}
     lon0 = ds.lon_u.isel(indexerll).values
     lat0 = ds.lat_u.isel(indexerll).values
     varin = ds.u.isel(ocean_time=0)
