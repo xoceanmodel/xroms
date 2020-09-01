@@ -5,8 +5,8 @@ import cartopy
 # import accessor
 
 
-grid = xr.open_dataset('tests/input/grid.nc')
-ds = xr.open_dataset('tests/input/ocean_his_0001.nc')
+grid = xr.open_dataset('xroms/tests/input/grid.nc')
+ds = xr.open_dataset('xroms/tests/input/ocean_his_0001.nc')
 # combine the two:
 ds = ds.merge(grid, overwrite_vars=True, compat='override')
 ds['Vtransform'] = 2

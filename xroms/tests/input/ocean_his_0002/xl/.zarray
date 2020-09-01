@@ -1,7 +1,7 @@
 {
     "chunks": [],
     "compressor": null,
-    "dtype": "<f8",
+    "dtype": ">f8",
     "fill_value": "NaN",
     "filters": null,
     "order": "C",

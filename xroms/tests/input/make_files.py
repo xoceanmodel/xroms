@@ -75,7 +75,7 @@ def output(to='netcdf'):
     out1['u'] = (('ocean_time','s_rho','eta_u','xi_u'), u[:2])
     out1['v'] = (('ocean_time','s_rho','eta_v','xi_v'), v[:2])
     out1['zeta'] = (('ocean_time','eta_rho','xi_rho'), np.zeros((2,yl,xl)))
-    out1['salt'] = (('ocean_time','eta_rho','xi_rho'), np.ones((2,yl,xl)))
+    out1['salt'] = (('ocean_time','s_rho','eta_rho','xi_rho'), np.ones((2,N,yl,xl)))
     out1['temp'] = (('ocean_time','s_rho','eta_rho','xi_rho'), np.ones((2,N,yl,xl)))
     out1 = out1.assign_coords(s_rho=s_rho, lat_u=grid.lat_u, lon_u=grid.lon_u, lat_v=grid.lat_v, lon_v=grid.lon_v, lat_rho=grid.lat_rho, lon_rho=grid.lon_rho)
     out1['s_rho'] = s_rho
@@ -94,7 +94,7 @@ def output(to='netcdf'):
     out2['u'] = (('ocean_time','s_rho','eta_u','xi_u'), u[2:])
     out2['v'] = (('ocean_time','s_rho','eta_v','xi_v'), v[2:])
     out2['zeta'] = (('ocean_time','eta_rho','xi_rho'), np.zeros((2,yl,xl)))
-    out2['salt'] = (('ocean_time','eta_rho','xi_rho'), np.ones((2,yl,xl)))
+    out2['salt'] = (('ocean_time','s_rho','eta_rho','xi_rho'), np.ones((2,N,yl,xl)))
     out2['temp'] = (('ocean_time','s_rho','eta_rho','xi_rho'), np.ones((2,N,yl,xl)))
     out2 = out2.assign_coords(s_rho=s_rho, lat_u=grid.lat_u, lon_u=grid.lon_u, lat_v=grid.lat_v, lon_v=grid.lon_v, lat_rho=grid.lat_rho, lon_rho=grid.lon_rho)
     out2['s_rho'] = s_rho

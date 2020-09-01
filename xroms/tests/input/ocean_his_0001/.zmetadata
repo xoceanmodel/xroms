@@ -2,7 +2,7 @@
     "metadata": {
         ".zattrs": {
             "Author": "pyroms.gridgen",
-            "Created": "2020-08-12T13:40:25.581172",
+            "Created": "2020-09-01T12:56:04.317244",
             "Description": "ROMS grid",
             "type": "ROMS GRD file"
         },
@@ -71,7 +71,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -86,7 +86,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho"
+            "coordinates": "lat_rho lon_rho"
         },
         "dmde/.zarray": {
             "chunks": [
@@ -100,7 +100,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -115,7 +115,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho"
+            "coordinates": "lat_rho lon_rho"
         },
         "dndx/.zarray": {
             "chunks": [
@@ -129,7 +129,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -144,12 +144,12 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho"
+            "coordinates": "lat_rho lon_rho"
         },
         "el/.zarray": {
             "chunks": [],
             "compressor": null,
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -172,7 +172,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -187,7 +187,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho",
+            "coordinates": "lat_rho lon_rho",
             "units": "seconds-1"
         },
         "h/.zarray": {
@@ -202,7 +202,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -217,7 +217,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho",
+            "coordinates": "lat_rho lon_rho",
             "units": "meters"
         },
         "hc/.zarray": {
@@ -258,7 +258,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -287,7 +287,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -316,7 +316,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -345,7 +345,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -374,7 +374,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -403,7 +403,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -432,7 +432,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -461,7 +461,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -490,7 +490,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -519,7 +519,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -548,7 +548,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -576,7 +576,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -591,7 +591,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho"
+            "coordinates": "lat_rho lon_rho"
         },
         "mask_u/.zarray": {
             "chunks": [
@@ -605,7 +605,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -634,7 +634,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -690,7 +690,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -705,7 +705,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho",
+            "coordinates": "lat_rho lon_rho",
             "units": "meters-1"
         },
         "pn/.zarray": {
@@ -720,7 +720,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -735,7 +735,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho",
+            "coordinates": "lat_rho lon_rho",
             "units": "meters-1"
         },
         "s_rho/.zarray": {
@@ -791,6 +791,7 @@
         "salt/.zarray": {
             "chunks": [
                 2,
+                3,
                 9,
                 14
             ],
@@ -807,6 +808,7 @@
             "order": "C",
             "shape": [
                 2,
+                3,
                 9,
                 14
             ],
@@ -815,10 +817,11 @@
         "salt/.zattrs": {
             "_ARRAY_DIMENSIONS": [
                 "ocean_time",
+                "s_rho",
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho"
+            "coordinates": "lat_rho lon_rho"
         },
         "spherical/.zarray": {
             "chunks": [],
@@ -879,7 +882,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho"
+            "coordinates": "lat_rho lon_rho"
         },
         "theta_b/.zarray": {
             "chunks": [],
@@ -989,7 +992,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -1018,7 +1021,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -1033,7 +1036,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho",
+            "coordinates": "lat_rho lon_rho",
             "units": "meters"
         },
         "x_u/.zarray": {
@@ -1048,7 +1051,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -1078,7 +1081,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -1108,7 +1111,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -1128,7 +1131,7 @@
         "xl/.zarray": {
             "chunks": [],
             "compressor": null,
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -1151,7 +1154,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -1180,7 +1183,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -1195,7 +1198,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho",
+            "coordinates": "lat_rho lon_rho",
             "units": "meters"
         },
         "y_u/.zarray": {
@@ -1210,7 +1213,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -1240,7 +1243,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -1270,7 +1273,7 @@
                 "id": "blosc",
                 "shuffle": 1
             },
-            "dtype": "<f8",
+            "dtype": ">f8",
             "fill_value": "NaN",
             "filters": null,
             "order": "C",
@@ -1317,7 +1320,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lon_rho lat_rho"
+            "coordinates": "lat_rho lon_rho"
         }
     },
     "zarr_consolidated_format": 1
