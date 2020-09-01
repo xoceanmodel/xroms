@@ -6,11 +6,14 @@ There are functions to...
 * help read in model output with automatically-calculated z coordinates
 * calculate many things in one line including:
   * derivatives in all dimensions, accounting for curvilinear grids and sigma layers
+  * grid metrics (i.e., grid lengths, areas, and volumes)
   * vorticity
   * density as calculated in ROMS
-  * N^2
+  * N^2 (buoyancy frequency/vertical buoyancy gradient)
+  * M^2 (horizontal buoyancy gradient)
   * easily change horizontal and vertical grids using `xgcm` grid objects
   * slice along a fixed value
+  * mixed-layer depth
 * Demonstrations:
   * selecting data in many different ways
   * interpolating in all dimensions, given `dask` chunks, sigma coordinates, and the fact that your grid might be curvilinear
