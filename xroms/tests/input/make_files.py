@@ -71,9 +71,9 @@ def output(to='netcdf'):
     v = np.ones((tl,N,yl-1,xl))*(np.linspace(-0.1,0.1,yl-1)[:,np.newaxis])  
 #     v = np.zeros((tl,N,yl-1,xl))
     # decreases with depth
-    temp = np.ones((tl,N,yl,xl))*(np.linspace(20,15,N)[:,np.newaxis,np.newaxis])  
+    temp = np.ones((tl,N,yl,xl))*(np.linspace(15,20,N)[:,np.newaxis,np.newaxis])  
     # increases with depth
-    salt = np.ones((tl,N,yl,xl))*(np.linspace(15,25,N)[:,np.newaxis,np.newaxis])  
+    salt = np.ones((tl,N,yl,xl))*(np.linspace(25,15,N)[:,np.newaxis,np.newaxis])  
 
     # Save file, starting from grid file
     # 1st file

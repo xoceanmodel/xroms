@@ -5,5 +5,5 @@
         "eta_rho",
         "xi_rho"
     ],
-    "coordinates": "lat_rho lon_rho"
+    "coordinates": "lon_rho lat_rho"
 }

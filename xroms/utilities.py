@@ -223,6 +223,7 @@ def ddz(var, grid, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfi
     var =  grid.derivative(var, 'Z', boundary=sboundary, fill_value=sfill_value)
     var = to_grid(var, grid, hcoord, scoord)
     var.attrs = attrs
+    var.name = var.attrs['name']
     return var
 
 
@@ -255,6 +256,8 @@ def ddxi(var, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', hf
     var = xroms.hgrad(var, grid, which='xi', z=z, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     var = to_grid(var, grid, hcoord, scoord)
     var.attrs = attrs
+    var.name = var.attrs['name']
+    var.name = var.attrs['name']
     return var
 
 
@@ -287,6 +290,7 @@ def ddeta(var, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', h
     var = xroms.hgrad(var, grid, which='eta', z=z, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     var = to_grid(var, grid, hcoord, scoord)
     var.attrs = attrs
+    var.name = var.attrs['name']
     return var
 
 

@@ -2,7 +2,7 @@
     "metadata": {
         ".zattrs": {
             "Author": "pyroms.gridgen",
-            "Created": "2020-09-01T14:00:43.700523",
+            "Created": "2020-09-02T10:02:33.191499",
             "Description": "ROMS grid",
             "type": "ROMS GRD file"
         },
@@ -99,7 +99,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho"
+            "coordinates": "lon_rho lat_rho"
         },
         "dmde/.zarray": {
             "chunks": [
@@ -128,7 +128,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho"
+            "coordinates": "lon_rho lat_rho"
         },
         "dndx/.zarray": {
             "chunks": [
@@ -157,7 +157,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho"
+            "coordinates": "lon_rho lat_rho"
         },
         "el/.zarray": {
             "chunks": [],
@@ -200,7 +200,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho",
+            "coordinates": "lon_rho lat_rho",
             "units": "seconds-1"
         },
         "h/.zarray": {
@@ -230,7 +230,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho",
+            "coordinates": "lon_rho lat_rho",
             "units": "meters"
         },
         "hc/.zarray": {
@@ -604,7 +604,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho"
+            "coordinates": "lon_rho lat_rho"
         },
         "mask_u/.zarray": {
             "chunks": [
@@ -718,7 +718,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho",
+            "coordinates": "lon_rho lat_rho",
             "units": "meters-1"
         },
         "pn/.zarray": {
@@ -748,7 +748,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho",
+            "coordinates": "lon_rho lat_rho",
             "units": "meters-1"
         },
         "s_rho/.zarray": {
@@ -834,7 +834,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho"
+            "coordinates": "lon_rho lat_rho"
         },
         "spherical/.zarray": {
             "chunks": [],
@@ -895,7 +895,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho"
+            "coordinates": "lon_rho lat_rho"
         },
         "theta_b/.zarray": {
             "chunks": [],
@@ -1049,7 +1049,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho",
+            "coordinates": "lon_rho lat_rho",
             "units": "meters"
         },
         "x_u/.zarray": {
@@ -1211,7 +1211,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho",
+            "coordinates": "lon_rho lat_rho",
             "units": "meters"
         },
         "y_u/.zarray": {
@@ -1333,7 +1333,7 @@
                 "eta_rho",
                 "xi_rho"
             ],
-            "coordinates": "lat_rho lon_rho"
+            "coordinates": "lon_rho lat_rho"
         }
     },
     "zarr_consolidated_format": 1

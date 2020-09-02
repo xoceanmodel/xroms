@@ -393,7 +393,7 @@ def mld(sig0, h, mask, z=None, thresh=0.03):
         z = sig0.z_rho
     
     # the mixed layer depth is the isosurface of depth where the potential density equals the surface + a threshold
-    mld = xisoslice(sig0 - sig0.isel(s_rho=-1) + thresh, 0.0, z, skey)
+    mld = xisoslice(sig0 - sig0.isel(s_rho=-1) - thresh, 0.0, z, skey)
     
     # Replace nan's that are not masked with the depth of the water column.
     cond = (mld.isnull()) & (mask == 1)

@@ -272,6 +272,7 @@ class xromsDatasetAccessor:
         var = var.xroms.to_grid(self.grid, hcoord, scoord)  # var is now DataArray
         attrs = {'name': 'rho', 'long_name': 'density', 'units': 'kg/m^3'}
         var.attrs = attrs
+        var.name = var.attrs['name']
         return var
 
     
@@ -288,16 +289,22 @@ class xromsDatasetAccessor:
         var = self.rho(hcoord=None, scoord=None, z=0)
         attrs = {'name': 'sig0', 'long_name': 'potential density', 'units': 'kg/m^3'}
         var.attrs = attrs
+        var.name = var.attrs['name']
         return var
     
     
     def N2(self, hcoord=None, scoord='s_w', hboundary='extend', hfill_value=None, sboundary='fill', sfill_value=np.nan):
         '''Calculate buoyancy frequency squared, or vertical buoyancy gradient.'''
+        try:
+            rho0 = self.ds.rho0
+        except:
+            rho0 = 1025  # kg/m^3
         
-        drhodz = self.rho.xroms.ddz(self.grid, 'drhodz', hcoord, scoord, sboundary=sboundary, sfill_value=sfill_value)
-        var = -g*drhodz/self.ds.rho0
+        drhodz = self.rho().xroms.ddz(self.grid, hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
+        var = -g*drhodz/rho0
         attrs = {'name': 'N2', 'long_name': 'buoyancy frequency squared, or vertical buoyancy gradient', 'units': '1/s^2'}
         var.attrs = attrs
+        var.name = var.attrs['name']
         return var
     
     
@@ -308,20 +315,25 @@ class xromsDatasetAccessor:
                    coordinate of var that starts with 'z_', and use that.
         
         '''
+        try:
+            rho0 = self.ds.rho0
+        except:
+            rho0 = 1025  # kg/m^3
         
-        drhodxi = self.rho.xroms.ddxi(self.grid, outname=None, hcoord=hcoord, scoord=scoord, 
+        drhodxi = self.rho().xroms.ddxi(self.grid, hcoord=hcoord, scoord=scoord, 
                                       hboundary=hboundary, hfill_value=hfill_value, 
                                       sboundary=sboundary, sfill_value=sfill_value, z=None)
-        drhodeta = self.rho.xroms.ddeta(self.grid, outname=None, hcoord=hcoord, scoord=scoord, 
+        drhodeta = self.rho().xroms.ddeta(self.grid, hcoord=hcoord, scoord=scoord, 
                                       hboundary=hboundary, hfill_value=hfill_value, 
                                       sboundary=sboundary, sfill_value=sfill_value, z=None)
-        var = np.sqrt(drhodxi**2 + drhodeta**2) * g/self.ds.rho0
+        var = np.sqrt(drhodxi**2 + drhodeta**2) * g/rho0
         attrs = {'name': 'M2', 'long_name': 'horizontal buoyancy gradient', 'units': '1/s^2'}
         var.attrs = attrs
+        var.name = var.attrs['name']
         return var
     
     
-    def mld(self, hcoord=None, scoord=None):
+    def mld(self, hcoord=None, scoord=None, thresh=0.03):
         '''Calculate vertical relative vorticity from ds.
         
         Inputs:
@@ -334,11 +346,12 @@ class xromsDatasetAccessor:
         > ds.xroms.mld().isel(ocean_time=0).plot(vmin=-20, vmax=0)
         '''
 
-        var = xroms.mld(self.sig0(), self.ds.h, self.ds.mask_rho, thresh=0.03)
+        var = xroms.mld(self.sig0(), self.ds.h, self.ds.mask_rho, thresh=thresh)
 
         var = var.xroms.to_grid(self.grid, hcoord, scoord)  # now DataArray
         attrs = {'name': 'mld', 'long_name': 'mixed layer depth', 'units': 'm'}
         var.attrs = attrs
+        var.name = var.attrs['name']
         return var
     
     
@@ -360,6 +373,7 @@ class xromsDatasetAccessor:
         var = var.xroms.to_grid(self.grid, hcoord, scoord)  # now DataArray
         attrs = {'name': 'KE', 'long_name': 'kinetic energy', 'units': 'kg/(m*s^2)'}
         var.attrs = attrs
+        var.name = var.attrs['name']
         return var
      
     
