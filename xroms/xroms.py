@@ -408,3 +408,27 @@ def KE(rho, speed):
     var = 0.5*rho*speed**2
     
     return var
+
+
+def timemean(var, timeperiod, attrs=None):#, hcoord=None, scoord=None):
+    '''DOCS'''
+
+    timeperiods = ['day', 'season', 'year', 'month', 'hour']
+    
+    assert timeperiod in timeperiods, 'timeperiod should be one of ' + ', '.join(timeperiods)
+    
+    # find time key for dims
+    tkey = var.dims[['time' in dim for dim in var.dims].index(True)]
+        
+    if attrs is None:
+        if not 'name' in var.attrs: var.attrs['name'] = 'var'
+        if not 'long_name' in var.attrs: var.attrs['long_name'] = 'var'
+        if not 'units' in var.attrs: var.attrs['units'] = 'units'            
+        attrs = {'name': 'mean ' + var.name, 'long_name': var.long_name + ', time mean over ' + timeperiod, 
+                 'units': var.units}
+
+    var = var.groupby(tkey + '.' + timeperiod).mean(tkey).mean(timeperiod)
+    var.attrs = attrs
+    var.name = var.attrs['name']
+
+    return var

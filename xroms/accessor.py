@@ -523,6 +523,12 @@ class xromsDataArrayAccessor:
         return xroms.ddxi(self.da, grid, attrs=attrs, hcoord=hcoord, scoord=scoord, 
                           hboundary=hboundary, hfill_value=hfill_value, 
                           sboundary=sboundary, sfill_value=sfill_value, z=z)
+    
+
+    def timemean(self, timeperiod, attrs=None):#, hcoord=None, scoord=None):
+        '''DOCS'''
+        
+        return xroms.timemean(self.da, timeperiod, attrs=None)#, hcoord=None, scoord=None)
         
     
     def isel(self, xi=None, eta=None, s=None, t=None, **kwargs):
