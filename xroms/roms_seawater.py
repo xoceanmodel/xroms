@@ -1,7 +1,13 @@
 import numpy as np
+import xroms
+
+g = 9.81
 
 
-def density(T, S, Z):
+
+
+
+def density(T, S, Z, grid, hcoord=None, scoord=None, attrs=None):
     """Return the density based on T, S, and Z. EOS based on ROMS Nonlinear/rho_eos.F
 
     Inputs:
@@ -102,19 +108,24 @@ def density(T, S, Z):
     )
     K2 = G01 + G02 * T + G03 * T ** 2 + H00 * S + H01 * S * T + H02 * S * T ** 2
     bulk = K0 - K1 * Z + K2 * Z ** 2
+    var = (den1 * bulk) / (bulk + 0.1 * Z)
 
-    return (den1 * bulk) / (bulk + 0.1 * Z)
+    if attrs is None:
+        attrs = {'name': 'rho', 'long_name': 'density', 'units': 'kg/m^3', 'grid': grid}
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+
+    return var
 
 
-def buoyancy(T, S, Z, rho0=1000.0):
+def buoyancy(T, S, Z, grid, rho0=1025.0, hcoord=None, scoord=None):
     """Return the buoyancy based on T, S, and Z. EOS based on ROMS Nonlinear/rho_eos.F
 
     Inputs:
     ------
 
-    T       array-like, temperature
-    S       array-like, salinity
-    Z       array-like, depth. To specify a reference depth, use a constant
+    T       (DataArray). temperature
+    S       (DataArray). salinity
+    Z       (DataArray). depth. To specify a reference depth, use a constant
 
     Outputs:
     -------
@@ -125,105 +136,106 @@ def buoyancy(T, S, Z, rho0=1000.0):
     Options:
     -------
 
-    rho0    Constant. The reference density. Default rho0=1000.0
+    rho0    Constant. The reference density. Default rho0=1025.0
     """
 
-    g = 9.81
-    return -g * density(T, S, Z) / rho0
+    attrs = {'name': 'buoyancy', 'long_name': 'buoyancy', 
+             'units': 'm/s^2', 'grid': grid}
+
+    var = -g * density(T, S, Z, grid) / rho0
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+
+    return var
 
 
-# def stratification_frequency(ds):
-#     '''Calculate buoyancy frequency squared, or N^2.'''
+def sig0(T, S, grid, hcoord=None, scoord=None):
+    '''Calculate potential density from salt/temp.
+
+    Inputs:
+    hcoord     string (None). Name of horizontal grid to interpolate variable
+               to. Options are 'rho' and 'psi'.
+    scoord     string (None). Name of vertical grid to interpolate variable
+               to. Options are 's_rho' and 's_w'.        
+    '''
+    
+    attrs = {'name': 'sig0', 'long_name': 'potential density', 'units': 'kg/m^3', 'grid': grid}
+    return density(T, S, 0, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+
+    
+def N2(rho, grid, rho0=1025, hcoord=None, scoord='s_w', hboundary='extend', hfill_value=None, sboundary='fill', sfill_value=np.nan):
+    '''Calculate buoyancy frequency squared, or vertical buoyancy gradient.'''
+
+    drhodz = xroms.ddz(rho, grid, hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
+    var = -g*drhodz/rho0
+    attrs = {'name': 'N2', 'long_name': 'buoyancy frequency squared, or vertical buoyancy gradient', 
+             'units': '1/s^2', 'grid': grid}
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    return var
+    
+    
+def M2(rho, grid, rho0=1025, hcoord=None, scoord='s_w', hboundary='extend', hfill_value=None, sboundary='fill', sfill_value=np.nan, z=None):
+    '''Calculate the horizontal buoyancy gradient.
+
+    z          DataArray. The vertical depths associated with q. Default is to find the
+               coordinate of var that starts with 'z_', and use that.
+
+    '''
+
+    drhodxi = xroms.ddxi(rho, grid, hcoord=hcoord, scoord=scoord, 
+                                  hboundary=hboundary, hfill_value=hfill_value, 
+                                  sboundary=sboundary, sfill_value=sfill_value, z=None)
+    drhodeta = xroms.ddeta(rho, grid, hcoord=hcoord, scoord=scoord, 
+                                  hboundary=hboundary, hfill_value=hfill_value, 
+                                  sboundary=sboundary, sfill_value=sfill_value, z=None)
+    var = np.sqrt(drhodxi**2 + drhodeta**2) * g/rho0
+    attrs = {'name': 'M2', 'long_name': 'horizontal buoyancy gradient', 
+             'units': '1/s^2', 'grid': grid}
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    return var
 
 
-#     T = ds.temp
-#     S = ds.salt
-#     Zw = ds.z_w
-#     Zr = ds.z_rho
+def mld(sig0, h, mask, grid, z=None, thresh=0.03, hcoord=None, scoord=None):
+    '''Calculate the mixed layer depth.
+    
+    Mixed layer depth is based on the fixed Potential Density (PD) threshold.
+    
+    Inputs:
+    sig0       DataArray. Potential density.
+    h          depths [m].
+    mask       mask to match sig0
+    z          DataArray (None). The vertical depths associated with sig0. Should be on 'rho'
+               grid horizontally and vertically. Use coords associated with DataArray sig0
+               if not input.
+    thresh     float (0.03). In kg/m^3
+    
+    Converted to xroms by K. Thyng Aug 2020 from:
+    
+    Update history:
+    v1.0 DL 2020Jun07
+        
+    References:
+    ncl mixed_layer_depth function at https://github.com/NCAR/ncl/blob/ed6016bf579f8c8e8f77341503daef3c532f1069/ni/src/lib/nfpfort/ocean.f
+    de Boyer Montégut, C., Madec, G., Fischer, A. S., Lazar, A., & Iudicone, D. (2004). Mixed layer depth over the global ocean: An examination of profile data and a profile‐based climatology. Journal of  Geophysical Research: Oceans, 109(C12).
+    '''
+    
+    if h.mean() > 0:  # if depths are positive, change to negative
+        h = -h
+    
+    # xisoslice will operate over the relevant s dimension
+    skey = sig0.dims[[dim[:2] == "s_" for dim in sig0.dims].index(True)]
+    
+    if z is None:
+        z = sig0.z_rho
+    
+    # the mixed layer depth is the isosurface of depth where the potential density equals the surface + a threshold
+    mld = xroms.xisoslice(sig0 - sig0.isel(s_rho=-1) - thresh, 0.0, z, skey)
+    
+    # Replace nan's that are not masked with the depth of the water column.
+    cond = (mld.isnull()) & (mask == 1)
+    mld = mld.where(~cond, h)
 
-#     sqrtS=np.sqrt(S)
-#     A00=+19092.56;    A01=+209.8925;     A02=-3.041638;     A03=-1.852732E-3
-#     A04=-1.361629E-5; B00=+104.4077;     B01=-6.500517;     B02=+0.1553190
-#     B03=+2.326469E-4; D00=-5.587545;     D01=+0.7390729;    D02=-1.909078E-2
-#     E00=+4.721788E-1; E01=+1.028859E-2;  E02=-2.512549E-4;  E03=-5.939910E-7
-#     F00=-1.571896E-2; F01=-2.598241E-4;  F02=+7.267926E-6;  G00=+2.042967E-3
-#     G01=+1.045941E-5; G02=-5.782165E-10; G03=+1.296821E-7;  H00=-2.595994E-7
-#     H01=-1.248266E-9; H02=-3.508914E-9;  Q00=+999.842594;   Q01=+6.793952E-2
-#     Q02=-9.095290E-3; Q03=+1.001685E-4;  Q04=-1.120083E-6;  Q05=+6.536332E-9
-#     U00=+0.824493E0;  U01=-4.08990E-3;   U02=+7.64380E-5;   U03=-8.24670E-7
-#     U04=+5.38750E-9;  V00=-5.72466E-3;   V01=+1.02270E-4;   V02=-1.65460E-6
-#     W00=+4.8314E-4
+    attrs = {'name': 'mld', 'long_name': 'mixed layer depth', 
+             'units': 'm', 'grid': grid}
+    mld = xroms.to_grid(mld, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
 
-#     g=9.81
-
-#     den1 = (Q00 + Q01*T + Q02*T**2 + Q03*T**3 + Q04*T**4 + Q05*T**5 +
-#             U00*S + U01*S*T + U02*S*T**2 + U03*S*T**3 + U04*S*T**4 +
-#             V00*S*sqrtS + V01*S*sqrtS*T + V02*S*sqrtS*T**2 +
-#             W00*S**2)
-
-#     K0 = (A00 + A01*T + A02*T**2 + A03*T**3 + A04*T**4 +
-#           B00*S + B01*S*T + B02*S*T**2 + B03*S*T**3 +
-#           D00*S*sqrtS + D01*S*sqrtS*T + D02*S*sqrtS*T**2)
-
-#     K1 = (E00 + E01*T + E02*T**2 + E03*T**3 +
-#           F00*S + F01*S*T + F02*S*T**2 +
-#           G00*S*sqrtS)
-
-#     K2 = G01 + G02*T + G03*T**2 + H00*S + H01*S*T + H02*S*T**2
-
-#     # below is some fugly coordinate wrangling to keep things in
-#     # the xarray universe. This could probably be cleaned up.
-#     Nm = len(ds.s_w) - 1
-#     Nmm = len(ds.s_w) - 2
-
-#     upw = {'s_w': slice(1, None)}
-#     dnw = {'s_w': slice(None, -1)}
-
-#     Zw_up = Zw.isel(**upw)
-#     Zw_up = Zw_up.rename({'s_w': 's_rho'})
-#     Zw_up.coords['s_rho'] = np.arange(Nm)
-#     Zw_dn = Zw.isel(**dnw)
-#     Zw_dn = Zw_dn.rename({'s_w': 's_rho'})
-#     Zw_dn.coords['s_rho'] = np.arange(Nm)
-
-#     K0.coords['s_rho'] = np.arange(Nm)
-#     K1.coords['s_rho'] = np.arange(Nm)
-#     K2.coords['s_rho'] = np.arange(Nm)
-#     den1.coords['s_rho'] = np.arange(Nm)
-
-#     bulk_up = K0 - Zw_up*(K1-Zw_up*K2)
-#     bulk_dn = K0 - Zw_dn*(K1-Zw_dn*K2)
-
-#     den_up = (den1*bulk_up) / (bulk_up + 0.1*Zw_up)
-#     den_dn = (den1*bulk_dn) / (bulk_dn + 0.1*Zw_dn)
-
-#     upr = {'s_rho': slice(1, None)}
-#     dnr = {'s_rho': slice(None, -1)}
-
-#     den_up = den1.isel(**upr)
-#     den_up = den_up.rename({'s_rho': 's_w'})
-#     den_up.coords['s_w'] = np.arange(Nmm)
-#     den_up = den_up.drop('z_rho')
-
-#     den_dn = den1.isel(**dnr)
-#     den_dn = den_dn.rename({'s_rho': 's_w'})
-#     den_dn.coords['s_w'] = np.arange(Nmm)
-#     den_dn = den_dn.drop('z_rho')
-
-#     Zr_up = Zr.isel(**upr)
-#     Zr_up = Zr_up.rename({'s_rho': 's_w'})
-#     Zr_up.coords['s_w'] = np.arange(Nmm)
-#     Zr_up = Zr_up.drop('z_rho')
-
-#     Zr_dn = Zr.isel(**dnr)
-#     Zr_dn = Zr_dn.rename({'s_rho': 's_w'})
-#     Zr_dn.coords['s_w'] = np.arange(Nmm)
-#     Zr_dn = Zr_dn.drop('z_rho')
-
-#     N2 = -g * (den_up-den_dn)/ (0.5*(den_up+den_dn)*(Zr_up-Zr_dn))
-
-#     # Put the rght vertical coordinates back, for plotting etc.
-#     N2.coords['z_w'] = ds.z_w.isel(s_w=slice(1, -1))
-#     N2.coords['s_w'] = ds.s_w.isel(s_w=slice(1, -1))
-
-#     return N2
+    return mld

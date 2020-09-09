@@ -4,6 +4,7 @@ import xroms
 import xarray as xr
 import numpy as np
 import cartopy
+from xgcm import grid as xgrid
 
 
 grid1 = xr.open_dataset('xroms/tests/input/grid.nc')
@@ -12,8 +13,9 @@ ds = xroms.open_netcdf('xroms/tests/input/ocean_his_0001.nc')
 # combine the two:
 ds = ds.merge(grid1, overwrite_vars=True, compat='override')
 # ds['Vtransform'] = 2
-ds.xroms
-ds, grid = xroms.roms_dataset(ds)
+# ds.xroms
+# ds, grid = xroms.roms_dataset(ds)
+
 
 
 # functions in test files:
@@ -28,6 +30,9 @@ salt = np.linspace(25,15,N)
 zeta = np.linspace(-0.1,0.1,xl)
 g = 9.81
 rho0 = 1025
+
+def test_grid():
+    assert isinstance(ds.attrs['grid'], xgrid.Grid)
 
 def test_ddz():
     ddz = (salt[2] - salt[0])/(z_rho[2] - z_rho[0])
@@ -47,13 +52,13 @@ def test_z_rho():
     assert np.allclose(ds.z_rho[0,:,0,0], z_rho)
 
 def test_rho():
-    assert np.allclose(ds.xroms.rho()[0,:,0,0], xroms.density(temp, salt, z_rho))
+    assert np.allclose(ds.xroms.rho()[0,:,0,0], xroms.density(temp, salt, z_rho, ds.attrs['grid']))
     
 def test_sig0():
-    assert np.allclose(ds.xroms.sig0()[0,:,0,0], xroms.density(temp, salt, 0))
+    assert np.allclose(ds.xroms.sig0()[0,:,0,0], xroms.density(temp, salt, 0, ds.attrs['grid']))
     
 def test_N2():
-    rho = xroms.density(temp, salt, z_rho)
+    rho = xroms.density(temp, salt, z_rho, ds.attrs['grid'])
     drhodz = (rho[2] - rho[0])/(z_rho[2] - z_rho[0])
     var = -g*drhodz/rho0
     # compare above estimate with two averaged since 
@@ -70,7 +75,7 @@ def test_N2():
     
 def test_mld():
     # choose threshold so that z_rho[-2] is the mld
-    sig0 = xroms.density(temp, salt, 0)
+    sig0 = xroms.density(temp, salt, 0, ds.attrs['grid'])
     thresh = sig0[-2] - sig0[-1]
     assert np.allclose(ds.xroms.mld(thresh=thresh)[0,0,0], z_rho[-2], rtol=1e-3)
 
@@ -78,7 +83,7 @@ def test_speed():
     assert np.allclose(ds.xroms.speed().mean(),np.sqrt(u**2 + v**2).mean())
 
 def test_KE():
-    rho = xroms.density(temp, salt, z_rho)[:,np.newaxis, np.newaxis]
+    rho = xroms.density(temp, salt, z_rho, ds.attrs['grid'])[:,np.newaxis, np.newaxis]
     s = (u**2 + v**2)[np.newaxis,:,:]
     KE = 0.5*rho*s
     assert np.allclose(ds.xroms.KE().mean(),KE.mean())

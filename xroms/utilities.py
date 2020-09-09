@@ -156,7 +156,7 @@ def to_s_w(var, grid, boundary='extend'):
     return var
 
 
-def to_grid(var, grid, hcoord=None, scoord=None):
+def to_grid(var, grid, hcoord=None, scoord=None, attrs=None):
     '''Implement grid changes to variable var using input strings.
 
     Inputs:
@@ -170,8 +170,13 @@ def to_grid(var, grid, hcoord=None, scoord=None):
     Change 'salt' variable in Dataset ds to be on psi horizontal and s_w vertical grids
     > xroms.to_grid(ds.salt, grid, 'psi', 's_w')
     '''
-
-    name = var.name
+    
+    if attrs is None and isinstance(var, xr.DataArray):
+        attrs = var.attrs.copy()
+        attrs['name'] = var.name
+        attrs['units'] = attrs.setdefault('units', 'units')
+        attrs['long_name']  = attrs.setdefault('long_name', 'var')
+        attrs['grid'] = grid
 
     if hcoord is not None:
         assert hcoord in ['rho','psi','u','v'], 'hcoord should be "rho" or "psi" or "u" or "v" but is "%s"' % hcoord
@@ -191,7 +196,9 @@ def to_grid(var, grid, hcoord=None, scoord=None):
         elif scoord in ['s_w','w']:
             var = to_s_w(var, grid)
 
-    var.name = name
+    if isinstance(var, xr.DataArray):
+        var.attrs = attrs
+        var.name = var.attrs['name']
 
     return var
 
@@ -212,19 +219,47 @@ def ddz(var, grid, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfi
     Example usage:
     > xroms.ddz(ds.salt, grid)
     '''
-    
-    if attrs is None:
-        if not 'name' in var.attrs: var.attrs['name'] = 'var'
-        if not 'long_name' in var.attrs: var.attrs['long_name'] = 'var'
-        if not 'units' in var.attrs: var.attrs['units'] = 'units'            
-        attrs = {'name': 'd' + var.name + 'dz', 'long_name': 'vertical derivative of ' + var.long_name, 
-                 'units': '1/m * ' + var.units}
+
+    if attrs is None and isinstance(var, xr.DataArray):
+        attrs = var.attrs.copy()
+        attrs['name'] = 'd' + var.name  + 'dz'
+        attrs['units'] = '1/m * ' + attrs.setdefault('units', 'units')
+        attrs['long_name']  = 'vertical derivative of ' + attrs.setdefault('long_name', 'var')
+        attrs['grid'] = grid
 
     var =  grid.derivative(var, 'Z', boundary=sboundary, fill_value=sfill_value)
-    var = to_grid(var, grid, hcoord, scoord)
-    var.attrs = attrs
-    var.name = var.attrs['name']
+    var = to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
     return var
+
+
+def dudz(u, grid, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
+    '''Calculate dudz. Wrapper of `ddz`.
+
+    Inputs:
+    hcoord     string (None). Name of horizontal grid to interpolate variable
+               to. Options are 'rho' and 'psi'.
+    scoord     string (None). Name of vertical grid to interpolate variable
+               to. Options are 's_rho' and 's_w'.
+
+    '''
+    attrs = {'name': 'dudz', 'long_name': 'u component of vertical shear', 
+             'units': '1/s', 'grid': grid}
+    return ddz(u, grid, attrs=attrs, hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
+
+
+def dvdz(v, grid, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
+    '''Calculate dvdz. Wrapper of `ddz`.
+
+    Inputs:
+    hcoord     string (None). Name of horizontal grid to interpolate variable
+               to. Options are 'rho' and 'psi'.
+    scoord     string (None). Name of vertical grid to interpolate variable
+               to. Options are 's_rho' and 's_w'.
+
+    '''
+    attrs = {'name': 'dvdz', 'long_name': 'v component of vertical shear', 
+             'units': '1/s', 'grid': grid}
+    return ddz(v, grid, attrs=attrs, hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
 
 
 def ddxi(var, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan, z=None):
@@ -245,19 +280,9 @@ def ddxi(var, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', hf
     Example usage:
     > xroms.ddxi(ds.salt, grid)
     '''
-    
-    if attrs is None:
-        if not 'name' in var.attrs: var.attrs['name'] = 'var'
-        if not 'long_name' in var.attrs: var.attrs['long_name'] = 'var'
-        if not 'units' in var.attrs: var.attrs['units'] = 'units'            
-        attrs = {'name': 'd' + var.name + 'dxi', 'long_name': 'horizontal xi derivative of ' + var.long_name, 
-                 'units': '1/m * ' + var.units}
-    
+        
     var = xroms.hgrad(var, grid, which='xi', z=z, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     var = to_grid(var, grid, hcoord, scoord)
-    var.attrs = attrs
-    var.name = var.attrs['name']
-    var.name = var.attrs['name']
     return var
 
 
@@ -280,17 +305,8 @@ def ddeta(var, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', h
     > xroms.ddeta(ds.salt, grid)
     '''
     
-    if attrs is None:
-        if not 'name' in var.attrs: var.attrs['name'] = 'var'
-        if not 'long_name' in var.attrs: var.attrs['long_name'] = 'var'
-        if not 'units' in var.attrs: var.attrs['units'] = 'units'            
-        attrs = {'name': 'd' + var.name + 'deta', 'long_name': 'horizontal eta derivative of ' + var.long_name, 
-                 'units': '1/m * ' + var.units}
-    
     var = xroms.hgrad(var, grid, which='eta', z=z, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     var = to_grid(var, grid, hcoord, scoord)
-    var.attrs = attrs
-    var.name = var.attrs['name']
     return var
 
 
@@ -494,14 +510,15 @@ def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
     out =  varl - propl*(varu-varl)/(propu-propl)
 
     check = (zc.sum(coord) == 2)
-    if check.sum() > 0:
-        if printwarning:
-            words = '''either iso_value exactly matches at least one entry in iso_array or
-                        iso_value is passed more than once (iso_array is not monotonic.
-                        iso_value is being adjusted slightly to account for the former case
-                        with an approximation.'''
-            print(words)
-        # where iso_value is located in iso_array, divide result by 2
-        out = xr.where(check, out/2, out)
+#     if check.sum() > 0:
+    if printwarning:
+        words = '''either iso_value exactly matches at least one entry in iso_array or
+                    iso_value is passed more than once (iso_array is not monotonic.
+                    iso_value is being adjusted slightly to account for the former case
+                    with an approximation.'''
+        print(words)
+    # where iso_value is located in iso_array, divide result by 2
+    out = xr.where(check, out/2, out)
 
     return out
+

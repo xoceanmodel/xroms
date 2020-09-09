@@ -2,12 +2,14 @@ import xarray as xr
 import xgcm
 from warnings import warn
 import cartopy
+import xroms
 import numpy as np
 
 
-from .utilities import to_rho, to_psi, xisoslice
+from .utilities import xisoslice, to_grid
 from .roms_seawater import buoyancy
 
+g = 9.81  # m/s^2
 
 def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     '''Return a dataset that is aware of ROMS coordinatates and an associated xgcm grid object with metrics
@@ -210,7 +212,9 @@ def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None)
     '''Return an xarray.Dataset based on a list of netCDF files
 
     Inputs:
-    files       A list of netCDF files
+    files       Where to find the model output. `files` could be: A list of netCDF file
+                names, a string of netCDF file name, or a string of a thredds server 
+                containing model output.
 
     Output:
     ds          An xarray.Dataset
@@ -230,7 +234,11 @@ def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None)
         ds = xr.open_dataset(files, chunks=chunks)
 
     ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
-#     ds['grid'] = grid   # can't store and retrieve from dataset
+    ds.attrs['grid'] = grid
+    # also put grid into every variable with at least 2D
+    for var in ds.variables:
+        if ds[var].ndim > 1:
+            ds[var].attrs['grid'] = ds.attrs['grid']
 
     return ds
 
@@ -259,12 +267,16 @@ def open_zarr(files, chunks=None, Vtransform=None, add_verts=False, proj=None):
         dim='ocean_time', data_vars='minimal', coords='minimal')
 
     ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
-#     ds['grid'] = grid   # can't store and retrieve from dataset
-
+    ds.attrs['grid'] = grid
+    # also put grid into every variable with at least 2D
+    for var in ds.variables:
+        if ds[var].ndim > 1:
+            ds[var].attrs['grid'] = ds.attrs['grid']
+    
     return ds
 
 
-def hgrad(q, grid, which='both', z=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
+def hgrad(q, grid, which='both', z=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None, attrs=None):
     '''Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions
 
     The main purpose of this it to account for the fact that ROMS vertical coordinates are
@@ -310,6 +322,14 @@ def hgrad(q, grid, which='both', z=None, hboundary='extend', hfill_value=None, s
 
         dqdxi = dqdx*dzdz - dqdz*dzdx
 
+        if attrs is None and isinstance(q, xr.DataArray):
+            attrs = q.attrs.copy()
+            attrs['name'] = 'd' + q.name  + 'dxi'
+            attrs['units'] = '1/m * ' + attrs.setdefault('units', 'units')
+            attrs['long_name']  = 'horizontal xi derivative of ' + attrs.setdefault('long_name', 'var')
+            attrs['grid'] = grid
+        dqdxi = xroms.to_grid(dqdxi, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)  
+
     if which in ['both','eta']:
 
         dqdy = grid.interp(grid.derivative(q, 'Y', boundary=hboundary, fill_value=hfill_value), 'Z', boundary=sboundary, fill_value=sfill_value)
@@ -318,6 +338,15 @@ def hgrad(q, grid, which='both', z=None, hboundary='extend', hfill_value=None, s
         dzdz = grid.interp(grid.derivative(z, 'Z', boundary=sboundary, fill_value=sfill_value), 'Y', boundary=hboundary, fill_value=hfill_value)
 
         dqdeta = dqdy*dzdz - dqdz*dzdy
+
+        if attrs is None and isinstance(q, xr.DataArray):
+            attrs = q.attrs.copy()
+            attrs['name'] = 'd' + q.name  + 'deta'
+            attrs['units'] = '1/m * ' + attrs.setdefault('units', 'units')
+            attrs['long_name']  = 'horizontal eta derivative of ' + attrs.setdefault('long_name', 'var')
+            attrs['grid'] = grid
+        dqdeta = xroms.to_grid(dqdeta, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)  
+        
 
     if which == 'both':
         return dqdxi, dqdeta
@@ -329,13 +358,13 @@ def hgrad(q, grid, which='both', z=None, hboundary='extend', hfill_value=None, s
         print('nothing being returned from hgrad')
 
 
-def relative_vorticity(ds, grid, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
+def relative_vorticity(u, v, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
     '''Return the vertical component of the relative vorticity on rho-points
 
 
     Inputs:
     ------
-    ds              ROMS dataset, needs to include grid metrics: dz_rho_u, dz_rho_v
+    u, v            (DataArray) xi, eta components of velocity
 
     grid            xgcm object, Grid object associated with DataArray phi
 
@@ -351,84 +380,106 @@ def relative_vorticity(ds, grid, hboundary='extend', hfill_value=None, sboundary
 
     '''
 
-    dvdxi = hgrad(ds.v, grid, which='xi', hboundary=hboundary, hfill_value=hfill_value,
+    dvdxi = hgrad(v, grid, which='xi', hboundary=hboundary, hfill_value=hfill_value,
                                           sboundary=sboundary, sfill_value=sfill_value)
-    dudeta = hgrad(ds.u, grid, which='eta', hboundary=hboundary, hfill_value=hfill_value,
+    dudeta = hgrad(u, grid, which='eta', hboundary=hboundary, hfill_value=hfill_value,
                                             sboundary=sboundary, sfill_value=sfill_value)
 
-    return dvdxi - dudeta
+    var = dvdxi - dudeta
+    attrs = {'name': 'vort', 'long_name': 'vertical component of vorticity', 
+             'units': '1/s', 'grid': grid}
+    var = to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)  
+
+    return var
 
 
-def mld(sig0, h, mask, z=None, thresh=0.03):
-    '''Calculate the mixed layer depth.
-    
-    Mixed layer depth is based on the fixed Potential Density (PD) threshold.
+def KE(rho, speed, grid, hcoord=None, scoord=None):
+    '''Calculate kinetic energy [kg/(m*s^2)].
     
     Inputs:
-    sig0       DataArray. Potential density.
-    h          depths [m].
-    mask       mask to match sig0
-    z          DataArray (None). The vertical depths associated with sig0. Should be on 'rho'
-               grid horizontally and vertically. Use coords associated with DataArray sig0
-               if not input.
-    thresh     float (0.03). In kg/m^3
-    
-    Converted to xroms by K. Thyng Aug 2020 from:
-    
-    Update history:
-    v1.0 DL 2020Jun07
-        
-    References:
-    ncl mixed_layer_depth function at https://github.com/NCAR/ncl/blob/ed6016bf579f8c8e8f77341503daef3c532f1069/ni/src/lib/nfpfort/ocean.f
-    de Boyer Montégut, C., Madec, G., Fischer, A. S., Lazar, A., & Iudicone, D. (2004). Mixed layer depth over the global ocean: An examination of profile data and a profile‐based climatology. Journal of  Geophysical Research: Oceans, 109(C12).
+    hcoord     string (None). Name of horizontal grid to interpolate variable
+               to. Options are 'rho' and 'psi'.
+    scoord     string (None). Name of vertical grid to interpolate variable
+               to. Options are 's_rho' and 's_w'.
     '''
     
-    if h.mean() > 0:  # if depths are positive, change to negative
-        h = -h
-    
-    # xisoslice will operate over the relevant s dimension
-    skey = sig0.dims[[dim[:2] == "s_" for dim in sig0.dims].index(True)]
-    
-    if z is None:
-        z = sig0.z_rho
-    
-    # the mixed layer depth is the isosurface of depth where the potential density equals the surface + a threshold
-    mld = xisoslice(sig0 - sig0.isel(s_rho=-1) - thresh, 0.0, z, skey)
-    
-    # Replace nan's that are not masked with the depth of the water column.
-    cond = (mld.isnull()) & (mask == 1)
-    mld = mld.where(~cond, h)
-
-    return mld
-
-
-def KE(rho, speed):
-    '''Calculate kinetic energy [kg/(m*s^2)].'''
-    
+    attrs = {'name': 'KE', 'long_name': 'kinetic energy', 
+             'units': 'kg/(m*s^2)', 'grid': grid}
     var = 0.5*rho*speed**2
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
     
     return var
 
 
-def timemean(var, timeperiod, attrs=None):#, hcoord=None, scoord=None):
-    '''DOCS'''
-
-    timeperiods = ['day', 'season', 'year', 'month', 'hour']
+def speed(u, v, grid, hcoord=None, scoord=None):
+    '''Calculate horizontal speed [m/s].
     
-    assert timeperiod in timeperiods, 'timeperiod should be one of ' + ', '.join(timeperiods)
+    Inputs:
+    hcoord     string (None). Name of horizontal grid to interpolate variable
+               to. Options are 'rho' and 'psi'.
+    scoord     string (None). Name of vertical grid to interpolate variable
+               to. Options are 's_rho' and 's_w'.
+    '''
     
-    # find time key for dims
-    tkey = var.dims[['time' in dim for dim in var.dims].index(True)]
-        
-    if attrs is None:
-        if not 'name' in var.attrs: var.attrs['name'] = 'var'
-        if not 'long_name' in var.attrs: var.attrs['long_name'] = 'var'
-        if not 'units' in var.attrs: var.attrs['units'] = 'units'            
-        attrs = {'name': 'mean ' + var.name, 'long_name': var.long_name + ', time mean over ' + timeperiod, 
-                 'units': var.units}
-
-    var = var.groupby(tkey + '.' + timeperiod).mean(tkey).mean(timeperiod)
-    var.attrs = attrs
-    var.name = var.attrs['name']
-
+    attrs = {'name': 's', 'long_name': 'horizontal speed', 
+             'units': 'm/s', 'grid': grid}
+    var = np.sqrt(u**2 + v**2)
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    
     return var
+
+
+def ertel(phi, u, v, f, grid, hcoord='rho', scoord='s_rho',
+          hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
+    '''Return Ertel potential vorticity of phi.
+
+    Inputs:
+    ------
+    phi             (DataArray) Conservative tracer. Usually this would be 
+                    the buoyancy but could be another approximately 
+                    conservative tracer. The buoyancy can be calculated as:
+                    > xroms.buoyancy(temp, salt, 0)
+                    and then input as `phi`. 
+                    
+    u, v            (DataArray) xi, eta components of velocity
+    
+    f               (DataArray) Coriolis array
+
+    grid            xgcm object, Grid object associated with Dataset.
+
+
+    Outputs:
+    -------
+    epv             The ertel potential vorticity
+                    epv = -v_z * phi_x + u_z * phi_y + (f + v_x - u_y) * phi_z
+
+    Options:
+    -------
+    hcoord     string (None). Name of horizontal grid to interpolate variable
+               to. Options are 'rho' and 'psi'.
+    scoord     string (None). Name of vertical grid to interpolate variable
+               to. Options are 's_rho' and 's_w'.
+    boundary        Passed to `grid` method calls. Default is `extend`
+    '''
+
+    # get the components of the grad(phi)
+    phi_xi, phi_eta = hgrad(phi, grid, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
+    phi_xi = xroms.to_grid(phi_xi, grid, hcoord=hcoord, scoord=scoord)
+    phi_eta = xroms.to_grid(phi_eta, grid, hcoord=hcoord, scoord=scoord)
+    phi_z = xroms.ddz(phi, grid, hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=np.nan)
+
+    # vertical shear (horizontal components of vorticity)
+    u_z = xroms.dudz(u, grid, hcoord=hcoord, scoord=scoord)
+    v_z = xroms.dvdz(v, grid, hcoord=hcoord, scoord=scoord)
+
+    # vertical component of vorticity on rho grid
+    vort = relative_vorticity(u, v, grid, hcoord=hcoord, scoord=scoord)
+
+    # combine terms to get the ertel potential vorticity
+    epv = -v_z * phi_xi + u_z * phi_eta + (f + vort) * phi_z
+
+    attrs = {'name': 'ertel', 'long_name': 'ertel potential vorticity', 
+             'units': 'tracer/(m*s)', 'grid': grid}
+    epv = xroms.to_grid(epv, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+
+    return epv
