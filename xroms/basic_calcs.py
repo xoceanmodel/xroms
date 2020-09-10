@@ -20,7 +20,8 @@ def mean(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs = var.attrs.copy()
         attrs['name'] = attrs.setdefault('name', 'var') 
         attrs['units'] = attrs.setdefault('units', 'units')
-        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', mean over dim ' + ', '.join(dim)
+        dimstr = dim if isinstance(dim, str) else ', '.join(dim)
+        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', mean over dim ' + dimstr
         attrs['grid'] = grid
         
     var = var.mean(dim)
@@ -46,7 +47,8 @@ def sum(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs = var.attrs.copy()
         attrs['name'] = attrs.setdefault('name', 'var') 
         attrs['units'] = attrs.setdefault('units', 'units')
-        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', sum over dim ' + ', '.join(dim)
+        dimstr = dim if isinstance(dim, str) else ', '.join(dim)
+        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', sum over dim ' + dimstr
         attrs['grid'] = grid
         
     var = var.sum(dim)
@@ -68,7 +70,8 @@ def max(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs = var.attrs.copy()
         attrs['name'] = attrs.setdefault('name', 'var') 
         attrs['units'] = attrs.setdefault('units', 'units')
-        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', max over dim ' + ', '.join(dim)
+        dimstr = dim if isinstance(dim, str) else ', '.join(dim)
+        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', max over dim ' + dimstr
         attrs['grid'] = grid
         
     var = var.max(dim)
@@ -90,7 +93,8 @@ def min(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs = var.attrs.copy()
         attrs['name'] = attrs.setdefault('name', 'var') 
         attrs['units'] = attrs.setdefault('units', 'units')
-        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', min over dim ' + ', '.join(dim)
+        dimstr = dim if isinstance(dim, str) else ', '.join(dim)
+        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', min over dim ' + dimstr
         attrs['grid'] = grid
         
     var = var.min(dim)
@@ -112,7 +116,8 @@ def std(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs = var.attrs.copy()
         attrs['name'] = attrs.setdefault('name', 'var') 
         attrs['units'] = attrs.setdefault('units', 'units')
-        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', std over dim ' + ', '.join(dim)
+        dimstr = dim if isinstance(dim, str) else ', '.join(dim)
+        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', std over dim ' + dimstr
         attrs['grid'] = grid
         
     var = var.std(dim)
@@ -134,7 +139,8 @@ def var(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs = var.attrs.copy()
         attrs['name'] = attrs.setdefault('name', 'var') 
         attrs['units'] = attrs.setdefault('units', 'units')
-        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', variance over dim ' + ', '.join(dim)
+        dimstr = dim if isinstance(dim, str) else ', '.join(dim)
+        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', variance over dim ' + dimstr
         attrs['grid'] = grid
         
     var = var.var(dim)
@@ -156,7 +162,8 @@ def median(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs = var.attrs.copy()
         attrs['name'] = attrs.setdefault('name', 'var') 
         attrs['units'] = attrs.setdefault('units', 'units')
-        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', median over dim ' + ', '.join(dim)
+        dimstr = dim if isinstance(dim, str) else ', '.join(dim)
+        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', median over dim ' + dimstr
         attrs['grid'] = grid
         
     var = var.median(dim)
@@ -185,7 +192,8 @@ def gridmean(var, grid, dim, attrs=None, hcoord=None, scoord=None):
         attrs = var.attrs.copy()
         attrs['name'] = attrs.setdefault('name', 'var') 
         attrs['units'] = attrs.setdefault('units', 'units')
-        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', mean over dim ' + ', '.join(dim)
+        dimstr = dim if isinstance(dim, str) else ', '.join(dim)
+        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', grid mean over dim ' + dimstr
         attrs['grid'] = grid
         
     var = grid.average(var, dim)
@@ -213,7 +221,8 @@ def gridsum(var, grid, dim, attrs=None, hcoord=None, scoord=None):
         attrs = var.attrs.copy()
         attrs['name'] = attrs.setdefault('name', 'var') 
         attrs['units'] = attrs.setdefault('units', 'units')
-        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', sum over dim ' + ', '.join(dim)
+        dimstr = dim if isinstance(dim, str) else ', '.join(dim)
+        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', grid sum over dim ' + dimstr
         attrs['grid'] = grid
     
     var = grid.integrate(var, dim)
