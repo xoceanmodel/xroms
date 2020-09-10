@@ -208,7 +208,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     return ds, grid
 
 
-def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None):
+def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None, parallel=True):
     '''Return an xarray.Dataset based on a list of netCDF files
 
     Inputs:
@@ -222,6 +222,7 @@ def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None)
     Options:
     chunks      The specified chunks for the DataSet.
                 Default: chunks = {'ocean_time':1}
+    parallel    (True) To be passed to `xarray open_mfdataset`.
     '''
 
     if chunks is None:
@@ -229,7 +230,8 @@ def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None)
 
     if isinstance(files, list):
         ds = xr.open_mfdataset(files, compat='override', combine='by_coords',
-                                     data_vars='minimal', coords='minimal', chunks=chunks)
+                               data_vars='minimal', coords='minimal', 
+                               chunks=chunks, parallel=parallel)
     elif isinstance(files, str):
         ds = xr.open_dataset(files, chunks=chunks)
 
