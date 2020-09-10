@@ -23,10 +23,10 @@ def mean(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', mean over dim ' + ', '.join(dim)
         attrs['grid'] = grid
         
-    varout = var.mean(dim)
+    var = var.mean(dim)
     var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
 
-    return varout
+    return var
 
 
 def sum(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
@@ -49,10 +49,10 @@ def sum(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', sum over dim ' + ', '.join(dim)
         attrs['grid'] = grid
         
-    varout = var.sum(dim)
+    var = var.sum(dim)
     var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
 
-    return varout
+    return var
 
 
 def max(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
@@ -71,10 +71,10 @@ def max(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', max over dim ' + ', '.join(dim)
         attrs['grid'] = grid
         
-    varout = var.max(dim)
+    var = var.max(dim)
     var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
 
-    return varout
+    return var
 
 
 def min(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
@@ -93,10 +93,10 @@ def min(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', min over dim ' + ', '.join(dim)
         attrs['grid'] = grid
         
-    varout = var.min(dim)
+    var = var.min(dim)
     var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
 
-    return varout
+    return var
 
 
 def std(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
@@ -115,10 +115,10 @@ def std(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', std over dim ' + ', '.join(dim)
         attrs['grid'] = grid
         
-    varout = var.std(dim)
+    var = var.std(dim)
     var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
 
-    return varout
+    return var
 
 
 def var(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
@@ -137,10 +137,10 @@ def var(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', variance over dim ' + ', '.join(dim)
         attrs['grid'] = grid
         
-    varout = var.var(dim)
+    var = var.var(dim)
     var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
 
-    return varout
+    return var
 
 
 def median(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
@@ -159,10 +159,10 @@ def median(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
         attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', median over dim ' + ', '.join(dim)
         attrs['grid'] = grid
         
-    varout = var.median(dim)
+    var = var.median(dim)
     var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
 
-    return varout
+    return var
 
 
 
@@ -191,7 +191,7 @@ def gridmean(var, grid, dim, attrs=None, hcoord=None, scoord=None):
     var = grid.average(var, dim)
     var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
         
-    return varout
+    return var
     
 
 def gridsum(var, grid, dim, attrs=None, hcoord=None, scoord=None):
@@ -219,7 +219,7 @@ def gridsum(var, grid, dim, attrs=None, hcoord=None, scoord=None):
     var = grid.integrate(var, dim)
     var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
          
-    return varout
+    return var
     
 
 def groupbytime(var, grid, timeperiod, attrs=None, hcoord=None, scoord=None):
