@@ -8,7 +8,7 @@ from .xroms import (roms_dataset,
                     open_zarr,
                     hgrad,
                     relative_vorticity, KE, speed,
-                    ertel)
+                    ertel, uv_geostrophic, EKE)
 from .roms_seawater import (density, buoyancy, sig0, N2,
                             M2, mld)
 from .utilities import (to_rho, to_psi, to_u, to_v,

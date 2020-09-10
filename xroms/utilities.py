@@ -105,58 +105,59 @@ def sel2d(ds, lon0, lat0, proj=None, whichgrid='rho', argsel=False):
         return ds.isel(indexer)
 
 
-def to_rho(var, grid, boundary='extend'):
+def to_rho(var, grid, boundary='extend', fill_value=np.nan):
     if 'xi_rho' not in var.dims:
-        var = grid.interp(var, 'X', to='center', boundary=boundary)
+        var = grid.interp(var, 'X', to='center', boundary=boundary, fill_value=fill_value)
     if 'eta_rho' not in var.dims:
-        var = grid.interp(var, 'Y', to='center', boundary=boundary)
+        var = grid.interp(var, 'Y', to='center', boundary=boundary, fill_value=fill_value)
     return var
 
 
-def to_psi(var, grid, boundary='extend'):
+def to_psi(var, grid, boundary='extend', fill_value=np.nan):
 
     if 'xi_u' not in var.dims:
-        var = grid.interp(var, 'X', to='inner', boundary=boundary)
+        var = grid.interp(var, 'X', to='inner', boundary=boundary, fill_value=fill_value)
     if 'eta_v' not in var.dims:
-        var = grid.interp(var, 'Y', to='inner', boundary=boundary)
+        var = grid.interp(var, 'Y', to='inner', boundary=boundary, fill_value=fill_value)
     return var
 
 
-def to_u(var, grid, boundary='extend'):
+def to_u(var, grid, boundary='extend', fill_value=np.nan):
     if 'xi_u' not in var.dims:
-        var = grid.interp(var, 'X', to='inner', boundary=boundary)
+        var = grid.interp(var, 'X', to='inner', boundary=boundary, fill_value=fill_value)
     if 'eta_rho' not in var.dims:
-        var = grid.interp(var, 'Y', to='center', boundary=boundary)
+        var = grid.interp(var, 'Y', to='center', boundary=boundary, fill_value=fill_value)
     return var
 
 
-def to_v(var, grid, boundary='extend'):
+def to_v(var, grid, boundary='extend', fill_value=np.nan):
     if 'xi_rho' not in var.dims:
-        var = grid.interp(var, 'X', to='center', boundary=boundary)
+        var = grid.interp(var, 'X', to='center', boundary=boundary, fill_value=fill_value)
     if 'eta_v' not in var.dims:
-        var = grid.interp(var, 'Y', to='inner', boundary=boundary)
+        var = grid.interp(var, 'Y', to='inner', boundary=boundary, fill_value=fill_value)
     return var
 
 
-def to_s_rho(var, grid, boundary='extend'):
+def to_s_rho(var, grid, boundary='extend', fill_value=np.nan):
     '''Convert from s_w to s_rho vertical grid.'''
 
     # only change if not already on s_rho
     if 's_rho' not in var.dims:
-        var = grid.interp(var, 'Z', to='center', boundary=boundary)
+        var = grid.interp(var, 'Z', to='center', boundary=boundary, fill_value=fill_value)
     return var
 
 
-def to_s_w(var, grid, boundary='extend'):
+def to_s_w(var, grid, boundary='extend', fill_value=np.nan):
     '''Convert from s_rho to s_w vertical grid.'''
 
     # only change if not already on s_w
     if 's_w' not in var.dims:
-        var = grid.interp(var, 'Z', to='outer', boundary=boundary)
+        var = grid.interp(var, 'Z', to='outer', boundary=boundary, fill_value=fill_value)
     return var
 
 
-def to_grid(var, grid, hcoord=None, scoord=None, attrs=None):
+def to_grid(var, grid, hcoord=None, scoord=None, attrs=None, hboundary='extend', hfill_value=np.nan, 
+            sboundary='extend', sfill_value=np.nan):
     '''Implement grid changes to variable var using input strings.
 
     Inputs:
@@ -181,20 +182,20 @@ def to_grid(var, grid, hcoord=None, scoord=None, attrs=None):
     if hcoord is not None:
         assert hcoord in ['rho','psi','u','v'], 'hcoord should be "rho" or "psi" or "u" or "v" but is "%s"' % hcoord
         if hcoord == 'rho':
-            var = to_rho(var, grid)
+            var = to_rho(var, grid, boundary=hboundary, fill_value=hfill_value)
         elif hcoord == 'psi':
-            var = to_psi(var, grid)
+            var = to_psi(var, grid, boundary=hboundary, fill_value=hfill_value)
         elif hcoord == 'u':
-            var = to_u(var, grid)
+            var = to_u(var, grid, boundary=hboundary, fill_value=hfill_value)
         elif hcoord == 'v':
-            var = to_v(var, grid)
+            var = to_v(var, grid, boundary=hboundary, fill_value=hfill_value)
 
     if scoord is not None:
         assert scoord in ['s_rho','rho','s_w','w'], 'scoord should be "s_rho", "rho", "s_w", or "w" but is "%s"' % scoord
         if scoord in ['s_rho','rho']:
-            var = to_s_rho(var, grid)
+            var = to_s_rho(var, grid, boundary=sboundary, fill_value=sfill_value)
         elif scoord in ['s_w','w']:
-            var = to_s_w(var, grid)
+            var = to_s_w(var, grid, boundary=sboundary, fill_value=sfill_value)
 
     if isinstance(var, xr.DataArray):
         var.attrs = attrs
@@ -203,7 +204,7 @@ def to_grid(var, grid, hcoord=None, scoord=None, attrs=None):
     return var
 
 
-def ddz(var, grid, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
+def ddz(var, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan):
     '''Calculate d/dz for a variable.
 
     Inputs:
@@ -228,11 +229,12 @@ def ddz(var, grid, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfi
         attrs['grid'] = grid
 
     var =  grid.derivative(var, 'Z', boundary=sboundary, fill_value=sfill_value)
-    var = to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    var = to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                 hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     return var
 
 
-def dudz(u, grid, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
+def dudz(u, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan):
     '''Calculate dudz. Wrapper of `ddz`.
 
     Inputs:
@@ -247,7 +249,7 @@ def dudz(u, grid, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfil
     return ddz(u, grid, attrs=attrs, hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
 
 
-def dvdz(v, grid, attrs=None, hcoord=None, scoord=None, sboundary='extend', sfill_value=np.nan):
+def dvdz(v, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan):
     '''Calculate dvdz. Wrapper of `ddz`.
 
     Inputs:
@@ -282,7 +284,8 @@ def ddxi(var, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', hf
     '''
         
     var = xroms.hgrad(var, grid, which='xi', z=z, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
-    var = to_grid(var, grid, hcoord, scoord)
+    var = to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                 hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     return var
 
 
@@ -306,7 +309,8 @@ def ddeta(var, grid, attrs=None, hcoord=None, scoord=None, hboundary='extend', h
     '''
     
     var = xroms.hgrad(var, grid, which='eta', z=z, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
-    var = to_grid(var, grid, hcoord, scoord)
+    var = to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                 hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     return var
 
 

@@ -25,7 +25,7 @@ class xromsDatasetAccessor:
         self._tris = None
     
     
-    def to_grid(self, varname, hcoord=None, scoord=None):
+    def to_grid(self, varname, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan):
         '''Implement grid changes to variable in Dataset using input strings.
         
         Inputs:
@@ -324,6 +324,15 @@ class xromsDatasetAccessor:
         return xroms.mld(self.sig0(), self.ds.h, self.ds.mask_rho, self.ds.attrs['grid'], thresh=thresh, hcoord=hcoord, scoord=scoord)
     
     
+    def EKE(self, hcoord=None, scoord=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
+        '''Calculate EKE'''
+        
+        ug, vg = xroms.uv_geostrophic(self.ds.zeta, self.ds.f, self.ds.attrs['grid'], hcoord=hcoord, scoord=scoord, 
+                        hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
+        
+        return xroms.EKE(ug, vg, self.ds.attrs['grid'], hcoord=hcoord, scoord=scoord,
+                  hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)    
+    
 #     @property
 #     def idgrid(self):
 #         '''Return string name of grid DataArray is on.
@@ -388,7 +397,7 @@ class xromsDataArrayAccessor:
         assert isinstance(da.attrs['grid'], xgrid.Grid), words
     
     
-    def to_grid(self, hcoord=None, scoord=None):
+    def to_grid(self, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan):
         '''Implement grid changes to DataArray using input strings.
         
         Inputs:

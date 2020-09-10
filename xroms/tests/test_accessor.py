@@ -80,13 +80,13 @@ def test_mld():
     assert np.allclose(ds.xroms.mld(thresh=thresh)[0,0,0], z_rho[-2], rtol=1e-3)
 
 def test_speed():
-    assert np.allclose(ds.xroms.speed().mean(),np.sqrt(u**2 + v**2).mean())
+    assert np.allclose(ds.xroms.speed(hcoord='psi').mean(),np.sqrt(u**2 + v**2).mean(), rtol=1e-2)
 
 def test_KE():
     rho = xroms.density(temp, salt, z_rho, ds.attrs['grid'])[:,np.newaxis, np.newaxis]
-    s = (u**2 + v**2)[np.newaxis,:,:]
-    KE = 0.5*rho*s
-    assert np.allclose(ds.xroms.KE().mean(),KE.mean())
+    s2 = (u**2 + v**2)[np.newaxis,:,:]
+    KE = 0.5*rho*s2
+    assert np.allclose(ds.xroms.KE(hcoord='psi').mean(),KE.mean(), rtol=1e-2)
 
 def test_relative_vorticity():
     assert np.allclose(ds.xroms.vort('rho', 's_rho'),0)

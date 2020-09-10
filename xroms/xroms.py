@@ -311,18 +311,34 @@ def hgrad(q, grid, which='both', z=None, hcoord=None, scoord=None, hboundary='ex
     '''
 
     if z is None:
-        coords = list(q.coords)
-        z_coord_name = coords[[coord[:2] == "z_" for coord in coords].index(True)]
-        z = q[z_coord_name]
+        try:
+            coords = list(q.coords)
+            z_coord_name = coords[[coord[:2] == "z_" for coord in coords].index(True)]
+            z = q[z_coord_name]
+            is3D = True
+        except:
+            # if we get here that means that q doesn't have z coords (like zeta)
+            is3D = False
+    else:
+        is3D = True
+            
 
     if which in ['both','xi']:
 
-        dqdx = grid.interp(grid.derivative(q, 'X', boundary=hboundary, fill_value=hfill_value), 'Z', boundary=sboundary, fill_value=sfill_value)
-        dqdz = grid.interp(grid.derivative(q, 'Z', boundary=sboundary, fill_value=sfill_value), 'X', boundary=hboundary, fill_value=hfill_value)
-        dzdx = grid.interp(grid.derivative(z, 'X', boundary=hboundary, fill_value=hfill_value), 'Z', boundary=sboundary, fill_value=sfill_value)
-        dzdz = grid.interp(grid.derivative(z, 'Z', boundary=sboundary, fill_value=sfill_value), 'X', boundary=hboundary, fill_value=hfill_value)
+        if is3D:
+            dqdx = grid.interp(grid.derivative(q, 'X', boundary=hboundary, fill_value=hfill_value), 
+                               'Z', boundary=sboundary, fill_value=sfill_value)
+            dqdz = grid.interp(grid.derivative(q, 'Z', boundary=sboundary, fill_value=sfill_value), 
+                               'X', boundary=hboundary, fill_value=hfill_value)
+            dzdx = grid.interp(grid.derivative(z, 'X', boundary=hboundary, fill_value=hfill_value), 
+                               'Z', boundary=sboundary, fill_value=sfill_value)
+            dzdz = grid.interp(grid.derivative(z, 'Z', boundary=sboundary, fill_value=sfill_value), 
+                               'X', boundary=hboundary, fill_value=hfill_value)
 
-        dqdxi = dqdx*dzdz - dqdz*dzdx
+            dqdxi = dqdx*dzdz - dqdz*dzdx
+        
+        else:  # 2D variables
+            dqdxi = grid.derivative(q, 'X', boundary=hboundary, fill_value=hfill_value)
 
         if attrs is None and isinstance(q, xr.DataArray):
             attrs = q.attrs.copy()
@@ -330,16 +346,25 @@ def hgrad(q, grid, which='both', z=None, hcoord=None, scoord=None, hboundary='ex
             attrs['units'] = '1/m * ' + attrs.setdefault('units', 'units')
             attrs['long_name']  = 'horizontal xi derivative of ' + attrs.setdefault('long_name', 'var')
             attrs['grid'] = grid
-        dqdxi = xroms.to_grid(dqdxi, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)  
+        dqdxi = xroms.to_grid(dqdxi, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                             hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)  
 
     if which in ['both','eta']:
+        
+        if is3D:
+            dqdy = grid.interp(grid.derivative(q, 'Y', boundary=hboundary, fill_value=hfill_value), 
+                               'Z', boundary=sboundary, fill_value=sfill_value)
+            dqdz = grid.interp(grid.derivative(q, 'Z', boundary=sboundary, fill_value=sfill_value), 
+                               'Y', boundary=hboundary, fill_value=hfill_value)
+            dzdy = grid.interp(grid.derivative(z, 'Y', boundary=hboundary, fill_value=hfill_value), 
+                               'Z', boundary=sboundary, fill_value=sfill_value)
+            dzdz = grid.interp(grid.derivative(z, 'Z', boundary=sboundary, fill_value=sfill_value), 
+                               'Y', boundary=hboundary, fill_value=hfill_value)
 
-        dqdy = grid.interp(grid.derivative(q, 'Y', boundary=hboundary, fill_value=hfill_value), 'Z', boundary=sboundary, fill_value=sfill_value)
-        dqdz = grid.interp(grid.derivative(q, 'Z', boundary=sboundary, fill_value=sfill_value), 'Y', boundary=hboundary, fill_value=hfill_value)
-        dzdy = grid.interp(grid.derivative(z, 'Y', boundary=hboundary, fill_value=hfill_value), 'Z', boundary=sboundary, fill_value=sfill_value)
-        dzdz = grid.interp(grid.derivative(z, 'Z', boundary=sboundary, fill_value=sfill_value), 'Y', boundary=hboundary, fill_value=hfill_value)
-
-        dqdeta = dqdy*dzdz - dqdz*dzdy
+            dqdeta = dqdy*dzdz - dqdz*dzdy
+        
+        else:  # 2D variables
+            dqdeta = grid.derivative(q, 'Y', boundary=hboundary, fill_value=hfill_value)
 
         if attrs is None and isinstance(q, xr.DataArray):
             attrs = q.attrs.copy()
@@ -347,7 +372,8 @@ def hgrad(q, grid, which='both', z=None, hcoord=None, scoord=None, hboundary='ex
             attrs['units'] = '1/m * ' + attrs.setdefault('units', 'units')
             attrs['long_name']  = 'horizontal eta derivative of ' + attrs.setdefault('long_name', 'var')
             attrs['grid'] = grid
-        dqdeta = xroms.to_grid(dqdeta, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)  
+        dqdeta = xroms.to_grid(dqdeta, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                              hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)  
         
 
     if which == 'both':
@@ -390,12 +416,13 @@ def relative_vorticity(u, v, grid, hcoord=None, scoord=None, hboundary='extend',
     var = dvdxi - dudeta
     attrs = {'name': 'vort', 'long_name': 'vertical component of vorticity', 
              'units': '1/s', 'grid': grid}
-    var = to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)  
+    var = to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                 hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)  
 
     return var
 
 
-def KE(rho, speed, grid, hcoord=None, scoord=None):
+def KE(rho, speed, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan):
     '''Calculate kinetic energy [kg/(m*s^2)].
     
     Inputs:
@@ -408,12 +435,13 @@ def KE(rho, speed, grid, hcoord=None, scoord=None):
     attrs = {'name': 'KE', 'long_name': 'kinetic energy', 
              'units': 'kg/(m*s^2)', 'grid': grid}
     var = 0.5*rho*speed**2
-    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                       hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     
     return var
 
 
-def speed(u, v, grid, hcoord=None, scoord=None):
+def speed(u, v, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan):
     '''Calculate horizontal speed [m/s].
     
     Inputs:
@@ -425,8 +453,11 @@ def speed(u, v, grid, hcoord=None, scoord=None):
     
     attrs = {'name': 's', 'long_name': 'horizontal speed', 
              'units': 'm/s', 'grid': grid}
+    u = xroms.to_rho(u, grid, boundary=hboundary, fill_value=hfill_value)
+    v = xroms.to_rho(v, grid, boundary=hboundary, fill_value=hfill_value)
     var = np.sqrt(u**2 + v**2)
-    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs, 
+                        hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     
     return var
 
@@ -482,6 +513,55 @@ def ertel(phi, u, v, f, grid, hcoord='rho', scoord='s_rho',
 
     attrs = {'name': 'ertel', 'long_name': 'ertel potential vorticity', 
              'units': 'tracer/(m*s)', 'grid': grid}
-    epv = xroms.to_grid(epv, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    epv = xroms.to_grid(epv, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                       hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
 
     return epv
+
+
+def uv_geostrophic(zeta, f, grid, hcoord='rho', scoord='s_rho',
+          hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
+    '''Calculate geostrophic velocities from zeta.
+    
+    Copy of copy of surf_geostr_vel of IRD Roms_Tools.
+    
+    v = g * zeta_eta / (d eta * f)
+    u = -g * zeta_xi / (d xi * f)
+    '''
+    
+    attrsu = {'name': 'u_geo', 'long_name': 'geostrophic u velocity', 
+            'units': 'm/s', 'grid': grid}
+    attrsv = {'name': 'v_geo', 'long_name': 'geostrophic v velocity', 
+            'units': 'm/s', 'grid': grid}
+    
+    # calculate derivatives of zeta
+    dzetadxi, dzetadeta = hgrad(zeta, grid, hcoord='rho', hboundary='extend')
+    
+    # calculate geostrophic velocities
+    vbar = g*dzetadeta/f
+    ubar = -g*dzetadxi/f
+    
+    ubar = xroms.to_grid(ubar, grid, hcoord=hcoord, scoord=scoord, attrs=attrsu,
+                         hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
+    vbar = xroms.to_grid(vbar, grid, hcoord=hcoord, scoord=scoord, attrs=attrsv,
+                         hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
+    
+    return ubar, vbar
+
+
+def EKE(ug, vg, grid, hcoord='rho', scoord='s_rho',
+          hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
+    '''Calculate EKE.'''
+    
+    attrs = {'name': 'EKE', 'long_name': 'eddy kinetic energy', 
+            'units': 'm^2/s^2', 'grid': grid}
+    
+    # make sure geostrophic velocities are on rho grid
+    ug = xroms.to_rho(ug, grid, boundary='extend')
+    vg = xroms.to_rho(vg, grid, boundary='extend')
+    
+    var = 0.5*(ug**2 + vg**2)
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                     hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
+    
+    return var

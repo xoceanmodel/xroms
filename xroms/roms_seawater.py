@@ -7,7 +7,7 @@ g = 9.81
 
 
 
-def density(T, S, Z, grid, hcoord=None, scoord=None, attrs=None):
+def density(T, S, Z, grid, hcoord=None, scoord=None, attrs=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan):
     """Return the density based on T, S, and Z. EOS based on ROMS Nonlinear/rho_eos.F
 
     Inputs:
@@ -112,12 +112,13 @@ def density(T, S, Z, grid, hcoord=None, scoord=None, attrs=None):
 
     if attrs is None:
         attrs = {'name': 'rho', 'long_name': 'density', 'units': 'kg/m^3', 'grid': grid}
-    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                       hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
 
     return var
 
 
-def buoyancy(T, S, Z, grid, rho0=1025.0, hcoord=None, scoord=None):
+def buoyancy(T, S, Z, grid, rho0=1025.0, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan):
     """Return the buoyancy based on T, S, and Z. EOS based on ROMS Nonlinear/rho_eos.F
 
     Inputs:
@@ -143,7 +144,8 @@ def buoyancy(T, S, Z, grid, rho0=1025.0, hcoord=None, scoord=None):
              'units': 'm/s^2', 'grid': grid}
 
     var = -g * density(T, S, Z, grid) / rho0
-    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                       hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
 
     return var
 
@@ -169,7 +171,8 @@ def N2(rho, grid, rho0=1025, hcoord=None, scoord='s_w', hboundary='extend', hfil
     var = -g*drhodz/rho0
     attrs = {'name': 'N2', 'long_name': 'buoyancy frequency squared, or vertical buoyancy gradient', 
              'units': '1/s^2', 'grid': grid}
-    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                       hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     return var
     
     
@@ -190,11 +193,12 @@ def M2(rho, grid, rho0=1025, hcoord=None, scoord='s_w', hboundary='extend', hfil
     var = np.sqrt(drhodxi**2 + drhodeta**2) * g/rho0
     attrs = {'name': 'M2', 'long_name': 'horizontal buoyancy gradient', 
              'units': '1/s^2', 'grid': grid}
-    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                       hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
     return var
 
 
-def mld(sig0, h, mask, grid, z=None, thresh=0.03, hcoord=None, scoord=None):
+def mld(sig0, h, mask, grid, z=None, thresh=0.03, hcoord=None, scoord=None, hboundary='extend', hfill_value=None, sboundary='fill', sfill_value=np.nan):
     '''Calculate the mixed layer depth.
     
     Mixed layer depth is based on the fixed Potential Density (PD) threshold.
@@ -236,6 +240,7 @@ def mld(sig0, h, mask, grid, z=None, thresh=0.03, hcoord=None, scoord=None):
 
     attrs = {'name': 'mld', 'long_name': 'mixed layer depth', 
              'units': 'm', 'grid': grid}
-    mld = xroms.to_grid(mld, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
+    mld = xroms.to_grid(mld, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
+                       hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
 
     return mld
