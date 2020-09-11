@@ -519,7 +519,7 @@ def ertel(phi, u, v, f, grid, hcoord='rho', scoord='s_rho',
     return epv
 
 
-def uv_geostrophic(zeta, f, grid, hcoord='rho', scoord='s_rho',
+def uv_geostrophic(zeta, f, grid, hcoord=None, scoord=None,
           hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
     '''Calculate geostrophic velocities from zeta.
     
@@ -535,11 +535,11 @@ def uv_geostrophic(zeta, f, grid, hcoord='rho', scoord='s_rho',
             'units': 'm/s', 'grid': grid}
     
     # calculate derivatives of zeta
-    dzetadxi, dzetadeta = hgrad(zeta, grid, hcoord='rho', hboundary='extend')
+    dzetadxi, dzetadeta = hgrad(zeta, grid)#, hcoord='rho', hboundary='extend')
     
     # calculate geostrophic velocities
-    vbar = g*dzetadeta/f
-    ubar = -g*dzetadxi/f
+    vbar = g*dzetadeta/xroms.to_v(f, grid, boundary='extend')
+    ubar = -g*dzetadxi/xroms.to_u(f, grid, boundary='extend')
     
     ubar = xroms.to_grid(ubar, grid, hcoord=hcoord, scoord=scoord, attrs=attrsu,
                          hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
