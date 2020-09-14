@@ -211,7 +211,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     return ds, grid
 
 
-def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None, parallel=True):
+def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None):
     '''Return an xarray.Dataset based on a list of netCDF files
 
     Inputs:
@@ -234,7 +234,7 @@ def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None,
     if isinstance(files, list):
         ds = xr.open_mfdataset(files, compat='override', combine='by_coords',
                                data_vars='minimal', coords='minimal', 
-                               chunks=chunks, parallel=parallel)
+                               chunks=chunks, parallel=parallel, engine='h5netcdf')
     elif isinstance(files, str):
         ds = xr.open_dataset(files, chunks=chunks)
 
