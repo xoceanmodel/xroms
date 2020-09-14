@@ -187,6 +187,9 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     ds['dV_w_v'] = ds.dz_w_v * ds.dx_v * ds.dy_v  # w vertical, v horizontal
     ds['dV_psi'] = ds.dz_psi * ds.dx_psi * ds.dy_psi  # rho vertical, psi horizontal
     ds['dV_w_psi'] = ds.dz_w_psi * ds.dx_psi * ds.dy_psi  # w vertical, psi horizontal
+    
+    if 'rho0' not in ds:
+        ds['rho0'] = 1025  # kg/m^3
 
     metrics = {
         ("X",): ["dx", "dx_u", "dx_v", "dx_psi"],  # X distances
@@ -386,20 +389,20 @@ def hgrad(q, grid, which='both', z=None, hcoord=None, scoord=None, hboundary='ex
         print('nothing being returned from hgrad')
 
 
-def relative_vorticity(u, v, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
-    '''Return the vertical component of the relative vorticity on rho-points
+def relative_vorticity(u, v, grid, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
+    '''Return the vertical component of the relative vorticity on psi/w grids.
 
 
     Inputs:
     ------
     u, v            (DataArray) xi, eta components of velocity
 
-    grid            xgcm object, Grid object associated with DataArray phi
+    grid            xgcm object, Grid object associated with DataArrays u, v
 
 
     Outputs:
     -------
-    rel_vort        The relative vorticity, v_x - u_y, on rho-points.
+    rel_vort        The relative vorticity, v_x - u_y, on psi-points.
 
 
     Options:
@@ -408,56 +411,49 @@ def relative_vorticity(u, v, grid, hcoord=None, scoord=None, hboundary='extend',
 
     '''
 
-    dvdxi = hgrad(v, grid, which='xi', hboundary=hboundary, hfill_value=hfill_value,
-                                          sboundary=sboundary, sfill_value=sfill_value)
-    dudeta = hgrad(u, grid, which='eta', hboundary=hboundary, hfill_value=hfill_value,
-                                            sboundary=sboundary, sfill_value=sfill_value)
+    dvdxi = hgrad(v, grid, which='xi')
+    dudeta = hgrad(u, grid, which='eta')
 
     var = dvdxi - dudeta
-    attrs = {'name': 'vort', 'long_name': 'vertical component of vorticity', 
-             'units': '1/s', 'grid': grid}
-    var = to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
-                 hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)  
+
+    if isinstance(var, xr.DataArray):
+        var.attrs['name'] = 'vort'
+        var.attrs['long_name'] = 'vertical component of vorticity'
+        var.attrs['units'] = '1/s'  # inherits grid from T
 
     return var
 
 
-def KE(rho, speed, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan):
+def KE(rho, speed):
     '''Calculate kinetic energy [kg/(m*s^2)].
     
     Inputs:
-    hcoord     string (None). Name of horizontal grid to interpolate variable
-               to. Options are 'rho' and 'psi'.
-    scoord     string (None). Name of vertical grid to interpolate variable
-               to. Options are 's_rho' and 's_w'.
     '''
     
-    attrs = {'name': 'KE', 'long_name': 'kinetic energy', 
-             'units': 'kg/(m*s^2)', 'grid': grid}
     var = 0.5*rho*speed**2
-    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
-                       hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
+
+    if isinstance(var, xr.DataArray):
+        var.attrs['name'] = 'KE'
+        var.attrs['long_name'] = 'kinetic energy'
+        var.attrs['units'] = 'kg/(m*s^2)'
     
     return var
 
 
-def speed(u, v, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value=np.nan, sboundary='extend', sfill_value=np.nan):
-    '''Calculate horizontal speed [m/s].
+def speed(u, v, grid, hboundary='extend', hfill_value=np.nan):
+    '''Calculate horizontal speed [m/s], rho/rho grids.
     
     Inputs:
-    hcoord     string (None). Name of horizontal grid to interpolate variable
-               to. Options are 'rho' and 'psi'.
-    scoord     string (None). Name of vertical grid to interpolate variable
-               to. Options are 's_rho' and 's_w'.
     '''
     
-    attrs = {'name': 's', 'long_name': 'horizontal speed', 
-             'units': 'm/s', 'grid': grid}
     u = xroms.to_rho(u, grid, boundary=hboundary, fill_value=hfill_value)
     v = xroms.to_rho(v, grid, boundary=hboundary, fill_value=hfill_value)
     var = np.sqrt(u**2 + v**2)
-    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs, 
-                        hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
+
+    if isinstance(var, xr.DataArray):
+        var.attrs['name'] = 's'
+        var.attrs['long_name'] = 'horizontal speed'
+        var.attrs['units'] = 'm/s'
     
     return var
 
@@ -505,7 +501,7 @@ def ertel(phi, u, v, f, grid, hcoord='rho', scoord='s_rho',
     u_z = xroms.dudz(u, grid, hcoord=hcoord, scoord=scoord)
     v_z = xroms.dvdz(v, grid, hcoord=hcoord, scoord=scoord)
 
-    # vertical component of vorticity on rho grid
+    # vertical component of vorticity on rho grid MOVE VORT TO RHO POINTS FROM PSI POINTS
     vort = relative_vorticity(u, v, grid, hcoord=hcoord, scoord=scoord)
 
     # combine terms to get the ertel potential vorticity
@@ -519,49 +515,68 @@ def ertel(phi, u, v, f, grid, hcoord='rho', scoord='s_rho',
     return epv
 
 
-def uv_geostrophic(zeta, f, grid, hcoord=None, scoord=None,
-          hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
+def uv_geostrophic(zeta, f, grid, hboundary='extend', hfill_value=None, which='both'):
     '''Calculate geostrophic velocities from zeta.
     
     Copy of copy of surf_geostr_vel of IRD Roms_Tools.
     
-    v = g * zeta_eta / (d eta * f)
-    u = -g * zeta_xi / (d xi * f)
+    vg = g * zeta_eta / (d eta * f)  # on v grid
+    ug = -g * zeta_xi / (d xi * f)  # on u grid
+    
+    
+    Inputs:
+    which           string ('both'). 'both': return both components of hgrad. 'xi': return only
+                 xi-direction. 'eta': return only eta-direction.
+
     '''
     
-    attrsu = {'name': 'u_geo', 'long_name': 'geostrophic u velocity', 
-            'units': 'm/s', 'grid': grid}
-    attrsv = {'name': 'v_geo', 'long_name': 'geostrophic v velocity', 
-            'units': 'm/s', 'grid': grid}
+    if which in ['both','xi']:
+
+        # calculate derivatives of zeta
+        dzetadxi = hgrad(zeta, grid, which='xi')
     
-    # calculate derivatives of zeta
-    dzetadxi, dzetadeta = hgrad(zeta, grid)#, hcoord='rho', hboundary='extend')
-    
-    # calculate geostrophic velocities
-    vbar = g*dzetadeta/xroms.to_v(f, grid, boundary='extend')
-    ubar = -g*dzetadxi/xroms.to_u(f, grid, boundary='extend')
-    
-    ubar = xroms.to_grid(ubar, grid, hcoord=hcoord, scoord=scoord, attrs=attrsu,
-                         hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
-    vbar = xroms.to_grid(vbar, grid, hcoord=hcoord, scoord=scoord, attrs=attrsv,
-                         hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
-    
-    return ubar, vbar
+        # calculate geostrophic velocities
+        ug = -g*dzetadxi/xroms.to_u(f, grid, boundary=hboundary, fill_value=hfill_value)
+
+        if isinstance(var, xr.DataArray):
+            ug.attrs['name'] = 'u_geo'
+            ug.attrs['long_name'] = 'geostrophic u velocity'
+            ug.attrs['units'] = 'm/s'  # inherits grid from T
+
+    if which in ['both','eta']:
+        # calculate derivatives of zeta
+        dzetadeta = hgrad(zeta, grid, which='eta')
+
+        # calculate geostrophic velocities
+        vg = g*dzetadeta/xroms.to_v(f, grid, boundary=hboundary, fill_value=hfill_value)
+
+        if isinstance(var, xr.DataArray):
+            vg.attrs['name'] = 'v_geo'
+            vg.attrs['long_name'] = 'geostrophic v velocity'
+            vg.attrs['units'] = 'm/s'  # inherits grid from T
+        
+    if which == 'both':
+        return ug, vg
+    elif which == 'xi':
+        return ug
+    elif which == 'eta':
+        return vg
+    else:
+        print('nothing being returned from uv_geostrophic')
 
 
-def EKE(ug, vg, grid, hcoord='rho', scoord='s_rho',
-          hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
-    '''Calculate EKE.'''
-    
-    attrs = {'name': 'EKE', 'long_name': 'eddy kinetic energy', 
-            'units': 'm^2/s^2', 'grid': grid}
+def EKE(ug, vg, grid, hboundary='extend', hfill_value=None):
+    '''Calculate EKE, rho grid.'''
     
     # make sure geostrophic velocities are on rho grid
-    ug = xroms.to_rho(ug, grid, boundary='extend')
-    vg = xroms.to_rho(vg, grid, boundary='extend')
+    ug = xroms.to_rho(ug, grid, boundary=hboundary, fill_value=hfill_value)
+    vg = xroms.to_rho(vg, grid, boundary=hboundary, fill_value=hfill_value)
     
     var = 0.5*(ug**2 + vg**2)
-    var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
-                     hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
+
+    if isinstance(var, xr.DataArray):
+        var.attrs['name'] = 'EKE'
+        var.attrs['long_name'] = 'eddy kinetic energy'
+        var.attrs['units'] = 'm^2/s^2'
     
     return var

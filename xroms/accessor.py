@@ -4,6 +4,7 @@ import xroms
 import numpy as np
 from xgcm import grid as xgrid
 
+xr.set_options(keep_attrs=True)
     
 g = 9.81  # m^2/s
     
@@ -168,50 +169,45 @@ class xromsDatasetAccessor:
         return xroms.dvdz(self.ds.v, self.ds.attrs['grid'], hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=sfill_value)
     
     
-    def KE(self, hcoord=None, scoord=None):
+    @property
+    def KE(self):
         '''Calculate kinetic energy.
-        
-        Inputs:
-        hcoord     string (None). Name of horizontal grid to interpolate variable
-                   to. Options are 'rho' and 'psi'.
-        scoord     string (None). Name of vertical grid to interpolate variable
-                   to. Options are 's_rho' and 's_w'.
                    
+        Uses speed that has been extended out to the rho grid.
+        
         Example usage:
-        > ds.xroms.KE()
+        > ds.xroms.KE
         '''
 
-        return xroms.KE(self.rho(), self.speed(), self.ds.attrs['grid'], hcoord=hcoord, scoord=scoord)
+        return xroms.KE(self.rho, self.speed)
     
     
-    def speed(self, hcoord=None, scoord=None):
-        '''Calculate horizontal speed from u and v components.
+    @property
+    def speed(self):
+        '''Calculate horizontal speed from u and v components, on rho/rho grids.
         
-        Inputs:
-        hcoord     string (None). Name of horizontal grid to interpolate variable
-                   to. Options are 'rho' and 'psi'.
-        scoord     string (None). Name of vertical grid to interpolate variable
-                   to. Options are 's_rho' and 's_w'.
-        
+        Automatically uses 'extend' for horizontal boundary.        
         '''
 
-        return xroms.speed(self.ds.u, self.ds.v, self.ds.attrs['grid'], hcoord=hcoord, scoord=scoord)
+        if 'speed' not in self.ds:
+            var = xroms.speed(self.ds.u, self.ds.v, self.ds.attrs['grid'], hboundary='extend')
+            self.ds['speed'] = var
+        return self.ds.speed
     
     
-    def vort(self, hcoord=None, scoord=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
-        '''Calculate vertical relative vorticity from ds.
+    @property
+    def vort(self):
+        '''Calculate vertical relative vorticity from ds, on psi.
         
-        Inputs:
-        hcoord     string (None). Name of horizontal grid to interpolate variable
-                   to. Options are 'rho', 'psi', 'u', 'v'.
-        scoord     string (None). Name of vertical grid to interpolate variable
-                   to. Options are 's_rho' and 's_w'.
+        Automatically uses 'extend' for both horizontal and vertical boundaries.
         
         '''
 
-        return xroms.relative_vorticity(self.ds.u, self.ds.v, self.ds.attrs['grid'], hcoord=hcoord, scoord=scoord, 
-                                       hboundary=hboundary, hfill_value=hfill_value,
-                                       sboundary=sboundary, sfill_value=sfill_value)
+        if 'vort' not in self.ds:
+            var = xroms.relative_vorticity(self.ds.u, self.ds.v, self.ds.attrs['grid'], 
+                                           hboundary='extend', sboundary='extend')
+            self.ds['vort'] = var
+        return self.ds.vort
 
     
     def ertel(self, tracer='buoyancy', hcoord='rho', scoord='s_rho', 
@@ -231,107 +227,110 @@ class xromsDatasetAccessor:
                            hcoord=hcoord, scoord=scoord, hboundary='extend', 
                            hfill_value=None, sboundary='extend', sfill_value=None)
     
-    
-    def rho(self, hcoord=None, scoord=None, z=None):
-        '''Return existing rho or calculate from salt/temp.
-        
-        Inputs:
-        hcoord     string (None). Name of horizontal grid to interpolate variable
-                   to. Options are 'rho' and 'psi'.
-        scoord     string (None). Name of vertical grid to interpolate variable
-                   to. Options are 's_rho' and 's_w'.
-        z          DataArray or int. The vertical depths associated with density. Default is to 
-                   use the z_rho coordinates, but could instead input 0 to get
-                   potential density.
-        
+    @property
+    def rho(self):
+        '''Return existing rho or calculate from salt/temp on rho/rho grids.
+                
         '''
         
-        if z is None:
-            z = self.ds.z_rho
-        
-        if 'rho' in self.ds.variables:
-            var = self.ds.rho
-        else:
-            var = xroms.density(self.ds.temp, self.ds.salt, z, self.ds.attrs['grid'], hcoord=None, scoord=None)
+        if 'rho' not in self.ds:
+            var = xroms.density(self.ds.temp, self.ds.salt, self.ds.z_rho)
+            self.ds['rho'] = var
 
-        return var
+        return self.ds.rho
 
     
+    @property
     def buoyancy(self, hcoord=None, scoord=None):
         '''Calculate buoyancy.'''
-        try:
-            rho0 = self.ds.rho0
-        except:
-            rho0 = 1025  # kg/m^3
-        return xroms.buoyancy(self.ds.temp, self.ds.salt, 0, self.ds.attrs['grid'], 
-                              rho0, hcoord=hcoord, scoord=scoord)
-        
-    
+
+        if 'buoyancy' not in self.ds:
+            var = xroms.buoyancy(self.sig0, self.ds.rho0)
+            self.ds['buoyancy'] = var
+        return self.ds.buoyancy
+       
+    @property
     def sig0(self, hcoord=None, scoord=None):
         '''Calculate potential density from salt/temp.
+        '''
+
+        if 'sig0' not in self.ds:
+            var = xroms.sig0(self.ds.temp, self.ds.salt)
+            self.ds['sig0'] = var
+        return self.ds.sig0
+
+    @property
+    def N2(self):
+        '''Calculate buoyancy frequency squared, or vertical buoyancy gradient, rho/w grids.'''
         
-        Inputs:
-        hcoord     string (None). Name of horizontal grid to interpolate variable
-                   to. Options are 'rho' and 'psi'.
-        scoord     string (None). Name of vertical grid to interpolate variable
-                   to. Options are 's_rho' and 's_w'.        
+        if 'N2' not in self.ds:
+            var = xroms.N2(self.rho, self.ds.attrs['grid'], self.ds.rho0, sboundary='fill', sfill_value=np.nan)
+            self.ds['N2'] = var
+        return self.ds.N2
+    
+    @property
+    def M2(self):
+        '''Calculate the horizontal buoyancy gradient, rho/w grids.
         '''
         
-        return xroms.sig0(self.ds.temp, self.ds.salt, self.ds.attrs['grid'], hcoord=None, scoord=None)
-
-    
-    def N2(self, hcoord=None, scoord='s_w', hboundary='extend', hfill_value=None, sboundary='fill', sfill_value=np.nan):
-        '''Calculate buoyancy frequency squared, or vertical buoyancy gradient.'''
-        
-        try:
-            rho0 = self.ds.rho0
-        except:
-            rho0 = 1025  # kg/m^3
-
-        return xroms.N2(self.rho(), self.ds.attrs['grid'], rho0, hcoord=hcoord, scoord=scoord, 
-                        hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
+        if 'M2' not in self.ds:
+            var = xroms.M2(self.rho, self.ds.attrs['grid'], self.ds.rho0, hcoord='rho',  
+                            hboundary='extend', sboundary='extend')
+            self.ds['M2'] = var
+        return self.ds.M2
     
     
-    def M2(self, hcoord=None, scoord='s_w', hboundary='extend', hfill_value=None, sboundary='fill', sfill_value=np.nan, z=None):
-        '''Calculate the horizontal buoyancy gradient.
-        
-        z          DataArray. The vertical depths associated with q. Default is to find the
-                   coordinate of var that starts with 'z_', and use that.
-        
-        '''
-        try:
-            rho0 = self.ds.rho0
-        except:
-            rho0 = 1025  # kg/m^3
-        
-        return xroms.N2(self.rho(), self.ds.attrs['grid'], rho0, hcoord=hcoord, scoord=scoord, 
-                        hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
-    
-    
-    def mld(self, hcoord=None, scoord=None, thresh=0.03):
+    def mld(self, thresh=0.03):
         '''Calculate mixed layer depth.
         
         Inputs:
-        hcoord     string (None). Name of horizontal grid to interpolate variable
-                   to. Options are 'rho' and 'psi'.
-        scoord     string (None). Name of vertical grid to interpolate variable
-                   to. Options are 's_rho' and 's_w'.
+        thresh     float (0.03). For detection of mixed layer. In kg/m^3
                    
         Example usage:
         > ds.xroms.mld().isel(ocean_time=0).plot(vmin=-20, vmax=0)
         '''
 
-        return xroms.mld(self.sig0(), self.ds.h, self.ds.mask_rho, self.ds.attrs['grid'], thresh=thresh, hcoord=hcoord, scoord=scoord)
+        return xroms.mld(self.sig0, self.ds.h, self.ds.mask_rho, thresh=thresh)
     
     
-    def EKE(self, hcoord=None, scoord=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
-        '''Calculate EKE'''
+    @property
+    def ug(self):
+        '''Calculate geostrophic u velocity from zeta.
+
+        Copy of copy of surf_geostr_vel of IRD Roms_Tools.
+
+        ug = -g * zeta_xi / (d xi * f)  # on u grid
+        '''
         
-        ug, vg = xroms.uv_geostrophic(self.ds.zeta, self.ds.f, self.ds.attrs['grid'], hcoord=hcoord, scoord=scoord, 
-                        hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
+        if 'ug' not in self.ds:
+            ug = xroms.uv_geostrophic(self.ds.zeta, self.ds.f, self.ds.attrs['grid'], hboundary='extend', hfill_value=None, which='xi')
+            self.ds['ug'] = ug
+        return self.ds['ug']
+    
+    
+    @property
+    def vg(self):
+        '''Calculate geostrophic v velocity from zeta.
+
+        Copy of copy of surf_geostr_vel of IRD Roms_Tools.
+
+        vg = g * zeta_eta / (d eta * f)  # on v grid
+        '''
         
-        return xroms.EKE(ug, vg, self.ds.attrs['grid'], hcoord=hcoord, scoord=scoord,
-                  hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)    
+        if 'vg' not in self.ds:
+            vg = xroms.uv_geostrophic(self.ds.zeta, self.ds.f, self.ds.attrs['grid'], hboundary='extend', hfill_value=None, which='eta')
+            self.ds['vg'] = vg
+        return self.ds['vg']
+        
+    
+    @property
+    def EKE(self):
+        '''Calculate EKE, rho grid'''
+        
+        if 'EKE' not in self.ds:
+            var = xroms.EKE(self.ug, self.vg, self.ds.attrs['grid'], hboundary='extend')    
+            self.ds['EKE'] = var
+        return self.ds['EKE']
     
 #     @property
 #     def idgrid(self):
@@ -490,7 +489,7 @@ class xromsDataArrayAccessor:
                                  attrs=attrs, hcoord=hcoord, scoord=scoord)
         
 
-    def mean(self, dim=None, attrs=None, hcoord=None, scoord=None):
+    def mean(self, dim=None, attrs=None, kwargs={}):
         '''Take mean over all or selected dimensions. Provide attributes.
 
         NOTE: You may want to be using `gridmean` instead of `mean` to account 
@@ -501,7 +500,7 @@ class xromsDataArrayAccessor:
                     names to average over.
         '''
 
-        return xroms.mean(self.da, self.da.attrs['grid'], dim=dim, attrs=attrs, hcoord=hcoord, scoord=scoord)
+        return xroms.mean(self.da, dim=dim, attrs=attrs, kwargs=kwargs)
         
 
     def sum(self, dim=None, attrs=None, hcoord=None, scoord=None):

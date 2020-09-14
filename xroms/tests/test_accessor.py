@@ -52,18 +52,18 @@ def test_z_rho():
     assert np.allclose(ds.z_rho[0,:,0,0], z_rho)
 
 def test_rho():
-    assert np.allclose(ds.xroms.rho()[0,:,0,0], xroms.density(temp, salt, z_rho, ds.attrs['grid']))
+    assert np.allclose(ds.xroms.rho[0,:,0,0], xroms.density(temp, salt, z_rho))
     
 def test_sig0():
-    assert np.allclose(ds.xroms.sig0()[0,:,0,0], xroms.density(temp, salt, 0, ds.attrs['grid']))
+    assert np.allclose(ds.xroms.sig0[0,:,0,0], xroms.density(temp, salt, 0))
     
 def test_N2():
-    rho = xroms.density(temp, salt, z_rho, ds.attrs['grid'])
+    rho = xroms.density(temp, salt, z_rho)
     drhodz = (rho[2] - rho[0])/(z_rho[2] - z_rho[0])
     var = -g*drhodz/rho0
     # compare above estimate with two averaged since 
     # there is a grid change
-    assert np.allclose(ds.xroms.N2()[0,1:3,0,0].mean(), var)
+    assert np.allclose(ds.xroms.N2[0,1:3,0,0].mean(), var)
     
 # def test_M2():
 #     z_rho_xi1 = np.array([-97.50211538, -50.04230769,  -2.5825    ])
@@ -75,21 +75,21 @@ def test_N2():
     
 def test_mld():
     # choose threshold so that z_rho[-2] is the mld
-    sig0 = xroms.density(temp, salt, 0, ds.attrs['grid'])
+    sig0 = xroms.density(temp, salt, 0)
     thresh = sig0[-2] - sig0[-1]
     assert np.allclose(ds.xroms.mld(thresh=thresh)[0,0,0], z_rho[-2], rtol=1e-3)
 
 def test_speed():
-    assert np.allclose(ds.xroms.speed(hcoord='psi').mean(),np.sqrt(u**2 + v**2).mean(), rtol=1e-2)
+    assert np.allclose(ds.xroms.speed.mean(),np.sqrt(u**2 + v**2).mean(), rtol=1e-2)
 
 def test_KE():
-    rho = xroms.density(temp, salt, z_rho, ds.attrs['grid'])[:,np.newaxis, np.newaxis]
+    rho = xroms.density(temp, salt, z_rho)[:,np.newaxis, np.newaxis]
     s2 = (u**2 + v**2)[np.newaxis,:,:]
     KE = 0.5*rho*s2
-    assert np.allclose(ds.xroms.KE(hcoord='psi').mean(),KE.mean(), rtol=1e-2)
+    assert np.allclose(ds.xroms.KE.xroms.to_grid(hcoord='psi').mean(),KE.mean(), rtol=1e-2)
 
 def test_relative_vorticity():
-    assert np.allclose(ds.xroms.vort('rho', 's_rho'),0)
+    assert np.allclose(ds.xroms.vort,0)
 
 def test_dudz():
     assert np.allclose(ds.xroms.dudz('rho', 's_rho'),0)

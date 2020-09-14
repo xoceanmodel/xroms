@@ -3,7 +3,7 @@ import numpy as np
 import xroms
 
 
-def mean(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
+def mean(var, dim=None, attrs=None, kwargs={}, hcoord=None, scoord=None):
     '''Take mean over all or selected dimensions. Provide attributes.
 
     NOTE: You may want to be using `gridmean` instead of `mean` to account 
@@ -14,17 +14,24 @@ def mean(var, grid, dim=None, attrs=None, hcoord=None, scoord=None):
     dim         (None) Can be None to average over all dimensions, a string of
                 one dimension to average over, or a list or tuple of dimension
                 names to average over.
+    kwargs      (dictionary) Dictionary of keyword arguments to pass to xarray 
+                calculation.
     '''
 
     if attrs is None and isinstance(var, xr.DataArray):
         attrs = var.attrs.copy()
         attrs['name'] = attrs.setdefault('name', 'var') 
         attrs['units'] = attrs.setdefault('units', 'units')
-        dimstr = dim if isinstance(dim, str) else ', '.join(dim)
-        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', mean over dim ' + dimstr
-        attrs['grid'] = grid
+        if dim is None:
+            dimstr = 'all'
+        elif isinstance(dim, str):
+            dimstr = dim
+        elif isinstance(dim, (list,tuple)):
+            dimstr = ', '.join(dim)
+#         dimstr = dim if isinstance(dim, str) else ', '.join(dim)
+        attrs['long_name']  = attrs.setdefault('long_name', 'var') + ', mean over dim: ' + dimstr
         
-    var = var.mean(dim)
+    var = var.mean(dim, **kwargs)
     var = xroms.to_grid(var, grid, hcoord=hcoord, scoord=scoord, attrs=attrs)
 
     return var

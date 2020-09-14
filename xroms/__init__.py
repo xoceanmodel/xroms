@@ -3,6 +3,7 @@ try:
 except ImportError:
     __version__ = "unknown"
 
+import xroms.interp  # order of reading in `from scipy.spatial import Delaunay` matters
 from .xroms import (roms_dataset,
                     open_netcdf,
                     open_zarr,
@@ -21,7 +22,6 @@ from .basic_calcs import (gridmean, gridsum,
                           mean, sum, max, min,
                           std, var, median,
                           groupbytime, downsampletime)
-# from .interp import setup, ll2xe, calc_zslices, interp
-import xroms.interp
+# # from .interp import setup, ll2xe, calc_zslices, interp
 import xroms.accessor
 
