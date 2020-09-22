@@ -4,7 +4,10 @@ from warnings import warn
 import cartopy
 import xroms
 import numpy as np
+import cf_xarray
 
+
+xr.set_options(keep_attrs=True)
 
 from .utilities import xisoslice, to_grid
 from .roms_seawater import buoyancy
@@ -75,45 +78,49 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
         z_w0 = ds.h * Zo_w
         
     # the dims present in this process could be different depending on the output sent in with the Dataset
-    dims_rho = list(ds.salt.dims)
-    dims_rho0 = dims_rho.copy()
-    if np.sum(['time' in dim for dim in dims_rho0]):
-        dims_rho0.pop(['time' in dim for dim in dims_rho0].index(True))
-    dims_w = dims_rho.copy()
-    # if s_rho is included in dims for this Dataset, rename it to s_w for dims_w
-    if dims_w.count('s_rho'):
-        dims_w[dims_w.index('s_rho')] = 's_w'
-    dims_w0 = dims_w.copy()
-    if np.sum(['time' in dim for dim in dims_w0]):
-        dims_w0.pop(['time' in dim for dim in dims_w0].index(True))
+#     dims_rho = list(ds.salt.dims)
+#     dims_rho0 = dims_rho.copy()
+#     if np.sum(['time' in dim for dim in dims_rho0]):
+#         dims_rho0.pop(['time' in dim for dim in dims_rho0].index(True))
+#     dims_w = dims_rho.copy()
+#     # if s_rho is included in dims for this Dataset, rename it to s_w for dims_w
+#     if dims_w.count('s_rho'):
+#         dims_w[dims_w.index('s_rho')] = 's_w'
+#     dims_w0 = dims_w.copy()
+#     if np.sum(['time' in dim for dim in dims_w0]):
+#         dims_w0.pop(['time' in dim for dim in dims_w0].index(True))
 
-    ds.coords['z_w'] = z_w.transpose(*dims_w,
-                                     transpose_coords=False)
-#     ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho',
+#     ds.coords['z_w'] = z_w.transpose(*dims_w,
 #                                      transpose_coords=False)
+#     ds.coords['z_w'] = z_w.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w.cf.get_valid_keys()])
+    ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho',
+                                     transpose_coords=False)
     ds.coords['z_w_u'] = grid.interp(ds.z_w, 'X')
     ds.coords['z_w_v'] = grid.interp(ds.z_w, 'Y')
     ds.coords['z_w_psi'] = grid.interp(ds.z_w_u, 'Y')
 
-    ds.coords['z_rho'] = z_rho.transpose(*dims_rho,
-                                     transpose_coords=False)
-#     ds.coords['z_rho'] = z_rho.transpose('ocean_time', 's_rho', 'eta_rho', 'xi_rho',
+#     ds.coords['z_rho'] = z_rho.transpose(*dims_rho,
 #                                      transpose_coords=False)
+#     ds.coords['z_rho'] = z_rho.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho.cf.get_valid_keys()])
+    ds.coords['z_rho'] = z_rho.transpose('ocean_time', 's_rho', 'eta_rho', 'xi_rho',
+                                     transpose_coords=False)
     ds.coords['z_rho_u'] = grid.interp(ds.z_rho, 'X')
     ds.coords['z_rho_v'] = grid.interp(ds.z_rho, 'Y')
     ds.coords['z_rho_psi'] = grid.interp(ds.z_rho_u, 'Y')
     # also include z coordinates with mean sea level (constant over time)
-    ds.coords['z_rho0'] = z_rho0.transpose(*dims_rho0,
-                                     transpose_coords=False)
-#     ds.coords['z_rho0'] = z_rho0.transpose('s_rho', 'eta_rho', 'xi_rho',
+#     ds.coords['z_rho0'] = z_rho0.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho0.cf.get_valid_keys()])
+#     ds.coords['z_rho0'] = z_rho0.transpose(*dims_rho0,
 #                                      transpose_coords=False)
+    ds.coords['z_rho0'] = z_rho0.transpose('s_rho', 'eta_rho', 'xi_rho',
+                                     transpose_coords=False)
     ds.coords['z_rho_u0'] = grid.interp(ds.z_rho0, 'X')
     ds.coords['z_rho_v0'] = grid.interp(ds.z_rho0, 'Y')
     ds.coords['z_rho_psi0'] = grid.interp(ds.z_rho_u0, 'Y')
-    ds.coords['z_w0'] = z_w0.transpose(*dims_w0,
-                                     transpose_coords=False)
-#     ds.coords['z_w0'] = z_w0.transpose('s_w', 'eta_rho', 'xi_rho',
+#     ds.coords['z_w0'] = z_w0.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w0.cf.get_valid_keys()])
+#     ds.coords['z_w0'] = z_w0.transpose(*dims_w0,
 #                                      transpose_coords=False)
+    ds.coords['z_w0'] = z_w0.transpose('s_w', 'eta_rho', 'xi_rho',
+                                     transpose_coords=False)
     ds.coords['z_w_u0'] = grid.interp(ds.z_w0, 'X')
     ds.coords['z_w_v0'] = grid.interp(ds.z_w0, 'Y')
     ds.coords['z_w_psi0'] = grid.interp(ds.z_w_u0, 'Y')
@@ -190,6 +197,39 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     
     if 'rho0' not in ds:
         ds['rho0'] = 1025  # kg/m^3
+        
+    # modify attributes for using cf-xarray
+    tdims = [dim for dim in ds.dims if dim[:3] == 'xi_']
+    for dim in tdims:
+        ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'X'})
+    tdims = [dim for dim in ds.dims if dim[:4] == 'eta_']
+    for dim in tdims:
+        ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'Y'})
+    ds.ocean_time.attrs['axis'] = 'T'
+    ds.ocean_time.attrs['standard_name'] = 'time'
+    tcoords = [coord for coord in ds.coords if coord[:2] == 's_']
+    for coord in tcoords:
+        ds[coord].attrs['axis'] = 'Z'
+#     # areas
+#     ds.coords["cell_area"] = ds['dA']
+#     ds.coords["cell_area_u"] = ds['dA_u']
+#     ds.coords["cell_area_v"] = ds['dA_v']
+#     ds.coords["cell_area_psi"] = ds['dA_psi']
+#     # and set proper attributes
+#     ds.temp.attrs["cell_measures"] = "area: cell_area, volume: cell_volume"
+#     ds.salt.attrs["cell_measures"] = "area: cell_area"
+#     ds.u.attrs["cell_measures"] = "area: cell_area_u"
+#     ds.v.attrs["cell_measures"] = "area: cell_area_v"
+#     # volumes
+#     ds.coords["cell_volume"] = ds['dV']
+# #     ds.temp.attrs["cell_measures"] = "volume: cell_volume"
+    
+#     ds['temp'].attrs['cell_measures'] = 'area: cell_area'
+#     tcoords = [coord for coord in ds.variables if coord[:2] == 'dA']
+#     for coord in tcoords:
+#         ds[coord].attrs['cell_measures'] = 'area: cell_area'
+
+    
 
     metrics = {
         ("X",): ["dx", "dx_u", "dx_v", "dx_psi"],  # X distances
@@ -211,7 +251,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     return ds, grid
 
 
-def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None, parallel=True, engine='h5netcdf'):
+def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None, parallel=True, engine='netcdf4'):
     '''Return an xarray.Dataset based on a list of netCDF files
 
     Inputs:
@@ -538,7 +578,7 @@ def uv_geostrophic(zeta, f, grid, hboundary='extend', hfill_value=None, which='b
         # calculate geostrophic velocities
         ug = -g*dzetadxi/xroms.to_u(f, grid, boundary=hboundary, fill_value=hfill_value)
 
-        if isinstance(var, xr.DataArray):
+        if isinstance(ug, xr.DataArray):
             ug.attrs['name'] = 'u_geo'
             ug.attrs['long_name'] = 'geostrophic u velocity'
             ug.attrs['units'] = 'm/s'  # inherits grid from T
@@ -550,7 +590,7 @@ def uv_geostrophic(zeta, f, grid, hboundary='extend', hfill_value=None, which='b
         # calculate geostrophic velocities
         vg = g*dzetadeta/xroms.to_v(f, grid, boundary=hboundary, fill_value=hfill_value)
 
-        if isinstance(var, xr.DataArray):
+        if isinstance(vg, xr.DataArray):
             vg.attrs['name'] = 'v_geo'
             vg.attrs['long_name'] = 'geostrophic v velocity'
             vg.attrs['units'] = 'm/s'  # inherits grid from T
