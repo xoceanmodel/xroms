@@ -1,34 +1,40 @@
-import numpy as np
 import xroms
 import xarray as xr
+import numpy as np
 
 g = 9.81
 
 
+def density(temp, salt, z=None):
+    """Calculate the density [kg/m^3] as calculated in ROMS.
 
-
-
-def density(T, S, z=None):
-    """Return the density based on T, S, and z. EOS based on ROMS Nonlinear/rho_eos.F
-
-    Inputs:
+    Inputs
     ------
+    temp: DataArray, ndarray
+        Temperature [Celsius]
+    salt: DataArray, ndarray
+        Salinity
+    z: DataArray, ndarray, int, float
+        Depth [m]. To specify a reference depth, use a constant. If None,
+        use z coordinate attached to temperature.
 
-    T       array-like, temperature
-    S       array-like, salinity
-    z       array-like, depth. To specify a reference depth, use a constant. If None,
-            use z coordinate attached to temperature.
-
-    Outputs:
+    Returns
     -------
-
-    rho     array-like, density based on ROMS Nonlinear/rho_eos.F EOS. On rho/rho grids.
+    DataArray or ndarray of calculated density on rho/rho grids.
+    
+    Notes
+    -----
+    Equation of state based on ROMS Nonlinear/rho_eos.F
+    
+    Example usage
+    -------------
+    >>> xroms.density(ds.temp, ds.salt)
     """
 
     if z is None:
-        coords = list(T.coords)
+        coords = list(temp.coords)
         z_coord_name = coords[[coord[:2] == "z_" for coord in coords].index(True)]
-        z = T[z_coord_name]
+        z = temp[z_coord_name]
 
     A00 = +19092.56
     A01 = +209.8925
@@ -72,79 +78,122 @@ def density(T, S, z=None):
     V02 = -1.65460e-6
     W00 = +4.8314e-4
     g = 9.81
-    sqrtS = np.sqrt(S)
+    sqrtS = np.sqrt(salt)
     den1 = (
         Q00
-        + Q01 * T
-        + Q02 * T ** 2
-        + Q03 * T ** 3
-        + Q04 * T ** 4
-        + Q05 * T ** 5
-        + U00 * S
-        + U01 * S * T
-        + U02 * S * T ** 2
-        + U03 * S * T ** 3
-        + U04 * S * T ** 4
-        + V00 * S * sqrtS
-        + V01 * S * sqrtS * T
-        + V02 * S * sqrtS * T ** 2
-        + W00 * S ** 2
+        + Q01 * temp
+        + Q02 * temp ** 2
+        + Q03 * temp ** 3
+        + Q04 * temp ** 4
+        + Q05 * temp ** 5
+        + U00 * salt
+        + U01 * salt * temp
+        + U02 * salt * temp ** 2
+        + U03 * salt * temp ** 3
+        + U04 * salt * temp ** 4
+        + V00 * salt * sqrtS
+        + V01 * salt * sqrtS * temp
+        + V02 * salt * sqrtS * temp ** 2
+        + W00 * salt ** 2
     )
     K0 = (
         A00
-        + A01 * T
-        + A02 * T ** 2
-        + A03 * T ** 3
-        + A04 * T ** 4
-        + B00 * S
-        + B01 * S * T
-        + B02 * S * T ** 2
-        + B03 * S * T ** 3
-        + D00 * S * sqrtS
-        + D01 * S * sqrtS * T
-        + D02 * S * sqrtS * T ** 2
+        + A01 * temp
+        + A02 * temp ** 2
+        + A03 * temp ** 3
+        + A04 * temp ** 4
+        + B00 * salt
+        + B01 * salt * temp
+        + B02 * salt * temp ** 2
+        + B03 * salt * temp ** 3
+        + D00 * salt * sqrtS
+        + D01 * salt * sqrtS * temp
+        + D02 * salt * sqrtS * temp ** 2
     )
     K1 = (
         E00
-        + E01 * T
-        + E02 * T ** 2
-        + E03 * T ** 3
-        + F00 * S
-        + F01 * S * T
-        + F02 * S * T ** 2
-        + G00 * S * sqrtS
+        + E01 * temp
+        + E02 * temp ** 2
+        + E03 * temp ** 3
+        + F00 * salt
+        + F01 * salt * temp
+        + F02 * salt * temp ** 2
+        + G00 * salt * sqrtS
     )
-    K2 = G01 + G02 * T + G03 * T ** 2 + H00 * S + H01 * S * T + H02 * S * T ** 2
+    K2 = G01 + G02 * temp + G03 * temp ** 2 + H00 * salt + H01 * salt * temp + H02 * salt * temp ** 2
     bulk = K0 - K1 * z + K2 * z ** 2
     var = (den1 * bulk) / (bulk + 0.1 * z)
 
     if isinstance(var, xr.DataArray):
         var.attrs['name'] = 'rho'
         var.attrs['long_name'] = 'density'
-        var.attrs['units'] = 'kg/m^3'  # inherits grid from T
+        var.attrs['units'] = 'kg/m^3'  # inherits grid from temp
         var.name = var.attrs['name']
     
     return var
 
 
-def buoyancy(sig0, rho0=1025.0):
-    """Return the buoyancy based on potential density. EOS based on ROMS Nonlinear/rho_eos.F
+def potential_density(temp, salt, z=0):
+    '''Calculate potential density [kg/m^3] with constant depth reference.
 
-    Inputs:
+    Inputs
     ------
+    temp: DataArray, ndarray
+        Temperature [Celsius]
+    salt: DataArray, ndarray
+        Salinity
+    z: int, float
+        Reference depth [m].
 
-    sig0    (DataArray). potential density
-
-    Outputs:
+    Returns
     -------
+    DataArray or ndarray of calculated potential density on rho/rho grids.
+    
+    Notes
+    -----
+    Uses equation of state based on ROMS Nonlinear/rho_eos.F
+    
+    Example usage
+    -------------
+    >>> xroms.potential_density(ds.temp, ds.salt)    
+    '''
+    
+    var = density(temp, salt, z)
 
-    buoyancy    array-like, buoyancy based on ROMS Nonlinear/rho_eos.F EOS
-                buoyancy = -g * rho / rho0
+    if isinstance(var, xr.DataArray):
+        var.attrs['name'] = 'sig0'
+        var.attrs['long_name'] = 'potential density'
+        var.attrs['units'] = 'kg/m^3'  # inherits grid from temp
+        var.name = var.attrs['name']
 
-    Options:
+    return var
+
+
+def buoyancy(sig0, rho0=1025.0):
+    """Calculate buoyancy [m/s^2] based on potential density.
+
+    Inputs
+    ------
+    sig0: DataArray, ndarray
+        Potential density [kg/m^3]
+    rho0: int, float
+        Reference density [kg/m^3].
+
+    Returns
     -------
-
-    rho0    Constant. The reference density. Default rho0=1025.0
+    DataArray or ndarray of calculated buoyancy on rho/rho grids.
+    
+    Notes
+    -----
+    buoyancy = -g * rho / rho0
+    
+    Uses equation of state based on ROMS Nonlinear/rho_eos.F
+    
+    g=9.81 [m/s^2]
+    
+    Example usage
+    -------------
+    >>> xroms.potential_density(ds.temp, ds.salt)    
     """
 
     var = -g * sig0 / rho0
@@ -152,27 +201,52 @@ def buoyancy(sig0, rho0=1025.0):
     if isinstance(var, xr.DataArray):
         var.attrs['name'] = 'buoyancy'
         var.attrs['long_name'] = 'buoyancy'
-        var.attrs['units'] = 'm/s^2'  # inherits grid from T
-
-    return var
-
-
-def sig0(T, S):
-    '''Calculate potential density from salt/temp.
-    '''
-    
-    var = density(T, S, 0)
-
-    if isinstance(var, xr.DataArray):
-        var.attrs['name'] = 'sig0'
-        var.attrs['long_name'] = 'potential density'
-        var.attrs['units'] = 'kg/m^3'  # inherits grid from T
+        var.attrs['units'] = 'm/s^2'  # inherits grid
+        var.name = var.attrs['name']
 
     return var
 
     
 def N2(rho, grid, rho0=1025.0, sboundary='fill', sfill_value=np.nan):
-    '''Calculate buoyancy frequency squared, or vertical buoyancy gradient, rho/w grids.'''
+    '''Calculate buoyancy frequency squared (vertical buoyancy gradient).
+    
+    Inputs
+    ------
+    rho: DataArray, ndarray
+        Density [kg/m^3]
+    grid: xgcm.grid
+        Grid object associated with rho
+    rho0: int, float
+        Reference density [kg/m^3].
+    sboundary: string, None
+        Passed to `grid` method calls; vertical boundary selection for 
+        calculating z derivative.
+        From xgcm documentation:
+        A flag indicating how to handle boundaries:
+        * None:  Do not apply any boundary conditions. Raise an error if
+          boundary conditions are required for the operation.
+        * 'fill':  Set values outside the array boundary to fill_value
+          (i.e. a Neumann boundary condition.)
+        * 'extend': Set values outside the array to the nearest array
+          value. (i.e. a limited form of Dirichlet boundary condition.
+    sfill_value: float, None
+        Passed to `grid` method calls; vertical boundary fill value 
+        associated with sboundary input.
+        From xgcm documentation:
+        The value to use in the boundary condition with `boundary='fill'`.
+    
+    Returns
+    -------
+    DataArray or ndarray of buoyancy frequency squared on rho/w grids.
+    
+    Notes
+    -----
+    N2 = -g d(rho)/dz / rho0
+    
+    Example usage
+    -------------
+    >>> xroms.N2(rho, grid)
+    '''
 
     drhodz = xroms.ddz(rho, grid, sboundary=sboundary, sfill_value=sfill_value)
     var = -g*drhodz/rho0
@@ -180,48 +254,116 @@ def N2(rho, grid, rho0=1025.0, sboundary='fill', sfill_value=np.nan):
     if isinstance(var, xr.DataArray):
         var.attrs['name'] = 'N2'
         var.attrs['long_name'] = 'buoyancy frequency squared, or vertical buoyancy gradient'
-        var.attrs['units'] = '1/s^2'  # inherits grid from T
+        var.attrs['units'] = '1/s^2'  # inherits grid
+        var.name = var.attrs['name']
 
     return var
     
     
-def M2(rho, grid, rho0=1025.0, hcoord='rho', scoord=None, hboundary='extend', hfill_value=None, sboundary='fill', sfill_value=np.nan, z=None):
-    '''Calculate the horizontal buoyancy gradient, rho/w grids.
-
-    z          DataArray. The vertical depths associated with q. Default is to find the
-               coordinate of var that starts with 'z_', and use that.
-
+def M2(rho, grid, rho0=1025.0, hboundary='extend', hfill_value=None, 
+       sboundary='fill', sfill_value=np.nan, z=None):
+    '''Calculate the horizontal buoyancy gradient.
+    
+    Inputs
+    ------
+    rho: DataArray, ndarray
+        Density [kg/m^3]
+    grid: xgcm.grid
+        Grid object associated with rho
+    rho0: int, float
+        Reference density [kg/m^3].
+    hboundary: string, None
+        Passed to `grid` method calls; horizontal boundary selection 
+        for calculating horizontal derivatives of rho.
+        From xgcm documentation:
+        A flag indicating how to handle boundaries:
+        * None:  Do not apply any boundary conditions. Raise an error if
+          boundary conditions are required for the operation.
+        * 'fill':  Set values outside the array boundary to fill_value
+          (i.e. a Neumann boundary condition.)
+        * 'extend': Set values outside the array to the nearest array
+          value. (i.e. a limited form of Dirichlet boundary condition.
+    hfill_value: float, None
+        Passed to `grid` method calls; horizontal boundary selection 
+        fill value.
+        From xgcm documentation:
+        The value to use in the boundary condition with `boundary='fill'`.
+    sboundary: string, None
+        Passed to `grid` method calls; vertical boundary selection for 
+        calculating horizontal derivatives of rho.
+        From xgcm documentation:
+        A flag indicating how to handle boundaries:
+        * None:  Do not apply any boundary conditions. Raise an error if
+          boundary conditions are required for the operation.
+        * 'fill':  Set values outside the array boundary to fill_value
+          (i.e. a Neumann boundary condition.)
+        * 'extend': Set values outside the array to the nearest array
+          value. (i.e. a limited form of Dirichlet boundary condition.
+    sfill_value: float, None
+        Passed to `grid` method calls; vertical boundary fill value 
+        associated with sboundary input.
+        From xgcm documentation:
+        The value to use in the boundary condition with `boundary='fill'`.
+    z: DataArray, ndarray
+        Depths [m] associated with rho. If None, use z coordinate attached to temperature.
+    
+    Returns
+    -------
+    DataArray or ndarray of the horizontal buoyancy gradient on rho/w grids.
+    
+    Notes
+    -----
+    M2 = g/rho0 * sqrt(d(rho)/dxi^2 + d(rho)deta^2)
+    
+    g=9.81 [m/s^2]
+    
+    Example usage
+    -------------
+    >>> xroms.M2(rho, grid)
     '''
-
-    drhodxi = xroms.ddxi(rho, grid, hcoord=hcoord, scoord=scoord, 
-                                  hboundary=hboundary, hfill_value=hfill_value, 
-                                  sboundary=sboundary, sfill_value=sfill_value, z=None)
-    drhodeta = xroms.ddeta(rho, grid, hcoord=hcoord, scoord=scoord, 
-                                  hboundary=hboundary, hfill_value=hfill_value, 
-                                  sboundary=sboundary, sfill_value=sfill_value, z=None)
+    
+    # calculate spatial derivatives of density
+    drhodxi, drhodeta = xroms.hgrad(rho, grid, which='both', hcoord='rho', 
+                                    hboundary=hboundary, hfill_value=hfill_value, 
+                                    sboundary=sboundary, sfill_value=sfill_value)
+    # combine
     var = np.sqrt(drhodxi**2 + drhodeta**2) * g/rho0
 
     if isinstance(var, xr.DataArray):
         var.attrs['name'] = 'M2'
         var.attrs['long_name'] = 'horizontal buoyancy gradient'
-        var.attrs['units'] = '1/s'  # inherits grid from T
+        var.attrs['units'] = '1/s'
+        var.attrs['grid'] = grid
+        var.name = var.attrs['name']
 
     return var
 
 
 def mld(sig0, h, mask, z=None, thresh=0.03):
-    '''Calculate the mixed layer depth.
+    '''Calculate the mixed layer depth [m].
+        
+    Inputs
+    ------
+    sig0: DataArray, ndarray
+        Potential density [kg/m^3]
+    h: DataArray, ndarray
+        Depths [m].
+    mask: DataArray, ndarray
+        mask to match sig0
+    z: DataArray, ndarray
+        The vertical depths associated with sig0. Should be on 'rho'
+        grid horizontally and vertically. Use z coords associated with DataArray sig0
+        if not input.
+    thresh: float
+        For detection of mixed layer [kg/m^3]
     
+    Returns
+    -------
+    DataArray or ndarray of mixed layer depth on rho horizontal grid.
+    
+    Notes
+    -----
     Mixed layer depth is based on the fixed Potential Density (PD) threshold.
-    
-    Inputs:
-    sig0       DataArray. Potential density.
-    h          depths [m].
-    mask       mask to match sig0
-    z          DataArray (None). The vertical depths associated with sig0. Should be on 'rho'
-               grid horizontally and vertically. Use coords associated with DataArray sig0
-               if not input.
-    thresh     float (0.03). For detection of mixed layer. In kg/m^3
     
     Converted to xroms by K. Thyng Aug 2020 from:
     
@@ -231,6 +373,10 @@ def mld(sig0, h, mask, z=None, thresh=0.03):
     References:
     ncl mixed_layer_depth function at https://github.com/NCAR/ncl/blob/ed6016bf579f8c8e8f77341503daef3c532f1069/ni/src/lib/nfpfort/ocean.f
     de Boyer Montégut, C., Madec, G., Fischer, A. S., Lazar, A., & Iudicone, D. (2004). Mixed layer depth over the global ocean: An examination of profile data and a profile‐based climatology. Journal of  Geophysical Research: Oceans, 109(C12).
+    
+    Example usage
+    -------------
+    >>> xroms.mld(sig0, h, mask)
     '''
     
     if h.mean() > 0:  # if depths are positive, change to negative
@@ -252,6 +398,9 @@ def mld(sig0, h, mask, z=None, thresh=0.03):
     if isinstance(mld, xr.DataArray):
         mld.attrs['name'] = 'mld'
         mld.attrs['long_name'] = 'mixed layer depth'
-        mld.attrs['units'] = 'm'  # inherits grid from T
+        mld.attrs['units'] = 'm'
+        if 'grid' in sig0.attrs:
+            mld.attrs['grid'] = sig0.attrs['grid']
+        mld.name = mld.attrs['name']
 
     return mld

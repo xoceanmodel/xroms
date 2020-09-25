@@ -9,8 +9,8 @@ import cf_xarray
 
 xr.set_options(keep_attrs=True)
 
-from .utilities import xisoslice, to_grid
-from .roms_seawater import buoyancy
+# from .utilities import xisoslice, to_grid
+# from .roms_seawater import buoyancy
 
 g = 9.81  # m/s^2
 
@@ -48,6 +48,20 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
 
 #     ds = ds.rename({'eta_u': 'eta_rho', 'xi_v': 'xi_rho', 'xi_psi': 'xi_u', 'eta_psi': 'eta_v'})
 
+        
+    # modify attributes for using cf-xarray
+    tdims = [dim for dim in ds.dims if dim[:3] == 'xi_']
+    for dim in tdims:
+        ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'X'})
+    tdims = [dim for dim in ds.dims if dim[:4] == 'eta_']
+    for dim in tdims:
+        ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'Y'})
+    ds.ocean_time.attrs['axis'] = 'T'
+    ds.ocean_time.attrs['standard_name'] = 'time'
+    tcoords = [coord for coord in ds.coords if coord[:2] == 's_']
+    for coord in tcoords:
+        ds[coord].attrs['axis'] = 'Z'
+
     coords={'X':{'center':'xi_rho', 'inner':'xi_u'},
         'Y':{'center':'eta_rho', 'inner':'eta_v'},
         'Z':{'center':'s_rho', 'outer':'s_w'}}
@@ -76,51 +90,26 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
         # also include z coordinates with mean sea level (constant over time)
         z_rho0 = ds.h * Zo_rho
         z_w0 = ds.h * Zo_w
-        
-    # the dims present in this process could be different depending on the output sent in with the Dataset
-#     dims_rho = list(ds.salt.dims)
-#     dims_rho0 = dims_rho.copy()
-#     if np.sum(['time' in dim for dim in dims_rho0]):
-#         dims_rho0.pop(['time' in dim for dim in dims_rho0].index(True))
-#     dims_w = dims_rho.copy()
-#     # if s_rho is included in dims for this Dataset, rename it to s_w for dims_w
-#     if dims_w.count('s_rho'):
-#         dims_w[dims_w.index('s_rho')] = 's_w'
-#     dims_w0 = dims_w.copy()
-#     if np.sum(['time' in dim for dim in dims_w0]):
-#         dims_w0.pop(['time' in dim for dim in dims_w0].index(True))
 
-#     ds.coords['z_w'] = z_w.transpose(*dims_w,
-#                                      transpose_coords=False)
-#     ds.coords['z_w'] = z_w.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w.cf.get_valid_keys()])
-    ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho',
-                                     transpose_coords=False)
+    ds.coords['z_w'] = z_w.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w.cf.get_valid_keys()])
+#     ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho', transpose_coords=False)
     ds.coords['z_w_u'] = grid.interp(ds.z_w, 'X')
     ds.coords['z_w_v'] = grid.interp(ds.z_w, 'Y')
     ds.coords['z_w_psi'] = grid.interp(ds.z_w_u, 'Y')
 
-#     ds.coords['z_rho'] = z_rho.transpose(*dims_rho,
-#                                      transpose_coords=False)
-#     ds.coords['z_rho'] = z_rho.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho.cf.get_valid_keys()])
-    ds.coords['z_rho'] = z_rho.transpose('ocean_time', 's_rho', 'eta_rho', 'xi_rho',
-                                     transpose_coords=False)
+    ds.coords['z_rho'] = z_rho.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho.cf.get_valid_keys()])
+#     ds.coords['z_rho'] = z_rho.transpose('ocean_time', 's_rho', 'eta_rho', 'xi_rho', transpose_coords=False)
     ds.coords['z_rho_u'] = grid.interp(ds.z_rho, 'X')
     ds.coords['z_rho_v'] = grid.interp(ds.z_rho, 'Y')
     ds.coords['z_rho_psi'] = grid.interp(ds.z_rho_u, 'Y')
     # also include z coordinates with mean sea level (constant over time)
-#     ds.coords['z_rho0'] = z_rho0.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho0.cf.get_valid_keys()])
-#     ds.coords['z_rho0'] = z_rho0.transpose(*dims_rho0,
-#                                      transpose_coords=False)
-    ds.coords['z_rho0'] = z_rho0.transpose('s_rho', 'eta_rho', 'xi_rho',
-                                     transpose_coords=False)
+    ds.coords['z_rho0'] = z_rho0.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho0.cf.get_valid_keys()])
+#     ds.coords['z_rho0'] = z_rho0.transpose('s_rho', 'eta_rho', 'xi_rho', transpose_coords=False)
     ds.coords['z_rho_u0'] = grid.interp(ds.z_rho0, 'X')
     ds.coords['z_rho_v0'] = grid.interp(ds.z_rho0, 'Y')
     ds.coords['z_rho_psi0'] = grid.interp(ds.z_rho_u0, 'Y')
-#     ds.coords['z_w0'] = z_w0.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w0.cf.get_valid_keys()])
-#     ds.coords['z_w0'] = z_w0.transpose(*dims_w0,
-#                                      transpose_coords=False)
-    ds.coords['z_w0'] = z_w0.transpose('s_w', 'eta_rho', 'xi_rho',
-                                     transpose_coords=False)
+    ds.coords['z_w0'] = z_w0.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w0.cf.get_valid_keys()])
+#     ds.coords['z_w0'] = z_w0.transpose('s_w', 'eta_rho', 'xi_rho', transpose_coords=False)
     ds.coords['z_w_u0'] = grid.interp(ds.z_w0, 'X')
     ds.coords['z_w_v0'] = grid.interp(ds.z_w0, 'Y')
     ds.coords['z_w_psi0'] = grid.interp(ds.z_w_u0, 'Y')
@@ -197,20 +186,9 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     
     if 'rho0' not in ds:
         ds['rho0'] = 1025  # kg/m^3
-        
-    # modify attributes for using cf-xarray
-    tdims = [dim for dim in ds.dims if dim[:3] == 'xi_']
-    for dim in tdims:
-        ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'X'})
-    tdims = [dim for dim in ds.dims if dim[:4] == 'eta_']
-    for dim in tdims:
-        ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'Y'})
-    ds.ocean_time.attrs['axis'] = 'T'
-    ds.ocean_time.attrs['standard_name'] = 'time'
-    tcoords = [coord for coord in ds.coords if coord[:2] == 's_']
-    for coord in tcoords:
-        ds[coord].attrs['axis'] = 'Z'
-#     # areas
+
+    # cf-xarray
+    # areas
 #     ds.coords["cell_area"] = ds['dA']
 #     ds.coords["cell_area_u"] = ds['dA_u']
 #     ds.coords["cell_area_v"] = ds['dA_v']
@@ -228,8 +206,22 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
 #     tcoords = [coord for coord in ds.variables if coord[:2] == 'dA']
 #     for coord in tcoords:
 #         ds[coord].attrs['cell_measures'] = 'area: cell_area'
-
-    
+#     # add coordinates attributes for variables
+    if 'positive' in ds.s_rho.attrs:
+        ds.s_rho.attrs.pop('positive')    
+    if 'positive' in ds.s_w.attrs:
+        ds.s_w.attrs.pop('positive')    
+#     ds['z_rho'].attrs['positive'] = 'up'
+    tcoords = [coord for coord in ds.coords if coord[:2] == 'z_' and '0' not in coord]
+    for coord in tcoords:
+        ds[coord].attrs['positive'] = 'up'
+#         ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'Y'})
+#     ds['z_rho'].attrs['vertical'] = 'depth'
+#     ds['temp'].attrs['coordinates'] = 'lon_rho lat_rho z_rho ocean_time'
+#     [del ds[var].encoding['coordinates'] for var in ds.variables if 'coordinates' in ds[var].encoding]
+    for var in ds.variables:
+        if 'coordinates' in ds[var].encoding:
+            del ds[var].encoding['coordinates']
 
     metrics = {
         ("X",): ["dx", "dx_u", "dx_v", "dx_psi"],  # X distances
@@ -279,11 +271,11 @@ def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None,
         ds = xr.open_dataset(files, chunks=chunks)
 
     ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
-    ds.attrs['grid'] = grid
+    ds.attrs['grid'] = grid  #THIS IS WHAT CAUSES RECURSION ERROR~~~~!!!
     # also put grid into every variable with at least 2D
     for var in ds.variables:
         if ds[var].ndim > 1:
-            ds[var].attrs['grid'] = ds.attrs['grid']
+            ds[var].attrs['grid'] = grid
 
     return ds
 
@@ -319,304 +311,3 @@ def open_zarr(files, chunks=None, Vtransform=None, add_verts=False, proj=None):
             ds[var].attrs['grid'] = ds.attrs['grid']
     
     return ds
-
-
-def hgrad(q, grid, which='both', z=None, hcoord=None, scoord=None, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None, attrs=None):
-    '''Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions
-
-    The main purpose of this it to account for the fact that ROMS vertical coordinates are
-    sigma coordinates.
-
-    Inputs:
-    ------
-
-    q               DataArray, Property to take gradients of
-
-    grid            xgcm object, Grid object associated with DataArray q
-
-    Outputs:
-    -------
-
-    dqdxi, dqdeta   Gradients of q in the xi- and eta-directions
-
-
-    Options:
-    -------
-
-    which           string ('both'). 'both': return both components of hgrad. 'xi': return only
-                     xi-direction. 'eta': return only eta-direction.
-
-    z               DataArray. The vertical depths associated with q. Default is to find the
-                    coordinate of q that starts with 'z_', and use that.
-
-    hboundary        Passed to `grid` method calls for horizontal calculations. Default is `extend`
-    sboundary        Passed to `grid` method calls for vertical calculations. Default is `extend`
-    '''
-
-    if z is None:
-        try:
-            coords = list(q.coords)
-            z_coord_name = coords[[coord[:2] == "z_" for coord in coords].index(True)]
-            z = q[z_coord_name]
-            is3D = True
-        except:
-            # if we get here that means that q doesn't have z coords (like zeta)
-            is3D = False
-    else:
-        is3D = True
-            
-
-    if which in ['both','xi']:
-
-        if is3D:
-            dqdx = grid.interp(grid.derivative(q, 'X', boundary=hboundary, fill_value=hfill_value), 
-                               'Z', boundary=sboundary, fill_value=sfill_value)
-            dqdz = grid.interp(grid.derivative(q, 'Z', boundary=sboundary, fill_value=sfill_value), 
-                               'X', boundary=hboundary, fill_value=hfill_value)
-            dzdx = grid.interp(grid.derivative(z, 'X', boundary=hboundary, fill_value=hfill_value), 
-                               'Z', boundary=sboundary, fill_value=sfill_value)
-            dzdz = grid.interp(grid.derivative(z, 'Z', boundary=sboundary, fill_value=sfill_value), 
-                               'X', boundary=hboundary, fill_value=hfill_value)
-
-            dqdxi = dqdx*dzdz - dqdz*dzdx
-        
-        else:  # 2D variables
-            dqdxi = grid.derivative(q, 'X', boundary=hboundary, fill_value=hfill_value)
-
-        if attrs is None and isinstance(q, xr.DataArray):
-            attrs = q.attrs.copy()
-            attrs['name'] = 'd' + q.name  + 'dxi'
-            attrs['units'] = '1/m * ' + attrs.setdefault('units', 'units')
-            attrs['long_name']  = 'horizontal xi derivative of ' + attrs.setdefault('long_name', 'var')
-            attrs['grid'] = grid
-        dqdxi = xroms.to_grid(dqdxi, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
-                             hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)  
-
-    if which in ['both','eta']:
-        
-        if is3D:
-            dqdy = grid.interp(grid.derivative(q, 'Y', boundary=hboundary, fill_value=hfill_value), 
-                               'Z', boundary=sboundary, fill_value=sfill_value)
-            dqdz = grid.interp(grid.derivative(q, 'Z', boundary=sboundary, fill_value=sfill_value), 
-                               'Y', boundary=hboundary, fill_value=hfill_value)
-            dzdy = grid.interp(grid.derivative(z, 'Y', boundary=hboundary, fill_value=hfill_value), 
-                               'Z', boundary=sboundary, fill_value=sfill_value)
-            dzdz = grid.interp(grid.derivative(z, 'Z', boundary=sboundary, fill_value=sfill_value), 
-                               'Y', boundary=hboundary, fill_value=hfill_value)
-
-            dqdeta = dqdy*dzdz - dqdz*dzdy
-        
-        else:  # 2D variables
-            dqdeta = grid.derivative(q, 'Y', boundary=hboundary, fill_value=hfill_value)
-
-        if attrs is None and isinstance(q, xr.DataArray):
-            attrs = q.attrs.copy()
-            attrs['name'] = 'd' + q.name  + 'deta'
-            attrs['units'] = '1/m * ' + attrs.setdefault('units', 'units')
-            attrs['long_name']  = 'horizontal eta derivative of ' + attrs.setdefault('long_name', 'var')
-            attrs['grid'] = grid
-        dqdeta = xroms.to_grid(dqdeta, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
-                              hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)  
-        
-
-    if which == 'both':
-        return dqdxi, dqdeta
-    elif which == 'xi':
-        return dqdxi
-    elif which == 'eta':
-        return dqdeta
-    else:
-        print('nothing being returned from hgrad')
-
-
-def relative_vorticity(u, v, grid, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
-    '''Return the vertical component of the relative vorticity on psi/w grids.
-
-
-    Inputs:
-    ------
-    u, v            (DataArray) xi, eta components of velocity
-
-    grid            xgcm object, Grid object associated with DataArrays u, v
-
-
-    Outputs:
-    -------
-    rel_vort        The relative vorticity, v_x - u_y, on psi-points.
-
-
-    Options:
-    -------
-    hboundary        Passed to `grid` method calls. Default is `extend`
-
-    '''
-
-    dvdxi = hgrad(v, grid, which='xi')
-    dudeta = hgrad(u, grid, which='eta')
-
-    var = dvdxi - dudeta
-
-    if isinstance(var, xr.DataArray):
-        var.attrs['name'] = 'vort'
-        var.attrs['long_name'] = 'vertical component of vorticity'
-        var.attrs['units'] = '1/s'  # inherits grid from T
-
-    return var
-
-
-def KE(rho, speed):
-    '''Calculate kinetic energy [kg/(m*s^2)].
-    
-    Inputs:
-    '''
-    
-    var = 0.5*rho*speed**2
-
-    if isinstance(var, xr.DataArray):
-        var.attrs['name'] = 'KE'
-        var.attrs['long_name'] = 'kinetic energy'
-        var.attrs['units'] = 'kg/(m*s^2)'
-    
-    return var
-
-
-def speed(u, v, grid, hboundary='extend', hfill_value=np.nan):
-    '''Calculate horizontal speed [m/s], rho/rho grids.
-    
-    Inputs:
-    '''
-    
-    u = xroms.to_rho(u, grid, boundary=hboundary, fill_value=hfill_value)
-    v = xroms.to_rho(v, grid, boundary=hboundary, fill_value=hfill_value)
-    var = np.sqrt(u**2 + v**2)
-
-    if isinstance(var, xr.DataArray):
-        var.attrs['name'] = 's'
-        var.attrs['long_name'] = 'horizontal speed'
-        var.attrs['units'] = 'm/s'
-    
-    return var
-
-
-def ertel(phi, u, v, f, grid, hcoord='rho', scoord='s_rho',
-          hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None):
-    '''Return Ertel potential vorticity of phi.
-
-    Inputs:
-    ------
-    phi             (DataArray) Conservative tracer. Usually this would be 
-                    the buoyancy but could be another approximately 
-                    conservative tracer. The buoyancy can be calculated as:
-                    > xroms.buoyancy(temp, salt, 0)
-                    and then input as `phi`. 
-                    
-    u, v            (DataArray) xi, eta components of velocity
-    
-    f               (DataArray) Coriolis array
-
-    grid            xgcm object, Grid object associated with Dataset.
-
-
-    Outputs:
-    -------
-    epv             The ertel potential vorticity
-                    epv = -v_z * phi_x + u_z * phi_y + (f + v_x - u_y) * phi_z
-
-    Options:
-    -------
-    hcoord     string (None). Name of horizontal grid to interpolate variable
-               to. Options are 'rho' and 'psi'.
-    scoord     string (None). Name of vertical grid to interpolate variable
-               to. Options are 's_rho' and 's_w'.
-    boundary        Passed to `grid` method calls. Default is `extend`
-    '''
-
-    # get the components of the grad(phi)
-    phi_xi, phi_eta = hgrad(phi, grid, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
-    phi_xi = xroms.to_grid(phi_xi, grid, hcoord=hcoord, scoord=scoord)
-    phi_eta = xroms.to_grid(phi_eta, grid, hcoord=hcoord, scoord=scoord)
-    phi_z = xroms.ddz(phi, grid, hcoord=hcoord, scoord=scoord, sboundary=sboundary, sfill_value=np.nan)
-
-    # vertical shear (horizontal components of vorticity)
-    u_z = xroms.dudz(u, grid, hcoord=hcoord, scoord=scoord)
-    v_z = xroms.dvdz(v, grid, hcoord=hcoord, scoord=scoord)
-
-    # vertical component of vorticity on rho grid MOVE VORT TO RHO POINTS FROM PSI POINTS
-    vort = relative_vorticity(u, v, grid, hcoord=hcoord, scoord=scoord)
-
-    # combine terms to get the ertel potential vorticity
-    epv = -v_z * phi_xi + u_z * phi_eta + (f + vort) * phi_z
-
-    attrs = {'name': 'ertel', 'long_name': 'ertel potential vorticity', 
-             'units': 'tracer/(m*s)', 'grid': grid}
-    epv = xroms.to_grid(epv, grid, hcoord=hcoord, scoord=scoord, attrs=attrs,
-                       hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value)
-
-    return epv
-
-
-def uv_geostrophic(zeta, f, grid, hboundary='extend', hfill_value=None, which='both'):
-    '''Calculate geostrophic velocities from zeta.
-    
-    Copy of copy of surf_geostr_vel of IRD Roms_Tools.
-    
-    vg = g * zeta_eta / (d eta * f)  # on v grid
-    ug = -g * zeta_xi / (d xi * f)  # on u grid
-    
-    
-    Inputs:
-    which           string ('both'). 'both': return both components of hgrad. 'xi': return only
-                 xi-direction. 'eta': return only eta-direction.
-
-    '''
-    
-    if which in ['both','xi']:
-
-        # calculate derivatives of zeta
-        dzetadxi = hgrad(zeta, grid, which='xi')
-    
-        # calculate geostrophic velocities
-        ug = -g*dzetadxi/xroms.to_u(f, grid, boundary=hboundary, fill_value=hfill_value)
-
-        if isinstance(ug, xr.DataArray):
-            ug.attrs['name'] = 'u_geo'
-            ug.attrs['long_name'] = 'geostrophic u velocity'
-            ug.attrs['units'] = 'm/s'  # inherits grid from T
-
-    if which in ['both','eta']:
-        # calculate derivatives of zeta
-        dzetadeta = hgrad(zeta, grid, which='eta')
-
-        # calculate geostrophic velocities
-        vg = g*dzetadeta/xroms.to_v(f, grid, boundary=hboundary, fill_value=hfill_value)
-
-        if isinstance(vg, xr.DataArray):
-            vg.attrs['name'] = 'v_geo'
-            vg.attrs['long_name'] = 'geostrophic v velocity'
-            vg.attrs['units'] = 'm/s'  # inherits grid from T
-        
-    if which == 'both':
-        return ug, vg
-    elif which == 'xi':
-        return ug
-    elif which == 'eta':
-        return vg
-    else:
-        print('nothing being returned from uv_geostrophic')
-
-
-def EKE(ug, vg, grid, hboundary='extend', hfill_value=None):
-    '''Calculate EKE, rho grid.'''
-    
-    # make sure geostrophic velocities are on rho grid
-    ug = xroms.to_rho(ug, grid, boundary=hboundary, fill_value=hfill_value)
-    vg = xroms.to_rho(vg, grid, boundary=hboundary, fill_value=hfill_value)
-    
-    var = 0.5*(ug**2 + vg**2)
-
-    if isinstance(var, xr.DataArray):
-        var.attrs['name'] = 'EKE'
-        var.attrs['long_name'] = 'eddy kinetic energy'
-        var.attrs['units'] = 'm^2/s^2'
-    
-    return var

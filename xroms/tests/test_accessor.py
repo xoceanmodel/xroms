@@ -92,7 +92,7 @@ def test_relative_vorticity():
     assert np.allclose(ds.xroms.vort,0)
 
 def test_dudz():
-    assert np.allclose(ds.xroms.dudz('rho', 's_rho'),0)
+    assert np.allclose(ds.xroms.dudz,0)
 
 def test_dvdz():
-    assert np.allclose(ds.xroms.dvdz('rho', 's_rho'),0)
+    assert np.allclose(ds.xroms.dvdz,0)

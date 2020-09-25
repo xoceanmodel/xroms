@@ -6,22 +6,19 @@ except ImportError:
 import xroms.interp  # order of reading in `from scipy.spatial import Delaunay` matters
 from .xroms import (roms_dataset,
                     open_netcdf,
-                    open_zarr,
-                    hgrad,
-                    relative_vorticity, KE, speed,
-                    ertel, uv_geostrophic, EKE)
-from .roms_seawater import (density, buoyancy, sig0, N2,
+                    open_zarr)
+from .roms_seawater import (density, buoyancy, potential_density, N2,
                             M2, mld)
-from .utilities import (to_rho, to_psi, to_u, to_v,
+from .derived import (relative_vorticity, KE, speed,
+                     ertel, uv_geostrophic, EKE,
+                     dudz, dvdz,
+                     vertical_shear)
+from .utilities import (hgrad, to_rho, to_psi, to_u, to_v,
                         to_s_w, to_s_rho,
                         to_grid, ddz, ddxi, ddeta,
-                        dudz, dvdz,
                         xisoslice, sel2d, argsel2d,
-                       build_indexer, id_grid)
-from .basic_calcs import (gridmean, gridsum,
-                          mean, sum, max, min,
-                          std, var, median,
-                          groupbytime, downsampletime)
+                        gridmean, gridsum)
+# from .basic_calcs import (gridmean, gridsum, groupbytime, downsampletime)
 # # from .interp import setup, ll2xe, calc_zslices, interp
 import xroms.accessor
 

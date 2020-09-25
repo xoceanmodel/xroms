@@ -7,7 +7,8 @@ import cartopy
 
 
 grid = xr.open_dataset('xroms/tests/input/grid.nc')
-ds = xr.open_dataset('xroms/tests/input/ocean_his_0001.nc')
+ds = xroms.open_netcdf('xroms/tests/input/ocean_his_0001.nc')
+# ds = xr.open_dataset('xroms/tests/input/ocean_his_0001.nc')
 # combine the two:
 ds = ds.merge(grid, overwrite_vars=True, compat='override')
 
@@ -18,29 +19,29 @@ def test_argsel2d():
     This compares with previous calculation.'''
     
     lon0, lat0 = -95.8, 27.1
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='rho') == (0,1)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='psi') == (0,0)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='u') == (0,0)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='v') == (0,1)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='vert') == (1,1)
+    assert xroms.argsel2d(ds.lon_rho, ds.lat_rho, lon0, lat0) == (0,1)
+    assert xroms.argsel2d(ds.lon_psi, ds.lat_psi, lon0, lat0) == (0,0)
+    assert xroms.argsel2d(ds.lon_u, ds.lat_u, lon0, lat0) == (0,0)
+    assert xroms.argsel2d(ds.lon_v, ds.lat_v, lon0, lat0) == (0,1)
+    assert xroms.argsel2d(ds.lon_vert, ds.lat_vert,lon0, lat0) == (1,1)
 
 
 def test_argsel2d_exact():
     '''test for exact index.'''
     
     lon0, lat0 = -95.928571, 27.166685  # one corner of grid
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='rho') == (1,0)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='psi') == (0,0)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='u') == (1,0)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='v') == (0,0)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='vert') == (1,1)
+    assert xroms.argsel2d(ds.lon_rho, ds.lat_rho, lon0, lat0) == (0,0)
+    assert xroms.argsel2d(ds.lon_psi, ds.lat_psi, lon0, lat0) == (0,0)
+    assert xroms.argsel2d(ds.lon_u, ds.lat_u, lon0, lat0) == (1,0)
+    assert xroms.argsel2d(ds.lon_v, ds.lat_v, lon0, lat0) == (0,0)
+    assert xroms.argsel2d(ds.lon_vert, ds.lat_vert, lon0, lat0) == (1,1)
 
     lon0, lat0 = -94.071429, 28.333351  # other corner of grid
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='rho') == (8,13)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='psi') == (7,12)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='u') == (8,12)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='v') == (7,13)
-    assert xroms.argsel2d(grid, lon0, lat0, whichgrid='vert') == (8,13)
+    assert xroms.argsel2d(ds.lon_rho, ds.lat_rho, lon0, lat0) == (7,13)
+    assert xroms.argsel2d(ds.lon_psi, ds.lat_psi, lon0, lat0) == (7,12)
+    assert xroms.argsel2d(ds.lon_u, ds.lat_u, lon0, lat0) == (8,12)
+    assert xroms.argsel2d(ds.lon_v, ds.lat_v, lon0, lat0) == (7,13)
+    assert xroms.argsel2d(ds.lon_vert, ds.lat_vert, lon0, lat0) == (8,13)
 
     
 def test_sel2d():
@@ -48,17 +49,17 @@ def test_sel2d():
     
     lon0, lat0 = -94.8, 28.0
     
-    assert xroms.sel2d(ds, lon0, lat0, whichgrid='u').u.isel(s_rho=0, ocean_time=0) == 0.7
-    assert np.allclose(xroms.sel2d(ds, lon0, lat0, whichgrid='v').v.isel(s_rho=0, ocean_time=0), 0.042857)
+    assert xroms.sel2d(ds.u, ds.lon_u, ds.lat_u, lon0, lat0).isel(s_rho=0, ocean_time=0) == 0.7
+    assert np.allclose(xroms.sel2d(ds.v, ds.lon_v, ds.lat_v, lon0, lat0).isel(s_rho=0, ocean_time=0), 0.042857)
     
     
-def test_sel2d_list():
-    '''Test sel2d for lon0/lat0 as list.'''
+# def test_sel2d_list():
+#     '''Test sel2d for lon0/lat0 as list.'''
 
-    lon0, lat0 = [-95.7,-94.8], [27.4,28.0]
+#     lon0, lat0 = [-95.7,-94.8], [27.4,28.0]
     
-    assert np.allclose(xroms.sel2d(ds, lon0, lat0, whichgrid='u').u.isel(s_rho=0, ocean_time=0), [0.1, 0.7])
-    assert np.allclose(xroms.sel2d(ds, lon0, lat0, whichgrid='v').v.isel(s_rho=0, ocean_time=0), [-0.071429,  0.042857])
+#     assert np.allclose(xroms.sel2d(ds.u, ds.lon_u, ds.lat_u, lon0, lat0).isel(s_rho=0, ocean_time=0), [0.1, 0.7])
+#     assert np.allclose(xroms.sel2d(ds.v, ds.lon_v, ds.lat_v, lon0, lat0).isel(s_rho=0, ocean_time=0), [-0.071429,  0.042857])
 
 
 def test_xisoslice():
@@ -69,7 +70,7 @@ def test_xisoslice():
     assert np.allclose(res, 0.6)
     
     # test latitude slice of u
-    res = xroms.xisoslice(ds.lat_u, 28, ds.u, 'eta_u').std()
+    res = xroms.xisoslice(ds.lat_u, 28, ds.u, 'eta_rho').std()
     assert np.allclose(res, 0.37416574)
     
     # test when slice isn't along a value that is equal along that slice

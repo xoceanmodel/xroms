@@ -4,13 +4,21 @@
 
 There are functions to...
 * help read in model output with automatically-calculated z coordinates
-* calculate many things in one line including:
-  * derivatives in all dimensions, accounting for curvilinear grids and sigma layers
-  * grid metrics (i.e., grid lengths, areas, and volumes)
-  * vorticity
+* calculate many derived variables with correct grid metrics in one line including:
+  * horizontal speed
+  * kinetic energy
+  * eddy kinetic energy
+  * vertical shear
+  * vertical vorticity
+  * Ertel potential vorticity
   * density as calculated in ROMS
+  * potential density
+  * buoyancy
   * N^2 (buoyancy frequency/vertical buoyancy gradient)
   * M^2 (horizontal buoyancy gradient)
+* useful functions including:
+  * derivatives in all dimensions, accounting for curvilinear grids and sigma layers
+  * grid metrics (i.e., grid lengths, areas, and volumes)
   * easily change horizontal and vertical grids using `xgcm` grid objects
   * slice along a fixed value
   * mixed-layer depth
