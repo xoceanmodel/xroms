@@ -32,7 +32,7 @@ g = 9.81
 rho0 = 1025
 
 def test_grid():
-    assert isinstance(ds.attrs['grid'], xgrid.Grid)
+    assert isinstance(ds.xroms.grid, xgrid.Grid)
 
 def test_ddz():
     ddz = (salt[2] - salt[0])/(z_rho[2] - z_rho[0])

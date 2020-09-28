@@ -15,9 +15,9 @@ class xromsDatasetAccessor:
         self.ds = ds
             
         # if ds wasn't read in with an xroms load function, it probably doesn't have a grid object
-        if 'grid' in ds.attrs:
+        if 'grid' not in ds.attrs:
             self.ds, grid = xroms.roms_dataset(self.ds)
-            self.ds.attrs['grid'] = grid    
+            self.grid = grid    
     
     @property
     def speed(self):
@@ -37,7 +37,7 @@ class xromsDatasetAccessor:
         '''
 
         if 'speed' not in self.ds:
-            var = xroms.speed(self.ds.u, self.ds.v, self.ds.attrs['grid'], hboundary='extend')
+            var = xroms.speed(self.ds.u, self.ds.v, self.grid, hboundary='extend')
             self.ds['speed'] = var
         return self.ds.speed
     
@@ -79,7 +79,7 @@ class xromsDatasetAccessor:
         '''
         
         if 'ug' not in self.ds:
-            ug = xroms.uv_geostrophic(self.ds.zeta, self.ds.f, self.ds.attrs['grid'], hboundary='extend', hfill_value=None, which='xi')
+            ug = xroms.uv_geostrophic(self.ds.zeta, self.ds.f, self.grid, hboundary='extend', hfill_value=None, which='xi')
             self.ds['ug'] = ug
         return self.ds['ug']
     
@@ -100,7 +100,7 @@ class xromsDatasetAccessor:
         '''
         
         if 'vg' not in self.ds:
-            vg = xroms.uv_geostrophic(self.ds.zeta, self.ds.f, self.ds.attrs['grid'], hboundary='extend', hfill_value=None, which='eta')
+            vg = xroms.uv_geostrophic(self.ds.zeta, self.ds.f, self.grid, hboundary='extend', hfill_value=None, which='eta')
             self.ds['vg'] = vg
         return self.ds['vg']
         
@@ -122,7 +122,7 @@ class xromsDatasetAccessor:
         '''
         
         if 'EKE' not in self.ds:
-            var = xroms.EKE(self.ug, self.vg, self.ds.attrs['grid'], hboundary='extend')    
+            var = xroms.EKE(self.ug, self.vg, self.grid, hboundary='extend')    
             self.ds['EKE'] = var
         return self.ds['EKE']
 
@@ -144,7 +144,7 @@ class xromsDatasetAccessor:
         '''
 
         if 'dudz' not in self.ds:
-            var = xroms.dudz(self.ds.u, self.ds.attrs['grid'], sboundary='extend')
+            var = xroms.dudz(self.ds.u, self.grid, sboundary='extend')
             self.ds['dudz'] = var
         return self.ds['dudz']
 
@@ -166,7 +166,7 @@ class xromsDatasetAccessor:
         '''
 
         if 'dvdz' not in self.ds:
-            var = xroms.dvdz(self.ds.v, self.ds.attrs['grid'], sboundary='extend')
+            var = xroms.dvdz(self.ds.v, self.grid, sboundary='extend')
             self.ds['dvdz'] = var
         return self.ds['dvdz']
         
@@ -187,7 +187,7 @@ class xromsDatasetAccessor:
         '''
         
         if 'shear' not in self.ds:
-            var = xroms.vertical_shear(self.dudz, self.dvdz, self.ds.attrs['grid'], hboundary='extend')    
+            var = xroms.vertical_shear(self.dudz, self.dvdz, self.grid, hboundary='extend')    
             self.ds['shear'] = var
         return self.ds['shear']
     
@@ -208,7 +208,7 @@ class xromsDatasetAccessor:
         '''
 
         if 'vort' not in self.ds:
-            var = xroms.relative_vorticity(self.ds.u, self.ds.v, self.ds.attrs['grid'], 
+            var = xroms.relative_vorticity(self.ds.u, self.ds.v, self.grid, 
                                            hboundary='extend', sboundary='extend')
             self.ds['vort'] = var
         return self.ds.vort
@@ -229,7 +229,7 @@ class xromsDatasetAccessor:
         >>> ds.xroms.ertel
         '''
 
-        return xroms.ertel(self.buoyancy, self.ds.u, self.ds.v, self.ds.f, self.ds.attrs['grid'], 
+        return xroms.ertel(self.buoyancy, self.ds.u, self.ds.v, self.ds.f, self.grid, 
                            hcoord='rho', scoord='s_rho', hboundary='extend', 
                            hfill_value=None, sboundary='extend', sfill_value=None)
 
@@ -307,7 +307,7 @@ class xromsDatasetAccessor:
         '''
         
         if 'N2' not in self.ds:
-            var = xroms.N2(self.rho, self.ds.attrs['grid'], self.ds.rho0, sboundary='fill', sfill_value=np.nan)
+            var = xroms.N2(self.rho, self.grid, self.ds.rho0, sboundary='fill', sfill_value=np.nan)
             self.ds['N2'] = var
         return self.ds.N2
 
@@ -328,7 +328,7 @@ class xromsDatasetAccessor:
         '''
         
         if 'M2' not in self.ds:
-            var = xroms.M2(self.rho, self.ds.attrs['grid'], self.ds.rho0,  
+            var = xroms.M2(self.rho, self.grid, self.ds.rho0,  
                             hboundary='extend', sboundary='fill', sfill_value=np.nan)
             self.ds['M2'] = var
         return self.ds.M2
@@ -430,7 +430,7 @@ class xromsDatasetAccessor:
         
         assert isinstance(varname, str), 'varname should be a string of the name of a variable stored in the Dataset'
         assert varname in self.ds, 'variable called "varname" must be in Dataset'
-        return xroms.ddxi(self.ds[varname], self.ds.attrs['grid'], attrs=attrs, hcoord=hcoord, scoord=scoord, 
+        return xroms.ddxi(self.ds[varname], self.grid, attrs=attrs, hcoord=hcoord, scoord=scoord, 
                           hboundary=hboundary, hfill_value=hfill_value, 
                           sboundary=sboundary, sfill_value=sfill_value)
 
@@ -511,7 +511,7 @@ class xromsDatasetAccessor:
         
         assert isinstance(varname, str), 'varname should be a string of the name of a variable stored in the Dataset'
         assert varname in self.ds, 'variable called "varname" must be in Dataset'
-        return xroms.ddeta(self.ds[varname], self.ds.attrs['grid'], hcoord=hcoord, scoord=scoord, 
+        return xroms.ddeta(self.ds[varname], self.grid, hcoord=hcoord, scoord=scoord, 
                           hboundary=hboundary, hfill_value=hfill_value, 
                           sboundary=sboundary, sfill_value=sfill_value, attrs=attrs)
     
@@ -584,7 +584,7 @@ class xromsDatasetAccessor:
         
         assert isinstance(varname, str), 'varname should be a string of the name of a variable stored in the Dataset'
         assert varname in self.ds, 'variable called "varname" must be in Dataset'
-        return xroms.ddz(self.ds[varname], self.ds.attrs['grid'], hcoord=hcoord, scoord=scoord, 
+        return xroms.ddz(self.ds[varname], self.grid, hcoord=hcoord, scoord=scoord, 
                          hboundary=hboundary, hfill_value=hfill_value,
                          sboundary=sboundary, sfill_value=sfill_value, attrs=attrs)
 
@@ -652,7 +652,7 @@ class xromsDatasetAccessor:
         
         assert isinstance(varname, str), 'varname should be a string of the name of a variable stored in the Dataset'
         assert varname in self.ds, 'variable called "varname" must be in Dataset'
-        return xroms.to_grid(self.ds[varname], self.ds.attrs['grid'], hcoord=hcoord, scoord=scoord, 
+        return xroms.to_grid(self.ds[varname], self.grid, hcoord=hcoord, scoord=scoord, 
                              hboundary=hboundary, hfill_value=hfill_value,
                              sboundary=sboundary, sfill_value=sfill_value)
   
