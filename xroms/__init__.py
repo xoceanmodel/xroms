@@ -4,9 +4,7 @@ except ImportError:
     __version__ = "unknown"
 
 import xroms.interp  # order of reading in `from scipy.spatial import Delaunay` matters
-from .xroms import (roms_dataset,
-                    open_netcdf,
-                    open_zarr)
+from .xroms import (roms_dataset, open_netcdf, open_mfnetcdf, open_zarr)
 from .roms_seawater import (density, buoyancy, potential_density, N2,
                             M2, mld)
 from .derived import (relative_vorticity, KE, speed,

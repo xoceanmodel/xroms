@@ -15,25 +15,48 @@ xr.set_options(keep_attrs=True)
 g = 9.81  # m/s^2
 
 def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
-    '''Return a dataset that is aware of ROMS coordinatates and an associated xgcm grid object with metrics
+    '''Modify Dataset to be aware of ROMS coordinates, with matching xgcm grid object.
 
-    Note that this could be very slow if dask is not on.
-
-    Input
-    -----
-
-    ds :     xarray dataset
-
-    Output
+    Inputs
     ------
+    ds: Dataset
+        xarray Dataset with model output
+    Vtransform: int, None
+        Vertical transform for ROMS model. Should be either 1 or 2 and only needs
+        to be input if not available in ds.
+    add_verts: boolean
+        Add 'verts' horizontal grid to ds if True. This requires a cartopy projection 
+        to be input too.
+    proj: cartopy crs projection, None
+        Should match geographic area of model domain. Required if `add_verts=True`, 
+        otherwise not used. Example:
+        >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
 
-    ds :     xarray dataset
-             dimensions are renamed to be consistent with xgcm
-             vertical coordinates are added
-
-    grid:    xgcm grid object
-             includes ROMS metrics
+    Returns
+    -------
+    ds: Dataset
+        Same dataset as input, but with dimensions renamed to be consistent with `xgcm` and
+        with vertical coordinates and metrics added.
+    grid: xgcm grid object
+        Includes ROMS metrics so can be used for xgcm grid operations, which mostly have 
+        been wrapped into xroms.
+             
+    Notes
+    -----
+    Note that this could be very slow if dask is not on.
+    
+    This does not need to be run by the user if `xroms` functions `open_netcdf` or 
+    `open_zarr` are used for reading in model output, since run in those functions.
+    
+    This also uses `cf-xarray` to manage dimensions of variables.
+    
+    Example usage
+    -------------
+    >>> ds, grid = xroms.roms_dataset(ds)
     '''
+    
+    if add_verts:
+        assert proj is not None, 'To add "verts" grid, input projection "proj".'
 
     rename = {}
     if 'eta_u' in ds.dims:
@@ -117,8 +140,6 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     # add vert grid, esp for plotting pcolormesh
     if add_verts:
         import pygridgen
-        if proj is None:
-            proj = cartopy.crs.LambertConformal(central_longitude=-98,    central_latitude=30)
         pc = cartopy.crs.PlateCarree()
         # project points for this calculation
         xr, yr = proj.transform_points(pc, ds.lon_rho.values, ds.lat_rho.values)[...,:2].T
@@ -240,74 +261,181 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     }
     grid = xgcm.Grid(ds, coords=coords, metrics=metrics, periodic=[])
 
-    return ds, grid
-
-
-def open_netcdf(files, chunks=None, Vtransform=None, add_verts=False, proj=None, parallel=True, engine='netcdf4'):
-    '''Return an xarray.Dataset based on a list of netCDF files
-
-    Inputs:
-    files       Where to find the model output. `files` could be: A list of netCDF file
-                names, a string of netCDF file name, or a string of a thredds server 
-                containing model output.
-
-    Output:
-    ds          An xarray.Dataset
-
-    Options:
-    chunks      The specified chunks for the DataSet.
-                Default: chunks = {'ocean_time':1}
-    parallel    (True) To be passed to `xarray open_mfdataset`.
-    '''
-
-    if chunks is None:
-        chunks = {"ocean_time": 1}  # A basic chunking, ok, but maybe not the best
-
-    if isinstance(files, list):
-        ds = xr.open_mfdataset(files, compat='override', combine='by_coords',
-                               data_vars='minimal', coords='minimal', 
-                               chunks=chunks, parallel=parallel, engine=engine)
-    elif isinstance(files, str):
-        ds = xr.open_dataset(files, chunks=chunks)
-
-    ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
-    ds.attrs['grid'] = grid  #THIS IS WHAT CAUSES RECURSION ERROR~~~~!!!
+    ds.attrs['grid'] = grid
     # also put grid into every variable with at least 2D
     for var in ds.variables:
         if ds[var].ndim > 1:
             ds[var].attrs['grid'] = grid
 
+    return ds, grid
+
+
+def open_netcdf(file, chunks={"ocean_time": 1}, xrargs={},
+                Vtransform=None, add_verts=False, proj=None):
+    '''Return Dataset based on a single thredds or physical location.
+
+    Inputs
+    ------
+    file: str
+        Where to find the model output. `file` could be: 
+        * a string of a single netCDF file name, or 
+        * a string of a thredds server address containing model output.
+    chunks: dict
+        The specified chunks for the Dataset. Use chunks to read in output using dask.
+    xrargs: dict
+        Keyword arguments to be passed to `xarray.open_dataset`. See `xarray` docs 
+        for options.
+    Vtransform: int, None
+        Vertical transform for ROMS model. Should be either 1 or 2 and only needs
+        to be input if not available in ds.
+    add_verts: boolean
+        Add 'verts' horizontal grid to ds if True. This requires a cartopy projection 
+        to be input too. This is passed to `roms_dataset`.
+    proj: cartopy crs projection, None
+        Should match geographic area of model domain. Required if `add_verts=True`, 
+        otherwise not used. This is passed to `roms_dataset`. Example:
+        >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
+
+    Returns
+    -------
+    ds: Dataset
+        Model output, read into an `xarray` Dataset. If 'chunks' keyword
+        argument is input, dask is used when reading in model output and 
+        output is read in lazily instead of eagerly.
+
+    Example usage
+    -------------
+    >>> ds = xroms.open_netcdf(file)
+    '''
+    
+    words = 'Model location should be given as string. If have list of multiple locations, use `open_mfdataset`.'
+    assert isinstance(file, str), words
+
+    ds = xr.open_dataset(file, chunks=chunks, **xrargs)
+
+    # modify Dataset with useful ROMS z coords and make xgcm grid operations usable.
+    ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
+
     return ds
 
 
-def open_zarr(files, chunks=None, Vtransform=None, add_verts=False, proj=None):
-    '''Return an xarray.Dataset based on a list of zarr files
+def open_mfnetcdf(files, chunks={"ocean_time": 1}, xrargs={},  
+                Vtransform=None, add_verts=False, proj=None):
+    '''Return Dataset based on a list of netCDF files.
 
-    Inputs:
-    files       A list of zarr files
+    Inputs
+    ------
+    files: list of strings
+        Where to find the model output. `files` can be a list of netCDF file names.
+    chunks: dict
+        The specified chunks for the Dataset. Use chunks to read in output using dask.
+    xrargs: dict
+        Keyword arguments to be passed to `xarray.open_mfdataset`.
+        Anything input by the user overwrites the default selections saved in this 
+        function. Defaults are:
+            {'compat': 'override', 'combine': 'by_coords',
+             'data_vars': 'minimal', 'coords': 'minimal', 'parallel': True}
+        Many other options are available; see xarray docs.
+    Vtransform: int, None
+        Vertical transform for ROMS model. Should be either 1 or 2 and only needs
+        to be input if not available in ds.
+    add_verts: boolean
+        Add 'verts' horizontal grid to ds if True. This requires a cartopy projection 
+        to be input too. This is passed to `roms_dataset`.
+    proj: cartopy crs projection, None
+        Should match geographic area of model domain. Required if `add_verts=True`, 
+        otherwise not used. This is passed to `roms_dataset`. Example:
+        >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
 
-    Output:
-    ds          An xarray.Dataset
+    Returns
+    -------
+    ds: Dataset
+        Model output, read into an `xarray` Dataset. If 'chunks' keyword
+        argument is input, dask is used when reading in model output and 
+        output is read in lazily instead of eagerly.
 
-    Options:
-    chunks      The specified chunks for the DataSet.
-                Default: chunks = {'ocean_time':1}
+    Example usage
+    -------------
+    >>> ds = xroms.open_mfnetcdf(files)
     '''
-    if chunks is None:
+    
+    words = 'Model location should be given as list of strings. If have single location, use `open_dataset`.'
+    assert isinstance(files, list), words
+        
+    xrargsin = {'compat': 'override', 'combine': 'by_coords',
+                'data_vars': 'minimal', 'coords': 'minimal', 
+                'parallel': True}
+    
+    # use input xarray arguments and prioritize them over xroms defaults.
+    xrargsin = {**xrargsin, **xrargs}
 
-        chunks = {'ocean_time':1}   # A basic chunking option
+    ds = xr.open_mfdataset(files, chunks=chunks, **xrargsin)
 
-    opts = {'consolidated': True,
-            'chunks': chunks, 'drop_variables': 'dstart'}
-    ds = xr.concat(
-        [xr.open_zarr(file, **opts) for file in files],
-        dim='ocean_time', data_vars='minimal', coords='minimal')
-
+    # modify Dataset with useful ROMS z coords and make xgcm grid operations usable.
     ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
-    ds.attrs['grid'] = grid
-    # also put grid into every variable with at least 2D
-    for var in ds.variables:
-        if ds[var].ndim > 1:
-            ds[var].attrs['grid'] = ds.attrs['grid']
+
+    return ds
+
+
+def open_zarr(files, chunks={"ocean_time": 1}, xrargs={}, xrconcatargs={},
+              Vtransform=None, add_verts=False, proj=None):
+    '''Return a Dataset based on a list of zarr files
+
+    Inputs
+    ------
+    files: list of strings
+        A list of zarr file directories.
+    chunks: dict
+        The specified chunks for the Dataset. Use chunks to read in output using dask.
+    xrargs: dict
+        Keyword arguments to be passed to `xarray.open_zarr`.
+        Anything input by the user overwrites the default selections saved in this 
+        function. Defaults are:
+            {'consolidated': True, 'drop_variables': 'dstart'}
+        Many other options are available; see xarray docs.
+    xrconcatargs: dict
+        Keyword arguments to be passed to `xarray.concat` for combining zarr files 
+        together. Anything input by the user overwrites the default selections saved in this 
+        function. Defaults are:
+            {'dim': 'ocean_time', 'data_vars': 'minimal', 'coords': 'minimal'}
+        Many other options are available; see xarray docs.
+    Vtransform: int, None
+        Vertical transform for ROMS model. Should be either 1 or 2 and only needs
+        to be input if not available in ds.
+    add_verts: boolean
+        Add 'verts' horizontal grid to ds if True. This requires a cartopy projection 
+        to be input too. This is passed to `roms_dataset`.
+    proj: cartopy crs projection, None
+        Should match geographic area of model domain. Required if `add_verts=True`, 
+        otherwise not used. This is passed to `roms_dataset`. Example:
+        >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
+
+    Returns
+    -------
+    ds: Dataset
+        Model output, read into an `xarray` Dataset. If 'chunks' keyword
+        argument is input, dask is used when reading in model output and 
+        output is read in lazily instead of eagerly.
+
+    Example usage
+    -------------
+    >>> ds = xroms.open_zarr(files)
+    '''
+        
+    # keyword arguments to go to `open_zarr`:
+    xrargsin = {'consolidated': True, 'drop_variables': 'dstart'}  
+    # use input xarray arguments and prioritize them over xroms defaults.
+    xrargsin = {**xrargsin, **xrargs}
+    
+    # keyword arguments to go to `concat`:
+    xrconcatargsin = {'dim': 'ocean_time', 'data_vars': 'minimal', 'coords': 'minimal'}
+    # use input xarray arguments and prioritize them over xroms defaults.
+    xrconcatargsin = {**xrconcatargsin, **xrconcatargs}
+
+    # open files
+    ds = xr.concat( [xr.open_zarr(file, **xrargsin) for file in files], **xrconcatargsin)
+
+    # modify Dataset with useful ROMS z coords and make xgcm grid operations usable.
+    ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
     
     return ds

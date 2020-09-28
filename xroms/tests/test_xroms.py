@@ -1,33 +1,34 @@
 '''Test xroms functions.'''
 
 import xroms
-import xarray as xr
-import numpy as np
-import cartopy
+from glob import glob
+import os
 
 
-grid = xr.open_dataset('xroms/tests/input/grid.nc')
-ds = xr.open_dataset('xroms/tests/input/ocean_his_0001.nc')
-# combine the two:
-ds = ds.merge(grid, overwrite_vars=True, compat='override')
-ds, grid = xroms.roms_dataset(ds, Vtransform=2)
-
-
-# def test_relative_vorticity():
+def test_open_netcdf():
+    '''Test xroms.open_netcdf().'''
     
-#     x.relative_vorticity(ds, grid, hboundary='extend', hfill_value=None, sboundary='extend', sfill_value=None)
-#     assert np.allclose(xroms.relative_vorticity(ds, grid),0)
-
-# def test_mld():
-#     sig0 = np.linspace(0,1,50)
-#     xroms.mld(sig0, h, mask, z=None, thresh=0.03)
-
-def test_dataset():
+    file = os.path.join(xroms.__path__[0],'tests','input', 'ocean_his_0001.nc')
+    ds = xroms.open_netcdf(file)#, Vtransform=2)
     
-    pass
-    # change to `dataset1` from `1roms_dataset`
-    
+    assert ds
 
-def test_hgrad():
+
+def test_open_mfnetcdf():
+    '''Test xroms.open_mfnetcdf().'''
     
-    pass
+    base = os.path.join(xroms.__path__[0],'tests','input')
+    files = glob('%s/ocean_his_000?.nc' % base)
+    ds = xroms.open_mfnetcdf(files, Vtransform=2)
+    
+    assert ds
+    
+    
+def test_open_zarr():
+    '''Test xroms.open_zarr().'''
+    
+    base = os.path.join(xroms.__path__[0],'tests','input')
+    files = glob('%s/ocean_his_000?' % base)
+    ds = xroms.open_zarr(files, chunks={'ocean_time':2}, Vtransform=2)
+    
+    assert ds
