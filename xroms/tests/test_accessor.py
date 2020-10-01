@@ -8,10 +8,11 @@ from xgcm import grid as xgrid
 
 
 grid1 = xr.open_dataset('xroms/tests/input/grid.nc')
-ds = xroms.open_netcdf('xroms/tests/input/ocean_his_0001.nc')
-# ds = xr.open_dataset('xroms/tests/input/ocean_his_0001.nc')
+# ds = xroms.open_netcdf('xroms/tests/input/ocean_his_0001.nc')
+ds = xr.open_dataset('xroms/tests/input/ocean_his_0001.nc')
 # combine the two:
 ds = ds.merge(grid1, overwrite_vars=True, compat='override')
+ds, grid = xroms.roms_dataset(ds)
 # ds['Vtransform'] = 2
 # ds.xroms
 # ds, grid = xroms.roms_dataset(ds)
@@ -77,7 +78,7 @@ def test_mld():
     # choose threshold so that z_rho[-2] is the mld
     sig0 = xroms.density(temp, salt, 0)
     thresh = sig0[-2] - sig0[-1]
-    assert np.allclose(ds.xroms.mld(thresh=thresh)[0,0,0], z_rho[-2], rtol=1e-3)
+    assert np.allclose(ds.xroms.mld(thresh=thresh)[0,0,0], z_rho[-2])
 
 def test_speed():
     assert np.allclose(ds.xroms.speed.mean(),np.sqrt(u**2 + v**2).mean(), rtol=1e-2)

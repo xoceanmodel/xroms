@@ -339,7 +339,7 @@ class xromsDatasetAccessor:
         
         Inputs
         ------
-        thresh: float
+        thresh: float, optional
             Threshold for detection of mixed layer [kg/m^3]
             
         Notes
@@ -362,13 +362,13 @@ class xromsDatasetAccessor:
         ------
         varname: str
             Name of variable in Dataset to operate on.
-        hcoord: string, None.
+        hcoord: string, optional.
             Name of horizontal grid to interpolate output to. 
             Options are 'rho', 'psi', 'u', 'v'.
-        scoord: string, None. 
+        scoord: string, optional. 
             Name of vertical grid to interpolate output to. 
             Options are 's_rho', 's_w', 'rho', 'w'.
-        hboundary: string, None
+        hboundary: string, optional
             Passed to `grid` method calls; horizontal boundary selection 
             for calculating horizontal derivative of var. This same value 
             will be used for all horizontal grid changes too.
@@ -380,12 +380,12 @@ class xromsDatasetAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        hfill_value: float, None
+        hfill_value: float, optional
             Passed to `grid` method calls; horizontal boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        sboundary: string, None
+        sboundary: string, optional
             Passed to `grid` method calls; vertical boundary selection 
             for calculating horizontal derivative of var. This same value will 
             be used for all vertical grid changes too.
@@ -397,12 +397,12 @@ class xromsDatasetAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        sfill_value: float, None
+        sfill_value: float, optional
             Passed to `grid` method calls; vertical boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        attrs: dict
+        attrs: dict, optional
             Dictionary of attributes to add to resultant arrays. Requires that 
             q is DataArray. For example:
             `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
@@ -443,13 +443,13 @@ class xromsDatasetAccessor:
         ------
         varname: str
             Name of variable in Dataset to operate on.
-        hcoord: string, None.
+        hcoord: string, optional.
             Name of horizontal grid to interpolate output to. 
             Options are 'rho', 'psi', 'u', 'v'.
-        scoord: string, None. 
+        scoord: string, optional. 
             Name of vertical grid to interpolate output to. 
             Options are 's_rho', 's_w', 'rho', 'w'.
-        hboundary: string, None
+        hboundary: string, optional
             Passed to `grid` method calls; horizontal boundary selection 
             for calculating horizontal derivative of var. This same value 
             will be used for grid changes too.
@@ -461,12 +461,12 @@ class xromsDatasetAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        hfill_value: float, None
+        hfill_value: float, optional
             Passed to `grid` method calls; horizontal boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        sboundary: string, None
+        sboundary: string, optional
             Passed to `grid` method calls; vertical boundary selection 
             for calculating horizontal derivative of var. This same value will 
             be used for grid changes too.
@@ -478,12 +478,12 @@ class xromsDatasetAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        sfill_value: float, None
+        sfill_value: float, optional
             Passed to `grid` method calls; vertical boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        attrs: dict
+        attrs: dict, optional
             Dictionary of attributes to add to resultant arrays. Requires that 
             q is DataArray. For example:
             `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
@@ -524,13 +524,13 @@ class xromsDatasetAccessor:
         ------
         varname: str
             Name of variable in Dataset to operate on.
-        hcoord: string, None.
+        hcoord: string, optional.
             Name of horizontal grid to interpolate output to. 
             Options are 'rho', 'psi', 'u', 'v'.
-        scoord: string, None. 
+        scoord: string, optional. 
             Name of vertical grid to interpolate output to. 
             Options are 's_rho', 's_w', 'rho', 'w'.
-        hboundary: string, None
+        hboundary: string, optional
             Passed to `grid` method calls; horizontal boundary selection 
             for grid changes.
             From xgcm documentation:
@@ -541,12 +541,12 @@ class xromsDatasetAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        hfill_value: float, None
+        hfill_value: float, optional
             Passed to `grid` method calls; horizontal boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        sboundary: string, None
+        sboundary: string, optional
             Passed to `grid` method calls; vertical boundary selection for 
             calculating z derivative. This same value will be used for grid 
             changes too.
@@ -558,12 +558,12 @@ class xromsDatasetAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        sfill_value: float, None
+        sfill_value: float, optional
             Passed to `grid` method calls; vertical boundary fill value 
             associated with sboundary input.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        attrs: dict
+        attrs: dict, optional
             Dictionary of attributes to add to resultant arrays. Requires that 
             q is DataArray. For example:
             `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
@@ -597,13 +597,13 @@ class xromsDatasetAccessor:
         ------
         varname: str
             Name of variable in Dataset to operate on.
-        hcoord: string, None.
+        hcoord: string, optional.
             Name of horizontal grid to interpolate output to. 
             Options are 'rho', 'psi', 'u', 'v'.
-        scoord: string, None. 
+        scoord: string, optional. 
             Name of vertical grid to interpolate output to. 
             Options are 's_rho', 's_w', 'rho', 'w'.
-        hboundary: string, None
+        hboundary: string, optional
             Passed to `grid` method calls; horizontal boundary selection 
             for grid changes.
             From xgcm documentation:
@@ -614,12 +614,12 @@ class xromsDatasetAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        hfill_value: float, None
+        hfill_value: float, optional
             Passed to `grid` method calls; horizontal boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        sboundary: string, None
+        sboundary: string, optional
             Passed to `grid` method calls; vertical boundary selection 
             for grid changes.
             From xgcm documentation:
@@ -630,7 +630,7 @@ class xromsDatasetAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        sfill_value: float, None
+        sfill_value: float, optional
             Passed to `grid` method calls; vertical boundary selection 
             fill value.
             From xgcm documentation:
@@ -710,13 +710,13 @@ class xromsDataArrayAccessor:
 
         Inputs
         ------
-        hcoord: string, None.
+        hcoord: string, optional.
             Name of horizontal grid to interpolate output to. 
             Options are 'rho', 'psi', 'u', 'v'.
-        scoord: string, None. 
+        scoord: string, optional. 
             Name of vertical grid to interpolate output to. 
             Options are 's_rho', 's_w', 'rho', 'w'.
-        hboundary: string, None
+        hboundary: string, optional
             Passed to `grid` method calls; horizontal boundary selection 
             for grid changes.
             From xgcm documentation:
@@ -727,12 +727,12 @@ class xromsDataArrayAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        hfill_value: float, None
+        hfill_value: float, optional
             Passed to `grid` method calls; horizontal boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        sboundary: string, None
+        sboundary: string, optional
             Passed to `grid` method calls; vertical boundary selection 
             for grid changes.
             From xgcm documentation:
@@ -743,7 +743,7 @@ class xromsDataArrayAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        sfill_value: float, None
+        sfill_value: float, optional
             Passed to `grid` method calls; vertical boundary selection 
             fill value.
             From xgcm documentation:
@@ -772,13 +772,13 @@ class xromsDataArrayAccessor:
             sboundary='extend', sfill_value=None, attrs=None):
         '''Calculate d/dz for a variable.
 
-        hcoord: string, None.
+        hcoord: string, optional.
             Name of horizontal grid to interpolate output to. 
             Options are 'rho', 'psi', 'u', 'v'.
-        scoord: string, None. 
+        scoord: string, optional. 
             Name of vertical grid to interpolate output to. 
             Options are 's_rho', 's_w', 'rho', 'w'.
-        hboundary: string, None
+        hboundary: string, optional
             Passed to `grid` method calls; horizontal boundary selection 
             for grid changes.
             From xgcm documentation:
@@ -789,12 +789,12 @@ class xromsDataArrayAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        hfill_value: float, None
+        hfill_value: float, optional
             Passed to `grid` method calls; horizontal boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        sboundary: string, None
+        sboundary: string, optional
             Passed to `grid` method calls; vertical boundary selection for 
             calculating z derivative. This same value will be used for grid 
             changes too.
@@ -806,12 +806,12 @@ class xromsDataArrayAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        sfill_value: float, None
+        sfill_value: float, optional
             Passed to `grid` method calls; vertical boundary fill value 
             associated with sboundary input.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        attrs: dict, None
+        attrs: dict, optional
             Dictionary of attributes to add to resultant arrays. Requires that 
             q is DataArray. For example:
             `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
@@ -841,13 +841,13 @@ class xromsDataArrayAccessor:
 
         Inputs
         ------
-        hcoord: string, None.
+        hcoord: string, optional.
             Name of horizontal grid to interpolate output to. 
             Options are 'rho', 'psi', 'u', 'v'.
-        scoord: string, None. 
+        scoord: string, optional. 
             Name of vertical grid to interpolate output to. 
             Options are 's_rho', 's_w', 'rho', 'w'.
-        hboundary: string, None
+        hboundary: string, optional
             Passed to `grid` method calls; horizontal boundary selection 
             for calculating horizontal derivative of var. This same value 
             will be used for all horizontal grid changes too.
@@ -859,12 +859,12 @@ class xromsDataArrayAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        hfill_value: float, None
+        hfill_value: float, optional
             Passed to `grid` method calls; horizontal boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        sboundary: string, None
+        sboundary: string, optional
             Passed to `grid` method calls; vertical boundary selection 
             for calculating horizontal derivative of var. This same value will 
             be used for all vertical grid changes too.
@@ -876,12 +876,12 @@ class xromsDataArrayAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        sfill_value: float, None
+        sfill_value: float, optional
             Passed to `grid` method calls; vertical boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        attrs: dict
+        attrs: dict, optional
             Dictionary of attributes to add to resultant arrays. Requires that 
             q is DataArray. For example:
             `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
@@ -918,13 +918,13 @@ class xromsDataArrayAccessor:
 
         Inputs
         ------
-        hcoord: string, None.
+        hcoord: string, optional.
             Name of horizontal grid to interpolate output to. 
             Options are 'rho', 'psi', 'u', 'v'.
-        scoord: string, None. 
+        scoord: string, optional. 
             Name of vertical grid to interpolate output to. 
             Options are 's_rho', 's_w', 'rho', 'w'.
-        hboundary: string, None
+        hboundary: string, optional
             Passed to `grid` method calls; horizontal boundary selection 
             for calculating horizontal derivative of var. This same value 
             will be used for grid changes too.
@@ -936,12 +936,12 @@ class xromsDataArrayAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        hfill_value: float, None
+        hfill_value: float, optional
             Passed to `grid` method calls; horizontal boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        sboundary: string, None
+        sboundary: string, optional
             Passed to `grid` method calls; vertical boundary selection 
             for calculating horizontal derivative of var. This same value will 
             be used for grid changes too.
@@ -953,12 +953,12 @@ class xromsDataArrayAccessor:
               (i.e. a Neumann boundary condition.)
             * 'extend': Set values outside the array to the nearest array
               value. (i.e. a limited form of Dirichlet boundary condition.
-        sfill_value: float, None
+        sfill_value: float, optional
             Passed to `grid` method calls; vertical boundary selection 
             fill value.
             From xgcm documentation:
             The value to use in the boundary condition with `boundary='fill'`.
-        attrs: dict
+        attrs: dict, optional
             Dictionary of attributes to add to resultant arrays. Requires that 
             q is DataArray. For example:
             `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
@@ -1120,55 +1120,120 @@ class xromsDataArrayAccessor:
         return xroms.gridsum(self.da, self.da.attrs['grid'], dim)
     
     
-#     def interp(self, xi=None, eta=None, s=None, t=None):
-#         '''Wrapper for xarray `interp` without needing to specify grid.
-        
-#         Example usage:
-#         > ds.salt.xroms.interp(xi=20.5, eta=35.5, t='2020-1-1')
-#         '''
-        
-#         indexer = xroms.build_indexer(self.da, xi, eta, s, t)
-        
-#         return self.da.interp(indexer)
+    def interpll(sel, lons, lats, which='pairs'):
+        '''Interpolate var to lons/lats positions.
 
-#     @property
-#     def idgrid(self):
-#         '''Return string name of grid DataArray is on.
-    
-#         Examples usage:
-#         > xroms.id_grid(ds.salt)
-#         returns 
-#         'rho'
-#         '''
-#         if self._idgrid is None:
-#             self._idgrid = xroms.id_grid(self.da)
-#         return self._idgrid
+        Wraps xESMF to perform proper horizontal interpolation on non-flat Earth.
 
-#     @property
-#     def tri(self):
+        Inputs
+        ------
+        lons: list, ndarray
+            Longitudes to interpolate to. Will be flattened upon input.
+        lats: list, ndarray
+            Latitudes to interpolate to. Will be flattened upon input.
+        which: str, optional
+            Which type of interpolation to do: 
+            * "pairs": lons/lats as unstructured coordinate pairs 
+              (in xESMF language, LocStream). 
+            * "grid": 2D array of points with 1 dimension the lons and
+              the other dimension the lats.
+
+        Returns
+        -------
+        DataArray of var interpolated to lons/lats. Dimensionality will be the
+        same as var except the Y and X dimensions will be 1 dimension called 
+        "locations" that lons.size if which=='pairs', or 2 dimensions called 
+        "lat" and "lon" if which=='grid' that are of lats.size and lons.size, 
+        respectively.
+
+        Notes
+        -----
+        var cannot have chunks in the Y or X dimensions.
+
+        cf-xarray should still be usable after calling this function.
+
+        Example usage
+        -------------
+        To return 1D pairs of points, in this case 3 points:
+        >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='pairs')
+        To return 2D pairs of points, in this case a 3x3 array of points:
+        >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='grid')
+        '''
         
-#         # triangulation calculations
-#         if self._tri is None:
-#             self._tri = xroms.interp.setup(self.da, self.idgrid)[self.idgrid]  # setup for this variable da
-#         return self._tri
-        
-#     def llzslice(self, lon0, lat0, z0s=None, zetaconstant=False, triplets=False):
-        
-#         self.tri
-#         return xroms.interp.llzslice(self.da, self.tri, lon0, lat0, z0s=z0s, zetaconstant=zetaconstant, triplets=triplets)
-        
-        
-#     def llzt(self, lon0, lat0, z0s=None, t0s=None, zetaconstant=False):
-        
-#         self.tri
-#         return xroms.interp.llzt(self.da, self.tri, lon0, lat0, z0s=z0s, t0s=t0s, zetaconstant=zetaconstant)
+        return xroms.interpll(self.da, lons, lats, which=which)
     
     
-#     def calc_zslices(self, z0s, zetaconstant=False):
-        
-#         return xroms.interp.calc_zslices(self.da, z0s, zetaconstant=False)
-    
-    
-#     def ll2xe(self, lon0, lat0, dims=None):
-        
-#         return xroms.interp.ll2xe(self.tri, lon0, lat0, dims=None)
+    def isoslice(self, iso_values, iso_array=None, axis='Z'):
+        '''Interpolate var to iso_values.
+
+        This wraps `xgcm` `transform` function for slice interpolation, 
+        though `transform` has additional functionality.
+
+        Inputs
+        ------
+        iso_values: list, ndarray
+            Values to interpolate to. If calculating var at fixed depths, 
+            iso_values are the fixed depths, which should be negative if 
+            below mean sea level. If input as array, should be 1D.
+        iso_array: DataArray, optional
+            Array that var is interpolated onto (e.g., z coordinates or 
+            density). If calculating var on fixed depth slices, iso_array 
+            contains the depths [m] associated with var. In that case and 
+            if None, will use z coordinate attached to var. Also use this 
+            option if you want to interpolate with z depths constant in 
+            time and input the appropriate z coordinate.
+        dim: str, optional
+            Dimension over which to calculate isoslice. If calculating var
+            onto fixed depths, `dim='Z'`. Options are 'Z', 'Y', and 'X'.
+
+        Returns
+        -------
+        DataArray of var interpolated to iso_values. Dimensionality will be the 
+        same as var except with dim dimension of size of iso_values. 
+
+        Notes
+        -----
+        var cannot have chunks in the dimension dim.
+
+        cf-xarray should still be usable after calling this function.
+
+        Example usage
+        -------------
+        To calculate temperature onto fixed depths:
+        >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50))
+
+        To calculate temperature onto salinity:
+        >>> xroms.isoslice(ds.temp, np.arange(0, 36), iso_array=ds.salt, axis='Z')
+
+        Calculate lat-z slice of salinity along a constant longitude value (-91.5):
+        >>> xroms.isoslice(ds.salt, -91.5, iso_array=ds.lon_rho, axis='X')
+
+        Calculate slice of salt at 28 deg latitude
+        >>> xroms.isoslice(ds.salt, 28, iso_array=ds.lat_rho, axis='Y')
+
+        Interpolate temp to salinity values between 0 and 36 in the X direction
+        >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='X')
+
+        Interpolate temp to salinity values between 0 and 36 in the Z direction
+        >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='Z')
+
+        Calculate the depth of a specific isohaline (33):
+        >>> xroms.isoslice(ds.salt, 33, iso_array=ds.z_rho, axis='Z')
+
+        Calculate dye 10 meters above seabed. Either do this on the vertical
+        rho grid, or first change to the w grid and then use `isoslice`. You may prefer
+        to do the latter if there is a possibility that the distance above the seabed you are 
+        interpolating to (10 m) could be below the deepest rho grid depth.
+        * on rho grid directly:
+        >>> height_from_seabed = ds.z_rho + ds.h
+        >>> height_from_seabed.name = 'z_rho'
+        >>> xroms.isoslice(ds.dye_01, 10, iso_array=height_from_seabed, axis='Z')
+        * on w grid:
+        >>> var_w = ds.dye_01.xroms.to_grid(scoord='w').chunk({'s_w': -1})
+        >>> ds['dye_01_w'] = var_w  # currently this is the easiest way to reattached coords xgcm variables
+        >>> height_from_seabed = ds.z_w + ds.h
+        >>> height_from_seabed.name = 'z_w'
+        >>> xroms.isoslice(ds['dye_01_w'], 10, iso_array=height_from_seabed, axis='Z')
+        '''
+
+        return xroms.isoslice(self.da, iso_values, grid=self.da.attrs['grid'], iso_array=iso_array, axis=axis)

@@ -21,13 +21,16 @@ There are functions to...
   * grid metrics (i.e., grid lengths, areas, and volumes)
   * easily change horizontal and vertical grids using `xgcm` grid objects
   * slice along a fixed value
+  * wrapper for interpolation in longitude/latitude and for fixed depths
   * mixed-layer depth
 * Demonstrations:
   * selecting data in many different ways
-  * interpolating in all dimensions, given `dask` chunks, sigma coordinates, and the fact that your grid might be curvilinear
+  * interpolation
   * changing time sampling
   * calculating climatologies
-* provide meta data along with calculated variables
+  * various calculations
+* provide/track attributes and coordinates through functions
+  * wraps `cf-xarray` to generalize coordinate and dimension calling.
 
 
 ## Installation
@@ -54,7 +57,7 @@ After installation, read in model output with one of three load methods:
 More information about reading in model output is available in Jupyter notebook `examples/io.pynb`.
 
 Other common tasks to do with model output using `xroms` as well as other packages are demonstrated in additional Jupyter notebooks:
+ * select_data
  * calc
  * interpolation
  * plotting
- * select_data

@@ -21,13 +21,13 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     ------
     ds: Dataset
         xarray Dataset with model output
-    Vtransform: int, None
+    Vtransform: int, optional
         Vertical transform for ROMS model. Should be either 1 or 2 and only needs
         to be input if not available in ds.
-    add_verts: boolean
+    add_verts: boolean, optional
         Add 'verts' horizontal grid to ds if True. This requires a cartopy projection 
         to be input too.
-    proj: cartopy crs projection, None
+    proj: cartopy crs projection, optional
         Should match geographic area of model domain. Required if `add_verts=True`, 
         otherwise not used. Example:
         >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
@@ -84,6 +84,13 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     tcoords = [coord for coord in ds.coords if coord[:2] == 's_']
     for coord in tcoords:
         ds[coord].attrs['axis'] = 'Z'
+    # make sure lon/lat have standard names
+    tcoords = [coord for coord in ds.coords if coord[:4] == 'lon_']
+    for coord in tcoords:
+        ds[coord].attrs['standard_name'] = 'longitude'
+    tcoords = [coord for coord in ds.coords if coord[:4] == 'lat_']
+    for coord in tcoords:
+        ds[coord].attrs['standard_name'] = 'latitude'
 
     coords={'X':{'center':'xi_rho', 'inner':'xi_u'},
         'Y':{'center':'eta_rho', 'inner':'eta_v'},
@@ -243,6 +250,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     for var in ds.variables:
         if 'coordinates' in ds[var].encoding:
             del ds[var].encoding['coordinates']
+    
 
     metrics = {
         ("X",): ["dx", "dx_u", "dx_v", "dx_psi"],  # X distances
@@ -261,7 +269,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     }
     grid = xgcm.Grid(ds, coords=coords, metrics=metrics, periodic=[])
 
-    ds.attrs['grid'] = grid
+#     ds.attrs['grid'] = grid  # causes recursion error
     # also put grid into every variable with at least 2D
     for var in ds.variables:
         if ds[var].ndim > 1:
@@ -280,18 +288,18 @@ def open_netcdf(file, chunks={"ocean_time": 1}, xrargs={},
         Where to find the model output. `file` could be: 
         * a string of a single netCDF file name, or 
         * a string of a thredds server address containing model output.
-    chunks: dict
+    chunks: dict, optional
         The specified chunks for the Dataset. Use chunks to read in output using dask.
-    xrargs: dict
+    xrargs: dict, optional
         Keyword arguments to be passed to `xarray.open_dataset`. See `xarray` docs 
         for options.
-    Vtransform: int, None
+    Vtransform: int, optional
         Vertical transform for ROMS model. Should be either 1 or 2 and only needs
         to be input if not available in ds.
-    add_verts: boolean
+    add_verts: boolean, optional
         Add 'verts' horizontal grid to ds if True. This requires a cartopy projection 
         to be input too. This is passed to `roms_dataset`.
-    proj: cartopy crs projection, None
+    proj: cartopy crs projection, optional
         Should match geographic area of model domain. Required if `add_verts=True`, 
         otherwise not used. This is passed to `roms_dataset`. Example:
         >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
@@ -327,22 +335,22 @@ def open_mfnetcdf(files, chunks={"ocean_time": 1}, xrargs={},
     ------
     files: list of strings
         Where to find the model output. `files` can be a list of netCDF file names.
-    chunks: dict
+    chunks: dict, optional
         The specified chunks for the Dataset. Use chunks to read in output using dask.
-    xrargs: dict
+    xrargs: dict, optional
         Keyword arguments to be passed to `xarray.open_mfdataset`.
         Anything input by the user overwrites the default selections saved in this 
         function. Defaults are:
             {'compat': 'override', 'combine': 'by_coords',
              'data_vars': 'minimal', 'coords': 'minimal', 'parallel': True}
         Many other options are available; see xarray docs.
-    Vtransform: int, None
+    Vtransform: int, optional
         Vertical transform for ROMS model. Should be either 1 or 2 and only needs
         to be input if not available in ds.
-    add_verts: boolean
+    add_verts: boolean, optional
         Add 'verts' horizontal grid to ds if True. This requires a cartopy projection 
         to be input too. This is passed to `roms_dataset`.
-    proj: cartopy crs projection, None
+    proj: cartopy crs projection, optional
         Should match geographic area of model domain. Required if `add_verts=True`, 
         otherwise not used. This is passed to `roms_dataset`. Example:
         >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
@@ -385,27 +393,27 @@ def open_zarr(files, chunks={"ocean_time": 1}, xrargs={}, xrconcatargs={},
     ------
     files: list of strings
         A list of zarr file directories.
-    chunks: dict
+    chunks: dict, optional
         The specified chunks for the Dataset. Use chunks to read in output using dask.
-    xrargs: dict
+    xrargs: dict, optional
         Keyword arguments to be passed to `xarray.open_zarr`.
         Anything input by the user overwrites the default selections saved in this 
         function. Defaults are:
             {'consolidated': True, 'drop_variables': 'dstart'}
         Many other options are available; see xarray docs.
-    xrconcatargs: dict
+    xrconcatargs: dict, optional
         Keyword arguments to be passed to `xarray.concat` for combining zarr files 
         together. Anything input by the user overwrites the default selections saved in this 
         function. Defaults are:
             {'dim': 'ocean_time', 'data_vars': 'minimal', 'coords': 'minimal'}
         Many other options are available; see xarray docs.
-    Vtransform: int, None
+    Vtransform: int, optional
         Vertical transform for ROMS model. Should be either 1 or 2 and only needs
         to be input if not available in ds.
-    add_verts: boolean
+    add_verts: boolean, optional
         Add 'verts' horizontal grid to ds if True. This requires a cartopy projection 
         to be input too. This is passed to `roms_dataset`.
-    proj: cartopy crs projection, None
+    proj: cartopy crs projection, optional
         Should match geographic area of model domain. Required if `add_verts=True`, 
         otherwise not used. This is passed to `roms_dataset`. Example:
         >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)

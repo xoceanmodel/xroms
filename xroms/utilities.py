@@ -11,24 +11,24 @@ def hgrad(q, grid, which='both', z=None, hcoord=None, scoord=None,
     Inputs
     ------
 
-    q: DataArray, ndarray
+    q: DataArray
         Property to take gradients of.
     grid: xgcm.grid
         Grid object associated with q.
-    which: string
+    which: string, optional
         Which components of gradient to return.
         * 'both': return both components of hgrad. 
         * 'xi': return only xi-direction. 
         * 'eta': return only eta-direction.
-    z: DataArray, ndarray
+    z: DataArray, ndarray, optional
         Depth [m]. If None, use z coordinate attached to q.
-    hcoord: string, None.
+    hcoord: string, optional
         Name of horizontal grid to interpolate output to. 
         Options are 'rho', 'psi', 'u', 'v'.
-    scoord: string, None. 
+    scoord: string, optional
         Name of vertical grid to interpolate output to. 
         Options are 's_rho', 's_w', 'rho', 'w'.
-    hboundary: string, None
+    hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection 
         for calculating horizontal derivatives of q. This same value 
         will be used for all horizontal grid changes too.
@@ -40,12 +40,12 @@ def hgrad(q, grid, which='both', z=None, hcoord=None, scoord=None,
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    hfill_value: float, None
+    hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection 
         fill value.
         From xgcm documentation:
         The value to use in the boundary condition with `boundary='fill'`.
-    sboundary: string, None
+    sboundary: string, optional
         Passed to `grid` method calls; vertical boundary selection 
         for calculating horizontal derivatives of q. This same value will 
         be used for all vertical grid changes too.
@@ -57,18 +57,18 @@ def hgrad(q, grid, which='both', z=None, hcoord=None, scoord=None,
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    sfill_value: float, None
+    sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection 
         fill value.
         From xgcm documentation:
         The value to use in the boundary condition with `boundary='fill'`.
-    attrs: dict
+    attrs: dict, optional
         Dictionary of attributes to add to resultant arrays. Requires that 
         q is DataArray.
         
     Returns
     -------
-    DataArray(s) or ndarray(s) of dqdxi and/or dqdeta, the gradients of q 
+    DataArray(s) of dqdxi and/or dqdeta, the gradients of q 
     in the xi- and eta-directions with attributes altered to reflect calculation.
 
     Notes
@@ -89,6 +89,8 @@ def hgrad(q, grid, which='both', z=None, hcoord=None, scoord=None,
     -------------
     >>> dtempdxi, dtempdeta = xroms.hgrad(ds.temp, grid)
     '''
+    
+    assert isinstance(q, xr.DataArray), 'var must be DataArray'
 
     if z is None:
         try:
@@ -173,19 +175,19 @@ def ddxi(var, grid, z=None, hcoord=None, scoord=None, hboundary='extend', hfill_
 
     Inputs
     ------
-    var: DataArray, ndarray
+    var: DataArray
         Variable to operate on.
     grid: xgcm.grid
         Grid object associated with var.
-    z: DataArray, ndarray
+    z: DataArray, ndarray, optional
         Depth [m]. If None, use z coordinate attached to var.
-    hcoord: string, None.
+    hcoord: string, optional
         Name of horizontal grid to interpolate output to. 
         Options are 'rho', 'psi', 'u', 'v'.
-    scoord: string, None. 
+    scoord: string, optional
         Name of vertical grid to interpolate output to. 
         Options are 's_rho', 's_w', 'rho', 'w'.
-    hboundary: string, None
+    hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection 
         for calculating horizontal derivative of var. This same value 
         will be used for all horizontal grid changes too.
@@ -197,12 +199,12 @@ def ddxi(var, grid, z=None, hcoord=None, scoord=None, hboundary='extend', hfill_
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    hfill_value: float, None
+    hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection 
         fill value.
         From xgcm documentation:
         The value to use in the boundary condition with `boundary='fill'`.
-    sboundary: string, None
+    sboundary: string, optional
         Passed to `grid` method calls; vertical boundary selection 
         for calculating horizontal derivative of var. This same value will 
         be used for all vertical grid changes too.
@@ -214,19 +216,19 @@ def ddxi(var, grid, z=None, hcoord=None, scoord=None, hboundary='extend', hfill_
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    sfill_value: float, None
+    sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection 
         fill value.
         From xgcm documentation:
         The value to use in the boundary condition with `boundary='fill'`.
-    attrs: dict
+    attrs: dict, optional
         Dictionary of attributes to add to resultant arrays. Requires that 
         q is DataArray. For example:
         `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
         
     Returns
     -------
-    DataArray or ndarray of dqdxi, the gradient of q in the xi-direction with 
+    DataArray of dqdxi, the gradient of q in the xi-direction with 
     attributes altered to reflect calculation.
 
     Notes
@@ -261,15 +263,15 @@ def ddeta(var, grid, z=None, hcoord=None, scoord=None, hboundary='extend', hfill
         Variable to operate on.
     grid: xgcm.grid
         Grid object associated with var.
-    z: DataArray, ndarray
+    z: DataArray, ndarray, optional
         Depth [m]. If None, use z coordinate attached to var.
-    hcoord: string, None.
+    hcoord: string, optional
         Name of horizontal grid to interpolate output to. 
         Options are 'rho', 'psi', 'u', 'v'.
-    scoord: string, None. 
+    scoord: string, optional
         Name of vertical grid to interpolate output to. 
         Options are 's_rho', 's_w', 'rho', 'w'.
-    hboundary: string, None
+    hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection 
         for calculating horizontal derivative of var. This same value 
         will be used for grid changes too.
@@ -281,12 +283,12 @@ def ddeta(var, grid, z=None, hcoord=None, scoord=None, hboundary='extend', hfill
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    hfill_value: float, None
+    hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection 
         fill value.
         From xgcm documentation:
         The value to use in the boundary condition with `boundary='fill'`.
-    sboundary: string, None
+    sboundary: string, optional
         Passed to `grid` method calls; vertical boundary selection 
         for calculating horizontal derivative of var. This same value will 
         be used for vertical grid changes too.
@@ -298,12 +300,12 @@ def ddeta(var, grid, z=None, hcoord=None, scoord=None, hboundary='extend', hfill
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    sfill_value: float, None
+    sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection 
         fill value.
         From xgcm documentation:
         The value to use in the boundary condition with `boundary='fill'`.
-    attrs: dict
+    attrs: dict, optional
         Dictionary of attributes to add to resultant arrays. Requires that 
         q is DataArray. For example:
         `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
@@ -341,17 +343,17 @@ def ddz(var, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value=Non
     
     Inputs
     ------
-    var: DataArray or ndarray
+    var: DataArray
         Variable to operate on.
     grid: xgcm.grid
         Grid object associated with var
-    hcoord: string, None.
+    hcoord: string, optional.
         Name of horizontal grid to interpolate output to. 
         Options are 'rho', 'psi', 'u', 'v'.
-    scoord: string, None. 
+    scoord: string, optional. 
         Name of vertical grid to interpolate output to. 
         Options are 's_rho', 's_w', 'rho', 'w'.
-    hboundary: string, None
+    hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection 
         for calculating horizontal derivative of var. This same value 
         will be used for grid changes too.
@@ -363,12 +365,12 @@ def ddz(var, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value=Non
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    hfill_value: float, None
+    hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection 
         fill value.
         From xgcm documentation:
         The value to use in the boundary condition with `boundary='fill'`.
-    sboundary: string, None
+    sboundary: string, optional
         Passed to `grid` method calls; vertical boundary selection for 
         calculating z derivative. This same value 
         will be used for grid changes too.
@@ -380,19 +382,19 @@ def ddz(var, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value=Non
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    sfill_value: float, None
+    sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary fill value 
         associated with sboundary input.
         From xgcm documentation:
         The value to use in the boundary condition with `boundary='fill'`.
-    attrs: dict
+    attrs: dict, optional
         Dictionary of attributes to add to resultant arrays. Requires that 
         q is DataArray. For example:
         `attrs={'name': 'varname', 'long_name': 'longvarname', 'units': 'units'}`
         
     Returns
     -------
-    DataArray or ndarray of vertical derivative of variable with 
+    DataArray of vertical derivative of variable with 
     attributes altered to reflect calculation.
     
     Notes
@@ -403,8 +405,10 @@ def ddz(var, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value=Non
     -------------
     >>> xroms.ddz(ds.salt, grid)
     '''
+    
+    assert isinstance(var, xr.DataArray), 'var must be DataArray'
 
-    if attrs is None and isinstance(var, xr.DataArray):
+    if attrs is None:
         attrs = var.attrs.copy()
         attrs['name'] = 'd' + var.name  + 'dz'
         attrs['units'] = '1/m * ' + attrs.setdefault('units', 'units')
@@ -520,7 +524,7 @@ def to_rho(var, grid, hboundary='extend', hfill_value=None):
         Variable to operate on.
     grid: xgcm.grid
         Grid object associated with var
-    hboundary: string, None
+    hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection 
         for grid changes.
         From xgcm documentation:
@@ -531,7 +535,7 @@ def to_rho(var, grid, hboundary='extend', hfill_value=None):
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    hfill_value: float, None
+    hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection 
         fill value.
         From xgcm documentation:
@@ -568,7 +572,7 @@ def to_psi(var, grid, hboundary='extend', hfill_value=None):
         Variable to operate on.
     grid: xgcm.grid
         Grid object associated with var
-    hboundary: string, None
+    hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection 
         for grid changes.
         From xgcm documentation:
@@ -579,7 +583,7 @@ def to_psi(var, grid, hboundary='extend', hfill_value=None):
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    hfill_value: float, None
+    hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection 
         fill value.
         From xgcm documentation:
@@ -617,7 +621,7 @@ def to_u(var, grid, hboundary='extend', hfill_value=None):
         Variable to operate on.
     grid: xgcm.grid
         Grid object associated with var
-    hboundary: string, None
+    hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection 
         for grid changes.
         From xgcm documentation:
@@ -628,7 +632,7 @@ def to_u(var, grid, hboundary='extend', hfill_value=None):
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    hfill_value: float, None
+    hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection 
         fill value.
         From xgcm documentation:
@@ -665,7 +669,7 @@ def to_v(var, grid, hboundary='extend', hfill_value=None):
         Variable to operate on.
     grid: xgcm.grid
         Grid object associated with var
-    hboundary: string, None
+    hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection 
         for grid changes.
         From xgcm documentation:
@@ -676,7 +680,7 @@ def to_v(var, grid, hboundary='extend', hfill_value=None):
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    hfill_value: float, None
+    hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection 
         fill value.
         From xgcm documentation:
@@ -713,7 +717,7 @@ def to_s_rho(var, grid, sboundary='extend', sfill_value=None):
         Variable to operate on.
     grid: xgcm.grid
         Grid object associated with var
-    sboundary: string, None
+    sboundary: string, optional
         Passed to `grid` method calls; vertical boundary selection 
         for grid changes.
         From xgcm documentation:
@@ -724,7 +728,7 @@ def to_s_rho(var, grid, sboundary='extend', sfill_value=None):
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    sfill_value: float, None
+    sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection 
         fill value.
         From xgcm documentation:
@@ -761,7 +765,7 @@ def to_s_w(var, grid, sboundary='extend', sfill_value=None):
         Variable to operate on.
     grid: xgcm.grid
         Grid object associated with var
-    sboundary: string, None
+    sboundary: string, optional
         Passed to `grid` method calls; vertical boundary selection 
         for grid changes.
         From xgcm documentation:
@@ -772,7 +776,7 @@ def to_s_w(var, grid, sboundary='extend', sfill_value=None):
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    sfill_value: float, None
+    sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection 
         fill value.
         From xgcm documentation:
@@ -810,13 +814,13 @@ def to_grid(var, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value
         Variable to operate on.
     grid: xgcm.grid
         Grid object associated with var
-    hcoord: string, None.
+    hcoord: string, optional.
         Name of horizontal grid to interpolate output to. 
         Options are 'rho', 'psi', 'u', 'v'.
-    scoord: string, None. 
+    scoord: string, optional. 
         Name of vertical grid to interpolate output to. 
         Options are 's_rho', 's_w', 'rho', 'w'.
-    hboundary: string, None
+    hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection 
         for grid changes.
         From xgcm documentation:
@@ -827,12 +831,12 @@ def to_grid(var, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    hfill_value: float, None
+    hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection 
         fill value.
         From xgcm documentation:
         The value to use in the boundary condition with `boundary='fill'`.
-    sboundary: string, None
+    sboundary: string, optional
         Passed to `grid` method calls; vertical boundary selection 
         for grid changes.
         From xgcm documentation:
@@ -843,7 +847,7 @@ def to_grid(var, grid, hcoord=None, scoord=None, hboundary='extend', hfill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
-    sfill_value: float, None
+    sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection 
         fill value.
         From xgcm documentation:
@@ -987,8 +991,19 @@ def gridsum(var, grid, dim):
     return var
 
 
-def xisoslice(iso_array, iso_value, projected_array, coord, printwarning=False):
+def xisoslice(iso_array, iso_value, projected_array, coord):
     '''Calculate an isosurface.
+    
+    This function has been possibly superceded by isoslice 
+    that wraps `xgcm.grid.transform` for the following reasons,
+    but more testing is needed:
+    * The implementation of `xgcm.grid.transform` is more robust
+      than `xisoslice` which has extra code for in case iso_value 
+      is exactly in iso_array. 
+    * For a 5-day model file, the run time for the same call for 
+      was approximately the same for xisolice and isoslice.
+    * isoslice might be more computationally robust for not 
+      breaking mid-way, but this is still unclear.
 
     This function calculates the value of projected_array on
     an isosurface in the array iso_array defined by iso_value.
