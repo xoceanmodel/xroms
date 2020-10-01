@@ -1,0 +1,4 @@
+# installing xESMF directly from github
+git+git://github.com/pangeo-data/xESMF.git#egg=xESMF
+#git+http://github.com/pangeo-data/xESMF.git#egg=xESMF
+#git+https://github.com/pangeo-data/xESMF.git#egg=xESMF

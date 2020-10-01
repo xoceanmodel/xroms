@@ -3,18 +3,37 @@ try:
 except ImportError:
     __version__ = "unknown"
 
-from .xroms import (roms_dataset, open_netcdf, open_mfnetcdf, open_zarr)
-from .roms_seawater import (density, buoyancy, potential_density, N2,
-                            M2, mld)
-from .derived import (relative_vorticity, KE, speed,
-                     ertel, uv_geostrophic, EKE,
-                     dudz, dvdz,
-                     vertical_shear)
-from .utilities import (hgrad, to_rho, to_psi, to_u, to_v,
-                        to_s_w, to_s_rho,
-                        to_grid, ddz, ddxi, ddeta,
-                        xisoslice, sel2d, argsel2d,
-                        gridmean, gridsum)
-from .interp import interpll, isoslice
 import xroms.accessor
 
+from .derived import (
+    EKE,
+    KE,
+    dudz,
+    dvdz,
+    ertel,
+    relative_vorticity,
+    speed,
+    uv_geostrophic,
+    vertical_shear,
+)
+from .interp import interpll, isoslice
+from .roms_seawater import M2, N2, buoyancy, density, mld, potential_density
+from .utilities import (
+    argsel2d,
+    ddeta,
+    ddxi,
+    ddz,
+    gridmean,
+    gridsum,
+    hgrad,
+    sel2d,
+    to_grid,
+    to_psi,
+    to_rho,
+    to_s_rho,
+    to_s_w,
+    to_u,
+    to_v,
+    xisoslice,
+)
+from .xroms import open_mfnetcdf, open_netcdf, open_zarr, roms_dataset

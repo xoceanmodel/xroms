@@ -35,15 +35,26 @@ There are functions to...
 
 ## Installation
 
-You can install this locally and so that it is editable (`-e`), and with the required packages:
+You can create an environment for this package with conda:
+
+    conda create --name XROMS python=3.8 --file requirements-conda.txt
+    
+Then you can install additional required packages with xroms so that it is editable (`-e`):
 
     git clone git@github.com:hetland/xroms.git
     cd xroms
-    pip install -r requirements.txt -e .
-
+    pip install -r requirements-pip.txt -e .
+    
 Or:
 
     pip install git+git://github.com/hetland/xroms
+
+If you already have an environment you'd like to use or just want to install in your regular Python, you can install with conda, then with pip:
+
+    conda install --file requirements-conda.txt
+    git clone git@github.com:hetland/xroms.git
+    cd xroms
+    pip install -r requirements-pip.txt -e .
     
 Additionally installing [bottleneck](https://github.com/pydata/bottleneck/) is supposed to improve the speed of `numpy`-based calculations.
 
