@@ -1,0 +1,8 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "eta_v",
+        "xi_v"
+    ],
+    "coordinates": "lon_v lat_v",
+    "units": "meters"
+}

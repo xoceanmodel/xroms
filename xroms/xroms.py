@@ -1,36 +1,98 @@
+from warnings import warn
+
+import cartopy
+import cf_xarray
+import numpy as np
 import xarray as xr
 import xgcm
-from warnings import warn
-import cartopy
+
+import xroms
 
 
-from .utilities import to_rho, to_psi
-from .roms_seawater import buoyancy
+xr.set_options(keep_attrs=True)
+
+# from .utilities import xisoslice, to_grid
+# from .roms_seawater import buoyancy
+
+g = 9.81  # m/s^2
 
 
-def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
-    '''Return a dataset that is aware of ROMS coordinatates and an associated xgcm grid object with metrics
-    
+def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
+    """Modify Dataset to be aware of ROMS coordinates, with matching xgcm grid object.
+
+    Inputs
+    ------
+    ds: Dataset
+        xarray Dataset with model output
+    Vtransform: int, optional
+        Vertical transform for ROMS model. Should be either 1 or 2 and only needs
+        to be input if not available in ds.
+    add_verts: boolean, optional
+        Add 'verts' horizontal grid to ds if True. This requires a cartopy projection
+        to be input too.
+    proj: cartopy crs projection, optional
+        Should match geographic area of model domain. Required if `add_verts=True`,
+        otherwise not used. Example:
+        >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
+
+    Returns
+    -------
+    ds: Dataset
+        Same dataset as input, but with dimensions renamed to be consistent with `xgcm` and
+        with vertical coordinates and metrics added.
+    grid: xgcm grid object
+        Includes ROMS metrics so can be used for xgcm grid operations, which mostly have
+        been wrapped into xroms.
+
+    Notes
+    -----
     Note that this could be very slow if dask is not on.
 
-    Input
-    -----
+    This does not need to be run by the user if `xroms` functions `open_netcdf` or
+    `open_zarr` are used for reading in model output, since run in those functions.
 
-    ds :     xarray dataset
+    This also uses `cf-xarray` to manage dimensions of variables.
 
-    Output
-    ------
-
-    ds :     xarray dataset
-             dimensions are renamed to be consistent with xgcm
-             vertical coordinates are added
-
-    grid:    xgcm grid object
-             includes ROMS metrics
+    Example usage
+    -------------
+    >>> ds, grid = xroms.roms_dataset(ds)
     """
-    ds = ds.rename(
-        {"eta_u": "eta_rho", "xi_v": "xi_rho", "xi_psi": "xi_u", "eta_psi": "eta_v"}
-    )
+
+    if add_verts:
+        assert proj is not None, 'To add "verts" grid, input projection "proj".'
+
+    rename = {}
+    if "eta_u" in ds.dims:
+        rename["eta_u"] = "eta_rho"
+    if "xi_v" in ds.dims:
+        rename["xi_v"] = "xi_rho"
+    if "xi_psi" in ds.dims:
+        rename["xi_psi"] = "xi_u"
+    if "eta_psi" in ds.dims:
+        rename["eta_psi"] = "eta_v"
+    ds = ds.rename(rename)
+
+    #     ds = ds.rename({'eta_u': 'eta_rho', 'xi_v': 'xi_rho', 'xi_psi': 'xi_u', 'eta_psi': 'eta_v'})
+
+    # modify attributes for using cf-xarray
+    tdims = [dim for dim in ds.dims if dim[:3] == "xi_"]
+    for dim in tdims:
+        ds[dim] = (dim, np.arange(ds.sizes[dim]), {"axis": "X"})
+    tdims = [dim for dim in ds.dims if dim[:4] == "eta_"]
+    for dim in tdims:
+        ds[dim] = (dim, np.arange(ds.sizes[dim]), {"axis": "Y"})
+    ds.ocean_time.attrs["axis"] = "T"
+    ds.ocean_time.attrs["standard_name"] = "time"
+    tcoords = [coord for coord in ds.coords if coord[:2] == "s_"]
+    for coord in tcoords:
+        ds[coord].attrs["axis"] = "Z"
+    # make sure lon/lat have standard names
+    tcoords = [coord for coord in ds.coords if coord[:4] == "lon_"]
+    for coord in tcoords:
+        ds[coord].attrs["standard_name"] = "longitude"
+    tcoords = [coord for coord in ds.coords if coord[:4] == "lat_"]
+    for coord in tcoords:
+        ds[coord].attrs["standard_name"] = "latitude"
 
     coords = {
         "X": {"center": "xi_rho", "inner": "xi_u"},
@@ -43,11 +105,15 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     if "Vtransform" in ds.variables.keys():
         Vtransform = ds.Vtransform
 
+    assert (
+        Vtransform is not None
+    ), "Need a Vtransform of 1 or 2, either in the Dataset or input to the function."
+
     if Vtransform == 1:
         Zo_rho = ds.hc * (ds.s_rho - ds.Cs_r) + ds.Cs_r * ds.h
         z_rho = Zo_rho + ds.zeta * (1 + Zo_rho / ds.h)
         Zo_w = ds.hc * (ds.s_w - ds.Cs_w) + ds.Cs_w * ds.h
-        z_w = Zo_w + ds.zeta * (1 + Zo_w/ds.h)
+        z_w = Zo_w + ds.zeta * (1 + Zo_w / ds.h)
         # also include z coordinates with mean sea level (constant over time)
         z_rho0 = Zo_rho
         z_w0 = Zo_w
@@ -60,84 +126,152 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
         z_rho0 = ds.h * Zo_rho
         z_w0 = ds.h * Zo_w
 
-    ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho',
-                                     transpose_coords=False)
-    ds.coords['z_w_u'] = grid.interp(ds.z_w, 'X')
-    ds.coords['z_w_v'] = grid.interp(ds.z_w, 'Y')
-    ds.coords['z_w_psi'] = grid.interp(ds.z_w_u, 'Y')
+    ds.coords["z_w"] = z_w.cf.transpose(
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w.cf.get_valid_keys()]
+    )
+    #     ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho', transpose_coords=False)
+    ds.coords["z_w_u"] = grid.interp(ds.z_w, "X")
+    ds.coords["z_w_v"] = grid.interp(ds.z_w, "Y")
+    ds.coords["z_w_psi"] = grid.interp(ds.z_w_u, "Y")
 
-    ds.coords['z_rho'] = z_rho.transpose('ocean_time', 's_rho', 'eta_rho', 'xi_rho',
-                                     transpose_coords=False)
-    ds.coords['z_rho_u'] = grid.interp(ds.z_rho, 'X')
-    ds.coords['z_rho_v'] = grid.interp(ds.z_rho, 'Y')
-    ds.coords['z_rho_psi'] = grid.interp(ds.z_rho_u, 'Y')
+    ds.coords["z_rho"] = z_rho.cf.transpose(
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho.cf.get_valid_keys()]
+    )
+    #     ds.coords['z_rho'] = z_rho.transpose('ocean_time', 's_rho', 'eta_rho', 'xi_rho', transpose_coords=False)
+    ds.coords["z_rho_u"] = grid.interp(ds.z_rho, "X")
+    ds.coords["z_rho_v"] = grid.interp(ds.z_rho, "Y")
+    ds.coords["z_rho_psi"] = grid.interp(ds.z_rho_u, "Y")
     # also include z coordinates with mean sea level (constant over time)
-    ds.coords['z_rho0'] = z_rho0.transpose('s_rho', 'eta_rho', 'xi_rho',
-                                     transpose_coords=False)
-    ds.coords['z_rho_u0'] = grid.interp(ds.z_rho0, 'X')
-    ds.coords['z_rho_v0'] = grid.interp(ds.z_rho0, 'Y')
-    ds.coords['z_rho_psi0'] = grid.interp(ds.z_rho_u0, 'Y')
-    ds.coords['z_w0'] = z_w0.transpose('s_w', 'eta_rho', 'xi_rho',
-                                     transpose_coords=False) 
-    ds.coords['z_w_u0'] = grid.interp(ds.z_w0, 'X')
-    ds.coords['z_w_v0'] = grid.interp(ds.z_w0, 'Y')
-    ds.coords['z_w_psi0'] = grid.interp(ds.z_w_u0, 'Y')
-    
+    ds.coords["z_rho0"] = z_rho0.cf.transpose(
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho0.cf.get_valid_keys()]
+    )
+    #     ds.coords['z_rho0'] = z_rho0.transpose('s_rho', 'eta_rho', 'xi_rho', transpose_coords=False)
+    ds.coords["z_rho_u0"] = grid.interp(ds.z_rho0, "X")
+    ds.coords["z_rho_v0"] = grid.interp(ds.z_rho0, "Y")
+    ds.coords["z_rho_psi0"] = grid.interp(ds.z_rho_u0, "Y")
+    ds.coords["z_w0"] = z_w0.cf.transpose(
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w0.cf.get_valid_keys()]
+    )
+    #     ds.coords['z_w0'] = z_w0.transpose('s_w', 'eta_rho', 'xi_rho', transpose_coords=False)
+    ds.coords["z_w_u0"] = grid.interp(ds.z_w0, "X")
+    ds.coords["z_w_v0"] = grid.interp(ds.z_w0, "Y")
+    ds.coords["z_w_psi0"] = grid.interp(ds.z_w_u0, "Y")
+
     # add vert grid, esp for plotting pcolormesh
     if add_verts:
         import pygridgen
-        if proj is None:
-            proj = cartopy.crs.LambertConformal(central_longitude=-98,    central_latitude=30)
+
         pc = cartopy.crs.PlateCarree()
         # project points for this calculation
-        xr, yr = proj.transform_points(pc, ds.lon_rho.values, ds.lat_rho.values)[...,:2].T
-        xr = xr.T; yr = yr.T
+        xr, yr = proj.transform_points(pc, ds.lon_rho.values, ds.lat_rho.values)[
+            ..., :2
+        ].T
+        xr = xr.T
+        yr = yr.T
         # calculate vert locations
         xv, yv = pygridgen.grid.rho_to_vert(xr, yr, ds.pm, ds.pn, ds.angle)
         # project back
-        lon_vert, lat_vert = pc.transform_points(proj, xv, yv)[...,:2].T
-        lon_vert = lon_vert.T; lat_vert = lat_vert.T
+        lon_vert, lat_vert = pc.transform_points(proj, xv, yv)[..., :2].T
+        lon_vert = lon_vert.T
+        lat_vert = lat_vert.T
         # add new coords to ds
-        ds.coords['lon_vert'] = (('eta_vert', 'xi_vert'), lon_vert)
-        ds.coords['lat_vert'] = (('eta_vert', 'xi_vert'), lat_vert)
+        ds.coords["lon_vert"] = (("eta_vert", "xi_vert"), lon_vert)
+        ds.coords["lat_vert"] = (("eta_vert", "xi_vert"), lat_vert)
 
-    ds['pm_v'] = grid.interp(ds.pm, 'Y')
-    ds['pn_u'] = grid.interp(ds.pn, 'X')
-    ds['pm_u'] = grid.interp(ds.pm, 'X')
-    ds['pn_v'] = grid.interp(ds.pn, 'Y')
-    ds['pm_psi'] = grid.interp(grid.interp(ds.pm, 'Y'),  'X') # at psi points (eta_v, xi_u)
-    ds['pn_psi'] = grid.interp(grid.interp(ds.pn, 'X'),  'Y') # at psi points (eta_v, xi_u)
+    ds["pm_v"] = grid.interp(ds.pm, "Y")
+    ds["pn_u"] = grid.interp(ds.pn, "X")
+    ds["pm_u"] = grid.interp(ds.pm, "X")
+    ds["pn_v"] = grid.interp(ds.pn, "Y")
+    ds["pm_psi"] = grid.interp(
+        grid.interp(ds.pm, "Y"), "X"
+    )  # at psi points (eta_v, xi_u)
+    ds["pn_psi"] = grid.interp(
+        grid.interp(ds.pn, "X"), "Y"
+    )  # at psi points (eta_v, xi_u)
 
-    ds['dx'] = 1/ds.pm
-    ds['dx_u'] = 1/ds.pm_u
-    ds['dx_v'] = 1/ds.pm_v
-    ds['dx_psi'] = 1/ds.pm_psi
+    ds["dx"] = 1 / ds.pm
+    ds["dx_u"] = 1 / ds.pm_u
+    ds["dx_v"] = 1 / ds.pm_v
+    ds["dx_psi"] = 1 / ds.pm_psi
 
-    ds['dy'] = 1/ds.pn
-    ds['dy_u'] = 1/ds.pn_u
-    ds['dy_v'] = 1/ds.pn_v
-    ds['dy_psi'] = 1/ds.pn_psi
+    ds["dy"] = 1 / ds.pn
+    ds["dy_u"] = 1 / ds.pn_u
+    ds["dy_v"] = 1 / ds.pn_v
+    ds["dy_psi"] = 1 / ds.pn_psi
 
-    ds['dz'] = grid.diff(ds.z_w, 'Z')
-    ds['dz_w'] = grid.diff(ds.z_rho, 'Z', boundary='fill')
-    ds['dz_u'] = grid.interp(ds.dz, 'X')
-    ds['dz_w_u'] = grid.interp(ds.dz_w, 'X')
-    ds['dz_v'] = grid.interp(ds.dz, 'Y')
-    ds['dz_w_v'] = grid.interp(ds.dz_w, 'Y')
-    ds['dz_psi'] = grid.interp(ds.dz_v, 'X')
-    ds['dz_w_psi'] = grid.interp(ds.dz_w_v, 'X')
+    ds["dz"] = grid.diff(ds.z_w, "Z")
+    ds["dz_w"] = grid.diff(ds.z_rho, "Z", boundary="fill")
+    ds["dz_u"] = grid.interp(ds.dz, "X")
+    ds["dz_w_u"] = grid.interp(ds.dz_w, "X")
+    ds["dz_v"] = grid.interp(ds.dz, "Y")
+    ds["dz_w_v"] = grid.interp(ds.dz_w, "Y")
+    ds["dz_psi"] = grid.interp(ds.dz_v, "X")
+    ds["dz_w_psi"] = grid.interp(ds.dz_w_v, "X")
 
     # also include z coordinates with mean sea level (constant over time)
-    ds['dz0'] = grid.diff(ds.z_w0, 'Z')
-    ds['dz_w0'] = grid.diff(ds.z_rho0, 'Z', boundary='fill')
-    ds['dz_u0'] = grid.interp(ds.dz0, 'X')
-    ds['dz_w_u0'] = grid.interp(ds.dz_w0, 'X')
-    ds['dz_v0'] = grid.interp(ds.dz0, 'Y')
-    ds['dz_w_v0'] = grid.interp(ds.dz_w0, 'Y')
-    ds['dz_psi0'] = grid.interp(ds.dz_v0, 'X')
-    ds['dz_w_psi0'] = grid.interp(ds.dz_w_v0, 'X')
+    ds["dz0"] = grid.diff(ds.z_w0, "Z")
+    ds["dz_w0"] = grid.diff(ds.z_rho0, "Z", boundary="fill")
+    ds["dz_u0"] = grid.interp(ds.dz0, "X")
+    ds["dz_w_u0"] = grid.interp(ds.dz_w0, "X")
+    ds["dz_v0"] = grid.interp(ds.dz0, "Y")
+    ds["dz_w_v0"] = grid.interp(ds.dz_w0, "Y")
+    ds["dz_psi0"] = grid.interp(ds.dz_v0, "X")
+    ds["dz_w_psi0"] = grid.interp(ds.dz_w_v0, "X")
 
-    ds['dA'] = ds.dx * ds.dy
+    # grid areas
+    ds["dA"] = ds.dx * ds.dy
+    ds["dA_u"] = ds.dx_u * ds.dy_u
+    ds["dA_v"] = ds.dx_v * ds.dy_v
+    ds["dA_psi"] = ds.dx_psi * ds.dy_psi
+
+    # volume
+    ds["dV"] = ds.dz * ds.dx * ds.dy  # rho vertical, rho horizontal
+    ds["dV_w"] = ds.dz_w * ds.dx * ds.dy  # w vertical, rho horizontal
+    ds["dV_u"] = ds.dz_u * ds.dx_u * ds.dy_u  # rho vertical, u horizontal
+    ds["dV_w_u"] = ds.dz_w_u * ds.dx_u * ds.dy_u  # w vertical, u horizontal
+    ds["dV_v"] = ds.dz_v * ds.dx_v * ds.dy_v  # rho vertical, v horizontal
+    ds["dV_w_v"] = ds.dz_w_v * ds.dx_v * ds.dy_v  # w vertical, v horizontal
+    ds["dV_psi"] = ds.dz_psi * ds.dx_psi * ds.dy_psi  # rho vertical, psi horizontal
+    ds["dV_w_psi"] = ds.dz_w_psi * ds.dx_psi * ds.dy_psi  # w vertical, psi horizontal
+
+    if "rho0" not in ds:
+        ds["rho0"] = 1025  # kg/m^3
+
+    # cf-xarray
+    # areas
+    #     ds.coords["cell_area"] = ds['dA']
+    #     ds.coords["cell_area_u"] = ds['dA_u']
+    #     ds.coords["cell_area_v"] = ds['dA_v']
+    #     ds.coords["cell_area_psi"] = ds['dA_psi']
+    #     # and set proper attributes
+    #     ds.temp.attrs["cell_measures"] = "area: cell_area, volume: cell_volume"
+    #     ds.salt.attrs["cell_measures"] = "area: cell_area"
+    #     ds.u.attrs["cell_measures"] = "area: cell_area_u"
+    #     ds.v.attrs["cell_measures"] = "area: cell_area_v"
+    #     # volumes
+    #     ds.coords["cell_volume"] = ds['dV']
+    # #     ds.temp.attrs["cell_measures"] = "volume: cell_volume"
+
+    #     ds['temp'].attrs['cell_measures'] = 'area: cell_area'
+    #     tcoords = [coord for coord in ds.variables if coord[:2] == 'dA']
+    #     for coord in tcoords:
+    #         ds[coord].attrs['cell_measures'] = 'area: cell_area'
+    #     # add coordinates attributes for variables
+    if "positive" in ds.s_rho.attrs:
+        ds.s_rho.attrs.pop("positive")
+    if "positive" in ds.s_w.attrs:
+        ds.s_w.attrs.pop("positive")
+    #     ds['z_rho'].attrs['positive'] = 'up'
+    tcoords = [coord for coord in ds.coords if coord[:2] == "z_" and "0" not in coord]
+    for coord in tcoords:
+        ds[coord].attrs["positive"] = "up"
+    #         ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'Y'})
+    #     ds['z_rho'].attrs['vertical'] = 'depth'
+    #     ds['temp'].attrs['coordinates'] = 'lon_rho lat_rho z_rho ocean_time'
+    #     [del ds[var].encoding['coordinates'] for var in ds.variables if 'coordinates' in ds[var].encoding]
+    for var in ds.variables:
+        if "coordinates" in ds[var].encoding:
+            del ds[var].encoding["coordinates"]
 
     metrics = {
         ("X",): ["dx", "dx_u", "dx_v", "dx_psi"],  # X distances
@@ -156,237 +290,204 @@ def roms_dataset(ds, Vtransform=None, add_verts=True, proj=None):
     }
     grid = xgcm.Grid(ds, coords=coords, metrics=metrics, periodic=[])
 
+    #     ds.attrs['grid'] = grid  # causes recursion error
+    # also put grid into every variable with at least 2D
+    for var in ds.variables:
+        if ds[var].ndim > 1:
+            ds[var].attrs["grid"] = grid
+
     return ds, grid
 
 
-def open_netcdf(files, chunks=None):
-    '''Return an xarray.Dataset based on a list of netCDF files
+def open_netcdf(
+    file,
+    chunks={"ocean_time": 1},
+    xrargs={},
+    Vtransform=None,
+    add_verts=False,
+    proj=None,
+):
+    """Return Dataset based on a single thredds or physical location.
 
-    Inputs:
-    files       A list of netCDF files
+    Inputs
+    ------
+    file: str
+        Where to find the model output. `file` could be:
+        * a string of a single netCDF file name, or
+        * a string of a thredds server address containing model output.
+    chunks: dict, optional
+        The specified chunks for the Dataset. Use chunks to read in output using dask.
+    xrargs: dict, optional
+        Keyword arguments to be passed to `xarray.open_dataset`. See `xarray` docs
+        for options.
+    Vtransform: int, optional
+        Vertical transform for ROMS model. Should be either 1 or 2 and only needs
+        to be input if not available in ds.
+    add_verts: boolean, optional
+        Add 'verts' horizontal grid to ds if True. This requires a cartopy projection
+        to be input too. This is passed to `roms_dataset`.
+    proj: cartopy crs projection, optional
+        Should match geographic area of model domain. Required if `add_verts=True`,
+        otherwise not used. This is passed to `roms_dataset`. Example:
+        >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
 
-    Output:
-    ds          An xarray.Dataset
+    Returns
+    -------
+    ds: Dataset
+        Model output, read into an `xarray` Dataset. If 'chunks' keyword
+        argument is input, dask is used when reading in model output and
+        output is read in lazily instead of eagerly.
 
-    Options:
-    chunks      The specified chunks for the DataSet.
-                Default: chunks = {'ocean_time':1}
+    Example usage
+    -------------
+    >>> ds = xroms.open_netcdf(file)
     """
 
-    if chunks is None:
-        chunks = {"ocean_time": 1}  # A basic chunking, ok, but maybe not the best
+    words = "Model location should be given as string. If have list of multiple locations, use `open_mfdataset`."
+    assert isinstance(file, str), words
 
-    return xr.open_mfdataset(
-        files,
-        compat="override",
-        combine="by_coords",
-        data_vars="minimal",
-        coords="minimal",
-        chunks=chunks,
-    )
+    ds = xr.open_dataset(file, chunks=chunks, **xrargs)
+
+    # modify Dataset with useful ROMS z coords and make xgcm grid operations usable.
+    ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
+
+    return ds
 
 
-def open_zarr(files, chunks=None):
-    '''Return an xarray.Dataset based on a list of zarr files
+def open_mfnetcdf(
+    files,
+    chunks={"ocean_time": 1},
+    xrargs={},
+    Vtransform=None,
+    add_verts=False,
+    proj=None,
+):
+    """Return Dataset based on a list of netCDF files.
 
-    Inputs:
-    files       A list of zarr files
+    Inputs
+    ------
+    files: list of strings
+        Where to find the model output. `files` can be a list of netCDF file names.
+    chunks: dict, optional
+        The specified chunks for the Dataset. Use chunks to read in output using dask.
+    xrargs: dict, optional
+        Keyword arguments to be passed to `xarray.open_mfdataset`.
+        Anything input by the user overwrites the default selections saved in this
+        function. Defaults are:
+            {'compat': 'override', 'combine': 'by_coords',
+             'data_vars': 'minimal', 'coords': 'minimal', 'parallel': True}
+        Many other options are available; see xarray docs.
+    Vtransform: int, optional
+        Vertical transform for ROMS model. Should be either 1 or 2 and only needs
+        to be input if not available in ds.
+    add_verts: boolean, optional
+        Add 'verts' horizontal grid to ds if True. This requires a cartopy projection
+        to be input too. This is passed to `roms_dataset`.
+    proj: cartopy crs projection, optional
+        Should match geographic area of model domain. Required if `add_verts=True`,
+        otherwise not used. This is passed to `roms_dataset`. Example:
+        >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
 
-    Output:
-    ds          An xarray.Dataset
+    Returns
+    -------
+    ds: Dataset
+        Model output, read into an `xarray` Dataset. If 'chunks' keyword
+        argument is input, dask is used when reading in model output and
+        output is read in lazily instead of eagerly.
 
-    Options:
-    chunks      The specified chunks for the DataSet.
-                Default: chunks = {'ocean_time':1}
+    Example usage
+    -------------
+    >>> ds = xroms.open_mfnetcdf(files)
     """
-    if chunks is None:
 
-        chunks = {'ocean_time':1}   # A basic chunking option
+    words = "Model location should be given as list of strings. If have single location, use `open_dataset`."
+    assert isinstance(files, list), words
 
-    opts = {'consolidated': True,
-            'chunks': chunks, 'drop_variables': 'dstart'}
-    return xr.concat(
-        [xr.open_zarr(file, **opts) for file in files],
-        dim='ocean_time', data_vars='minimal', coords='minimal')
-    
+    xrargsin = {
+        "compat": "override",
+        "combine": "by_coords",
+        "data_vars": "minimal",
+        "coords": "minimal",
+        "parallel": True,
+    }
 
-def hgrad(q, grid, z=None, boundary="extend", to=None):
-    """Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions
+    # use input xarray arguments and prioritize them over xroms defaults.
+    xrargsin = {**xrargsin, **xrargs}
 
-    Inputs:
+    ds = xr.open_mfdataset(files, chunks=chunks, **xrargsin)
+
+    # modify Dataset with useful ROMS z coords and make xgcm grid operations usable.
+    ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
+
+    return ds
+
+
+def open_zarr(
+    files,
+    chunks={"ocean_time": 1},
+    xrargs={},
+    xrconcatargs={},
+    Vtransform=None,
+    add_verts=False,
+    proj=None,
+):
+    """Return a Dataset based on a list of zarr files
+
+    Inputs
     ------
+    files: list of strings
+        A list of zarr file directories.
+    chunks: dict, optional
+        The specified chunks for the Dataset. Use chunks to read in output using dask.
+    xrargs: dict, optional
+        Keyword arguments to be passed to `xarray.open_zarr`.
+        Anything input by the user overwrites the default selections saved in this
+        function. Defaults are:
+            {'consolidated': True, 'drop_variables': 'dstart'}
+        Many other options are available; see xarray docs.
+    xrconcatargs: dict, optional
+        Keyword arguments to be passed to `xarray.concat` for combining zarr files
+        together. Anything input by the user overwrites the default selections saved in this
+        function. Defaults are:
+            {'dim': 'ocean_time', 'data_vars': 'minimal', 'coords': 'minimal'}
+        Many other options are available; see xarray docs.
+    Vtransform: int, optional
+        Vertical transform for ROMS model. Should be either 1 or 2 and only needs
+        to be input if not available in ds.
+    add_verts: boolean, optional
+        Add 'verts' horizontal grid to ds if True. This requires a cartopy projection
+        to be input too. This is passed to `roms_dataset`.
+    proj: cartopy crs projection, optional
+        Should match geographic area of model domain. Required if `add_verts=True`,
+        otherwise not used. This is passed to `roms_dataset`. Example:
+        >>> proj = cartopy.crs.LambertConformal(central_longitude=-98, central_latitude=30)
 
-    q               DataArray, Property to take gradients of
-
-    grid            xgcm object, Grid object associated with DataArray q
-
-    Outputs:
+    Returns
     -------
+    ds: Dataset
+        Model output, read into an `xarray` Dataset. If 'chunks' keyword
+        argument is input, dask is used when reading in model output and
+        output is read in lazily instead of eagerly.
 
-    dqdxi, dqdeta   Gradients of q in the xi- and eta-directions
+    Example usage
+    -------------
+    >>> ds = xroms.open_zarr(files)
+    """
 
+    # keyword arguments to go to `open_zarr`:
+    xrargsin = {"consolidated": True, "drop_variables": "dstart"}
+    # use input xarray arguments and prioritize them over xroms defaults.
+    xrargsin = {**xrargsin, **xrargs}
 
-    Options:
-    -------
+    # keyword arguments to go to `concat`:
+    xrconcatargsin = {"dim": "ocean_time", "data_vars": "minimal", "coords": "minimal"}
+    # use input xarray arguments and prioritize them over xroms defaults.
+    xrconcatargsin = {**xrconcatargsin, **xrconcatargs}
 
-    z               DataArray. The vertical depths associated with q. Default is to find the
-                    coordinate of q that starts with 'z_', and use that.
+    # open files
+    ds = xr.concat([xr.open_zarr(file, **xrargsin) for file in files], **xrconcatargsin)
 
-    to              By default, gradient values are located at the midpoints between q points
-                    in each direction of the gradient. Optionally, these can be interpolated
-                    to either rho- or psi-points passing `rho` or `psi`
+    # modify Dataset with useful ROMS z coords and make xgcm grid operations usable.
+    ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
 
-    boundary        Passed to `grid` method calls. Default is `extend`
-    '''
-
-    if z is None:
-        coords = list(q.coords)
-        z_coord_name = coords[[coord[:2] == "z_" for coord in coords].index(True)]
-        z = q[z_coord_name]
-
-    dqdx = grid.interp(
-        grid.derivative(q, "X", boundary=boundary), "Z", boundary=boundary
-    )
-    dqdz = grid.interp(
-        grid.derivative(q, "Z", boundary=boundary), "X", boundary=boundary
-    )
-    dzdx = grid.interp(
-        grid.derivative(z, "X", boundary=boundary), "Z", boundary=boundary
-    )
-    dzdz = grid.interp(
-        grid.derivative(z, "Z", boundary=boundary), "X", boundary=boundary
-    )
-
-    dqdxi = dqdx * dzdz - dqdz * dzdx
-
-    dqdy = grid.interp(
-        grid.derivative(q, "Y", boundary=boundary), "Z", boundary=boundary
-    )
-    dqdz = grid.interp(
-        grid.derivative(q, "Z", boundary=boundary), "Y", boundary=boundary
-    )
-    dzdy = grid.interp(
-        grid.derivative(z, "Y", boundary=boundary), "Z", boundary=boundary
-    )
-    dzdz = grid.interp(
-        grid.derivative(z, "Z", boundary=boundary), "Y", boundary=boundary
-    )
-
-    dqdeta = dqdy * dzdz - dqdz * dzdy
-
-    if to == "rho":
-        return to_rho(dqdxi, grid), to_rho(dqdeta, grid)
-    if to == "psi":
-        return to_psi(dqdxi), to_psi(dqdeta)
-    else:
-        return dqdxi, dqdeta
-
-
-def relative_vorticity(ds, grid, boundary='extend', to='rho'):
-    '''Return the relative vorticity on rho-points
-    
-    
-    Inputs:
-    ------
-    ds              ROMS dataset, needs to include grid metrics: dz_rho_u, dz_rho_v
-    
-    grid            xgcm object, Grid object associated with DataArray phi
-    
-    
-    Outputs:
-    -------
-    rel_vort        The relative vorticity, v_x - u_y, on rho-points.
-
-
-    Options:
-    -------
-    boundary        Passed to `grid` method calls. Default is `extend`
-    
-    to              Grid to interpolate to, default is horizontal and vertical rho-points, 
-                    otherwise on horizontal psi-points, vertical w-points.
-    '''
-
-    dvdx = grid.interp(grid.derivative(ds.v, 'X', boundary=boundary), 'Z', boundary=boundary)
-    dvdz = grid.interp(grid.derivative(ds.v, 'Z', boundary=boundary), 'X', boundary=boundary)
-    dzdx = grid.interp(grid.derivative(ds.z_rho_v, 'X', boundary=boundary), 'Z', boundary=boundary)
-    dzdz = grid.interp(grid.derivative(ds.z_rho_v, 'Z', boundary=boundary), 'X', boundary=boundary)
-
-    dvdxi = dvdx*dzdz - dvdz*dzdx
-
-    dudy = grid.interp(grid.derivative(ds.u, 'Y', boundary=boundary), 'Z', boundary=boundary)
-    dudz = grid.interp(grid.derivative(ds.u, 'Z', boundary=boundary), 'Y', boundary=boundary)
-    dzdy = grid.interp(grid.derivative(ds.z_rho_u, 'Y', boundary=boundary), 'Z', boundary=boundary)
-    dzdz = grid.interp(grid.derivative(ds.z_rho_u, 'Z', boundary=boundary), 'Y', boundary=boundary)
-
-    dudeta = dudy*dzdz - dudz*dzdy
-
-    if to == 'rho':
-        return ( to_rho(grid.interp(dvdxi, 'Z', boundary=boundary), grid) - 
-                 to_rho(grid.interp(dudeta, 'Z', boundary=boundary), grid) )
-    else:
-        return dvdxi - dudeta
-
-
-def ertel(ds, grid, tracer=None, boundary='extend'):
-    '''Return gradients of property q in the ROMS curvilinear grid native xi- and eta- directions
-
-    Inputs:
-    ------
-    ds              ROMS dataset
-    
-    grid            xgcm object, Grid object associated with DataArray phi
-    
-    
-    Outputs:
-    -------
-    epv             The ertel potential vorticity
-                    epv = -v_z * phi_x + u_z * phi_y + (f + v_x - u_y) * phi_z
-
-    Options:
-    -------
-    tracer          The tracer to use in calculating EPV. Default is buoyancy. 
-                    Buoyancy calculated from salt and temp if rho is not present.
-
-    boundary        Passed to `grid` method calls. Default is `extend`
-    '''
-    
-    # load appropriate tracer into 'phi', defalut rho. Use EOS if necessary
-    if tracer is None:
-        if 'rho' in ds.variables:
-            phi =  -9.8 * ds.rho/1000.0 
-        else:
-            phi = buoyancy(ds.temp, ds.salt, 0)
-    else:
-        phi = ds[tracer]
-    
-    # get the components of the grad(phi)
-    phi_xi, phi_eta = hgrad(phi, grid, to='rho', boundary=boundary)
-    phi_xi = grid.interp(phi_xi, 'Z', boundary=boundary)
-    phi_eta = grid.interp(phi_eta, 'Z', boundary=boundary)
-    
-    phi_z = grid.derivative(phi, 'Z', boundary=boundary)
-    phi_z = grid.interp(phi_z, 'Z', boundary=boundary)
-    
-    # vertical shear (horizontal components of vorticity)
-    v_z = grid.derivative(ds.v, 'Z', boundary=boundary)
-    v_z = grid.interp(grid.interp(v_z, 'Y', boundary=boundary), 'Z', boundary=boundary)
-    
-    u_z = grid.derivative(ds.u, 'Z', boundary=boundary)
-    u_z = grid.interp(grid.interp(u_z, 'X', boundary=boundary), 'Z', boundary=boundary)
-
-    # vertical component of vorticity
-    rel_vort = relative_vorticity(ds, grid)
-    
-    # combine terms to get the ertel potential vorticity
-    epv = -v_z * phi_xi + u_z * phi_eta + (ds.f + rel_vort) * phi_z
-    
-    # add coordinates
-    try:
-        epv.coords['lon_rho'] = ds.coords['lon_rho']
-        epv.coords['lat_rho'] = ds.coords['lat_rho']
-        epv.coords['z_rho'] = ds.coords['z_rho']
-        epv.coords['ocean_time'] = ds.coords['ocean_time']
-    except:
-        warn('Could not append coordinates')
-
-    return epv
+    return ds

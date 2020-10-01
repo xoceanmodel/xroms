@@ -1,283 +1,283 @@
-from scipy.spatial import Delaunay
-import matplotlib.tri as mtri
 import numpy as np
-import xroms
 import xarray as xr
+import xesmf as xe
+import xgcm
 
 
-def setup(ds, whichgrids=None):
-    '''Set up for using ll2xe().
-    
-    Set up Delaunay triangulation by calculating triangulation and functions for 
-    calculating grid coords from lon/lat pairs and save into and return ds object.
-    
-    Create a separate triangulation setup for each grid since otherwise it impacts 
-    the performance, especially at edges. Can input keyword whichgrids to only 
-    calculate for particular grids — this is intended for testing purposes to save time.
-    
-    Usage is demonstrated in ll2xe().
-    '''    
-    tris = {}
-    # Set up Delaunay triangulation of grid space in lon/lat coordinates
-    
-    if whichgrids is None:
-        whichgrids = ['rho', 'u', 'v', 'psi']
-        
-    for whichgrid in whichgrids:
-        lonkey = 'lon_' + whichgrid
-        latkey = 'lat_' + whichgrid
+def interpll(var, lons, lats, which="pairs"):
+    """Interpolate var to lons/lats positions.
 
-        # Triangulation for curvilinear space to grid space
-        # Have to use SciPy's Triangulation to be more robust.
-        # http://matveichev.blogspot.com/2014/02/matplotlibs-tricontour-interesting.html
-        lon = ds[lonkey].values.flatten()
-        lat = ds[latkey].values.flatten()
-        pts = np.column_stack((lon, lat))
-        tess = Delaunay(pts)
-        tri = mtri.Triangulation(lon, lat, tess.simplices.copy())
-        # For the triangulation, need to preprocess the mask to get rid of potential 
-        # flat triangles at the boundaries.
-        # http://matplotlib.org/1.3.1/api/tri_api.html#matplotlib.tri.TriAnalyzer
-        mask = mtri.TriAnalyzer(tri).get_flat_tri_mask(0.01, rescale=False)
-        tri.set_mask(mask)
+    Wraps xESMF to perform proper horizontal interpolation on non-flat Earth.
 
-        # Next set up the grid (or index) space grids: integer arrays that are the
-        # shape of the horizontal model grid.
-        J, I = ds[lonkey].shape
-        X, Y = np.meshgrid(np.arange(I), np.arange(J))
+    Inputs
+    ------
+    var: DataArray
+        Variable to operate on.
+    lons: list, ndarray
+        Longitudes to interpolate to. Will be flattened upon input.
+    lats: list, ndarray
+        Latitudes to interpolate to. Will be flattened upon input.
+    which: str, optional
+        Which type of interpolation to do:
+        * "pairs": lons/lats as unstructured coordinate pairs
+          (in xESMF language, LocStream).
+        * "grid": 2D array of points with 1 dimension the lons and
+          the other dimension the lats.
 
-        # these are the functions for interpolating X and Y (the grid arrays) onto
-        # lon/lat coordinates. That is, the functions for calculating grid space coords
-        # corresponding to input lon/lat coordinates.
-        fx = mtri.LinearTriInterpolator(tri, X.flatten())
-        fy = mtri.LinearTriInterpolator(tri, Y.flatten())
+    Returns
+    -------
+    DataArray of var interpolated to lons/lats. Dimensionality will be the
+    same as var except the Y and X dimensions will be 1 dimension called
+    "locations" that lons.size if which=='pairs', or 2 dimensions called
+    "lat" and "lon" if which=='grid' that are of lats.size and lons.size,
+    respectively.
 
-        tris[whichgrid] = {'name': whichgrid, 'tri': tri, 'fx': fx, 'fy': fy}
-    
-    return tris
-    
-    
-def ll2xe(trisgrid, lon0, lat0, dims=None):
-    '''Find equivalent xi/eta coords for lon/lat.
-    
-    trisgrid: dictionary tris (from setup()), selected down to grid to use for this function.
-    lon0, lat0: lon/lat coordinate pairs at which to find equivalent grid space coordinates.
-    dims (None): if None, function will use ("eta_pts", "xi_pts") and "pts" for dimensions 
-        associated with output xi0/eta0. Otherwise, can be input but needs to match the 
-        dimentionality of lon0/lat0.
-    
-    Example usage to find coords on rho grid:
-    xi0, eta0 = xroms.ll2xe(tris['rho'], lon0, lat0)
-    '''
-    
-    # use these dimensions if not otherwise assigned
-    if dims is None:
-        # if shape of lon0/lat0 is more than 1d, leave dims empty. NOT TRUE NOW?
-        # otherwise if 1d, add dims="pts" to interpolate to just those points and not array
-        if np.asarray(lon0).ndim > 2:
-            print('lon0/lat0 should have ndim of 2 or less.')    
-        elif np.asarray(lon0).ndim == 2:
-            dims = ("eta_pts","xi_pts")
-        elif np.asarray(lon0).ndim == 1:
-            dims = "pts"
+    Notes
+    -----
+    var cannot have chunks in the Y or X dimensions.
+
+    cf-xarray should still be usable after calling this function.
+
+    Example usage
+    -------------
+    To return 1D pairs of points, in this case 3 points:
+    >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='pairs')
+    To return 2D pairs of points, in this case a 3x3 array of points:
+    >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='grid')
+    """
+
+    # rename coords for use with xESMF
+    lonkey = [coord for coord in var.coords if "lon_" in coord][0]
+    latkey = [coord for coord in var.coords if "lat_" in coord][0]
+    var = var.rename({lonkey: "lon", latkey: "lat"})
+
+    # make sure dimensions are in typical cf ordering (T, Z, Y, X)
+    var = var.cf.transpose(
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in var.cf.get_valid_keys()]
+    )
+
+    # force lons/lats to be 1D arrays
+    lats = np.asarray(lats).flatten()
+    lons = np.asarray(lons).flatten()
+
+    # whether inputs are
+    if which == "pairs":
+        locstream_out = True
+    elif which == "grid":
+        locstream_out = False
+
+    # set up for output
+    varint = xr.Dataset({"lat": (["lat"], lats), "lon": (["lon"], lons)})
+
+    # Calculate weights.
+    regridder = xe.Regridder(var, varint, "bilinear", locstream_out=locstream_out)
+
+    # Perform interpolation
+    varint = regridder(var, keep_attrs=True)
+
+    # check for presence of z coord with interpolated output
+    zkey_varint = [
+        coord for coord in varint.coords if "z_" in coord and "0" not in coord
+    ]
+
+    # get z coordinates to go with interpolated output if not available
+    if zkey_varint == []:
+        zkey = [coord for coord in var.coords if "z_" in coord and "0" not in coord][
+            0
+        ]  # str
+        zint = regridder(var[zkey], keep_attrs=True)
+
+        # add coords
+        varint = varint.assign_coords({zkey: zint})
+
+    # add attributes for cf-xarray
+    if which == "pairs":
+        varint["locations"] = (
+            "locations",
+            np.arange(varint.sizes["locations"]),
+            {"axis": "X"},
+        )
+    elif which == "grid":
+        varint["lon"].attrs["axis"] = "X"
+        varint["lat"].attrs["axis"] = "Y"
+    varint["lon"].attrs["standard_name"] = "longitude"
+    varint["lat"].attrs["standard_name"] = "latitude"
+
+    return varint
+
+
+def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
+    """Interpolate var to iso_values.
+
+    This wraps `xgcm` `transform` function for slice interpolation,
+    though `transform` has additional functionality.
+
+    Inputs
+    ------
+    var: DataArray
+        Variable to operate on.
+    iso_values: list, ndarray
+        Values to interpolate to. If calculating var at fixed depths,
+        iso_values are the fixed depths, which should be negative if
+        below mean sea level. If input as array, should be 1D.
+    grid: xgcm.grid, optional
+        Grid object associated with var. Optional because checks var
+        attributes for grid.
+    iso_array: DataArray, optional
+        Array that var is interpolated onto (e.g., z coordinates or
+        density). If calculating var on fixed depth slices, iso_array
+        contains the depths [m] associated with var. In that case and
+        if None, will use z coordinate attached to var. Also use this
+        option if you want to interpolate with z depths constant in
+        time and input the appropriate z coordinate.
+    dim: str, optional
+        Dimension over which to calculate isoslice. If calculating var
+        onto fixed depths, `dim='Z'`. Options are 'Z', 'Y', and 'X'.
+
+    Returns
+    -------
+    DataArray of var interpolated to iso_values. Dimensionality will be the
+    same as var except with dim dimension of size of iso_values.
+
+    Notes
+    -----
+    var cannot have chunks in the dimension dim.
+
+    cf-xarray should still be usable after calling this function.
+
+    Example usage
+    -------------
+    To calculate temperature onto fixed depths:
+    >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50))
+
+    To calculate temperature onto salinity:
+    >>> xroms.isoslice(ds.temp, np.arange(0, 36), iso_array=ds.salt, axis='Z')
+
+    Calculate lat-z slice of salinity along a constant longitude value (-91.5):
+    >>> xroms.isoslice(ds.salt, -91.5, iso_array=ds.lon_rho, axis='X')
+
+    Calculate slice of salt at 28 deg latitude
+    >>> xroms.isoslice(ds.salt, 28, iso_array=ds.lat_rho, axis='Y')
+
+    Interpolate temp to salinity values between 0 and 36 in the X direction
+    >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='X')
+
+    Interpolate temp to salinity values between 0 and 36 in the Z direction
+    >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='Z')
+
+    Calculate the depth of a specific isohaline (33):
+    >>> xroms.isoslice(ds.salt, 33, iso_array=ds.z_rho, axis='Z')
+
+    Calculate dye 10 meters above seabed. Either do this on the vertical
+    rho grid, or first change to the w grid and then use `isoslice`. You may prefer
+    to do the latter if there is a possibility that the distance above the seabed you are
+    interpolating to (10 m) could be below the deepest rho grid depth.
+    * on rho grid directly:
+    >>> height_from_seabed = ds.z_rho + ds.h
+    >>> height_from_seabed.name = 'z_rho'
+    >>> xroms.isoslice(ds.dye_01, 10, iso_array=height_from_seabed, axis='Z')
+    * on w grid:
+    >>> var_w = ds.dye_01.xroms.to_grid(scoord='w').chunk({'s_w': -1})
+    >>> ds['dye_01_w'] = var_w  # currently this is the easiest way to reattached coords xgcm variables
+    >>> height_from_seabed = ds.z_w + ds.h
+    >>> height_from_seabed.name = 'z_w'
+    >>> xroms.isoslice(ds['dye_01_w'], 10, iso_array=height_from_seabed, axis='Z')
+    """
+
+    words = "Either grid should be input or var should be DataArray with grid in attributes."
+    assert (grid is not None) or (
+        isinstance(var, xr.DataArray) and "grid" in var.attrs
+    ), words
+
+    if grid is None:
+        grid = var.attrs["grid"]
+
+    assert isinstance(grid, xgcm.Grid), "grid must be `xgcm` grid object."
+
+    attrs = var.attrs  # save to reinstitute at end
+
+    # make sure iso_values are array-like
+    if isinstance(iso_values, (int, float)):
+        iso_values = [iso_values]
+
+    # interpolate to the z coordinates associated with var
+    if iso_array is None:
+        key = [coord for coord in var.coords if "z_" in coord and "0" not in coord][
+            0
+        ]  # str
+        assert (
+            len(key) > 0
+        ), "z coordinates associated with var could not be identified."
+        iso_array = var[key]
+    else:
+        if isinstance(iso_array, xr.DataArray) and iso_array.name is not None:
+            key = iso_array.name
         else:
-            # Interpolate to xi0,eta0 and add a new dimension to select these points
-            # alone using advanced indexing and advanced interpolation in xarray.
-            # http://xarray.pydata.org/en/stable/interpolation.html
-            dims = ()
-    else:
-        assert len(dims) == np.asarray(lon0).ndim, 'there needs to be a dimension for each dimension of lon0'
-        
-    # calculate grid coords
-    xi0 = trisgrid['fx'](lon0, lat0)
-    eta0 = trisgrid['fy'](lon0, lat0)
-    
-    # assign dimensions for future interpolation
-    xi0 = xr.DataArray(xi0, dims=dims)
-    eta0 = xr.DataArray(eta0, dims=dims)
+            key = "z"
 
-    return xi0, eta0
+    # save key names for later
+    lonkey = var.cf["longitude"].name
+    latkey = var.cf["latitude"].name
+    zkey = var.cf["vertical"].name
 
+    # perform interpolation
+    transformed = grid.transform(var, axis, iso_values, target_data=iso_array)
 
-def calc_zslices(varin, z0s, zetaconstant=False):
-    """Wrapper for `xisoslice` for multiple constant depths.
-    
-    varin: DataArray containing variable to be interpolated.
-    z0s: vertical depths to interpolate to.    
-    zetaconstant (False): Input as True to not consider time-varying zeta for depth-interpolation.
-    
-    Note: need to have run roms_dataset to get z info into dataset.
-    Note: Can't have chunking in z direction for this function."""
-    
-    ## fix up shapes, etc
-    # if 0d DataArray, convert to float first
-    if isinstance(z0s, xr.DataArray) and z0s.ndim==0:
-        z0s = float(z0s)
-    # if scalar, change to array
-    if isinstance(z0s, (int,float,list)):
-        z0s = np.array(z0s)
-    # if 0D, change to 1d
-    if z0s.ndim == 0:
-        z0s = z0s.reshape(1)    
-        
-    if zetaconstant:
-        zarray = varin[[dim for dim in varin.coords if 'z' in dim and '0' in dim][0]]
-    else:
-        zarray = varin[[dim for dim in varin.coords if 'z' in dim and not '0' in dim][0]]
-        
-    # figure out s coord, whether 's_rho' or 's_w' for varin
-    scoord = [dim for dim in varin.coords if 's' in dim][0]
+    if key not in transformed.coords:
+        transformed = transformed.assign_coords({key: iso_array})
 
-    # Projecting 3rd input onto constant value z0 in iso_array (1st input)
-    if z0s is not None:
-        sls = []
-        for z0 in z0s:
-            sl = xroms.xisoslice(zarray, z0, varin, scoord)
-            sl = sl.expand_dims({'z': [z0]})
-            sls.append(sl)
-        sl = xr.concat(sls, dim='z')
-    else:
-        sl = varin
+    # perform interpolation for other coordinates if needed
+    if zkey not in transformed.coords:
+        transformedZ = grid.transform(
+            var[zkey], axis, iso_values, target_data=iso_array
+        )
+        transformed = transformed.assign_coords({zkey: transformedZ})
 
-    return sl
+    if latkey not in transformed.coords:
+        # this interpolation won't work for certain combinations of var[latkey] and iso_array
+        # without the following step
+        if "T" in iso_array.cf.get_valid_keys():
+            iso_array = iso_array.cf.isel(T=0).drop_vars(
+                iso_array.cf["T"].name, errors="ignore"
+            )
+        if "Z" in iso_array.cf.get_valid_keys():
+            iso_array = iso_array.cf.isel(Z=0).drop_vars(
+                iso_array.cf["Z"].name, errors="ignore"
+            )
+        transformedlat = grid.transform(
+            var[latkey], axis, iso_values, target_data=iso_array
+        )
+        transformed = transformed.assign_coords({latkey: transformedlat})
 
+    if lonkey not in transformed.coords:
+        # this interpolation won't work for certain combinations of var[latkey] and iso_array
+        # without the following step
+        if "T" in iso_array.cf.get_valid_keys():
+            iso_array = iso_array.cf.isel(T=0).drop_vars(
+                iso_array.cf["T"].name, errors="ignore"
+            )
+        if "Z" in iso_array.cf.get_valid_keys():
+            iso_array = iso_array.cf.isel(Z=0).drop_vars(
+                iso_array.cf["Z"].name, errors="ignore"
+            )
+        transformedlon = grid.transform(
+            var[lonkey], axis, iso_values, target_data=iso_array
+        )
+        transformed = transformed.assign_coords({lonkey: transformedlon})
 
-def llzslice(varin, trisgrid, lon0, lat0, z0s=None, zetaconstant=False, triplets=False):
-    '''Interpolation, best for depth slices.
-    
-    This function uses `xroms.utilities.xisoslice` to calculate slices of depth. 
-    Delaunay triangulation is used to find horizontal locations in grid space from 
-    input lon/lat coordinates. The interpolation in eta/xi space is done through 
-    xarray's `interp`. Time interpolation can easily be done after running this 
-    function. Some of this process is not stream-lined since a DataArray cannot be 
-    chunked in the interpolation dimension, complicated the process.
-    
-    Inputs:
-    varin: xarray DataArray containing variable to be interpolated
-    trisgrid: previously-calculated output from setup function, already subsetted to whichgrid
-    lon0, lat0: lon/lat coordinate pairs to interpolate to.
-    z0s (None): vertical depths to interpolate to. Shape does not need to match lon0/lat0 since
-      unless `triplets=True` is also input, values will be calculated for lon0/lat0 for every 
-      value in z0s.
-    zetaconstant (False): Input as True to not consider time-varying zeta for depth-interpolation.
-    triplets (False): If True, input arrays must be the same shapes and 1D
-      and assumed that the inputs are triplets for interpolation.
-      Otherwise, only lon0/lat0 need to match shape and they will be found for all 
-      input z0s values.
-    
-    Note: Can't have chunking in eta or xi direction for this function, or 
-        for z if z0s is not None. Can reset chunks before calling this function with:
-        > varin.chunk(-1) 
-        or input a dictionary to the call with the new chunk choices.
-    Note: May need to transpose dimensions after interpolation, e.g.,:
-    var.transpose('ocean_time','z','pts')
-    '''
-    
-    if triplets:
-        dims = ['pts2']  # intermediate name so that 2nd interpolation is to 'pts'
-        assert np.asarray(lon0).squeeze().shape == np.asarray(lat0).squeeze().shape == np.asarray(z0s).squeeze().shape
-    else:
-        dims = None
-    
-    # find all necessary z slices, so setting up z interpolation first, here:
-    if z0s is not None:
-        sl = calc_zslices(varin, z0s, zetaconstant)
-    else:
-        sl = varin
+    transformed[zkey].attrs["positive"] = "up"
+    transformed[lonkey].attrs["standard_name"] = "longitude"
+    transformed[latkey].attrs["standard_name"] = "latitude"
 
-    # for lon/lat interpolation, find locations of lon0/lat0 in grid space
-    xi0, eta0 = ll2xe(trisgrid, lon0, lat0, dims=dims)
-    
-    # Set up indexer for desired interpolation directions
-    xidim = [dim for dim in varin.dims if 'xi' in dim][0]
-    etadim = [dim for dim in varin.dims if 'eta' in dim][0]
-    indexer = {xidim: xi0, etadim: eta0}
+    # bring along attributes for cf-xarray
+    transformed[key].attrs["axis"] = axis
+    transformed.attrs["grid"] = grid
+    # add original attributes back in
+    transformed.attrs = {**attrs, **transformed.attrs}
 
-    # set up lazy interpolation
-    var = sl.interp(indexer)
-    
-    # if want triplets back, need to select the points down the diagonal of the
-    # array of pts2 returned
-    if triplets:
-        pts = xr.DataArray(np.arange(len(lon0)), dims=["pts"])
-        z0s = xr.DataArray(np.arange(len(lon0)), dims=["pts"])
-        var = var.isel(pts2=pts, z=z0s)  # isel bc selecting from interpolated object
-    
-    return var
+    # reorder back to normal ordering in case changed
+    transformed = transformed.cf.transpose(
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in transformed.cf.get_valid_keys()]
+    )
 
-
-def llzt(varin, trisgrid, lon0, lat0, z0s=None, t0s=None, zetaconstant=False):
-    '''Interpolation, best for triplets or quadruplets (t,z,y,x).
-    
-    This function uses Delaunay triangulation to find eta/xi grid coords of 
-    lon0/lat0 coordinates. Then it loops over:
-     * z (zetaconstant=True) to calculate the z,y,x interpolation. Time 
-       interpolation can be done subsequently. `varin` cannot be chunked in 
-       the z/y/x dimensions. 
-     * or z and t (zetaconstant=False) to calculate the t, z, y, x 
-       interpolation. In this time, all 4 dimensions are interpolated to 
-       simultaneously. No dimensions can be chunked over in this case.
-
-    Inputs:
-    varin: xarray DataArray containing variable to be interpolated
-    trisgrid: previously-calculated output from setup function, already subsetted to whichgrid
-    lon0/lat0/z0s: inputs to interpolate varin to. Must be lists.
-    z0s (None): vertical depths to interpolate to.    
-    t0s (None): times to interpolate to.
-    zetaconstant (False): Input as True to not consider time-varying zeta for depth-interpolation.
-
-    If zetaconstant is False, varin can't be read in with dask/can't have 
-        chunks in any dimension since all will be interpolated in. Chunks 
-        can be reset beforehand with: `ds.chunk(-1)`
-    If zetaconstant is True, time interpolation does not occur in this function 
-        because dask and chunks couldn't be used in that case at all. But, it 
-        is very easy to interpolate afterward:
-    > varout2 = varout.chunk(-1).interp(ocean_time=t0s)  # reset time chunks
-    > it0s = xr.DataArray(np.arange(len(lon0)), dims=["pts"])  # advanced indexing to pull triplets out
-    > varout.isel(ocean_time=it0s)  # pull triplets out
-    '''
-
-    assert np.asarray(lon0).squeeze().shape == np.asarray(lat0).squeeze().shape, 'lon0 and lat0 need the same shape'
-    
-    if z0s is not None and not zetaconstant:  # zeta/depth varies in time
-        assert t0s is not None, 'need t0s if considering zeta in time for depths'
-        assert np.asarray(t0s).squeeze().shape == np.asarray(lat0).squeeze().shape, 't0s shape needs to match lon0 and others'
-        if varin.chunks is not None:
-            chunktest = np.sum([len(chunk) for chunk in varin.chunks]) == len(varin.chunks)
-            assert chunktest, 'varin cannot be read in with dask (have chunks) if zetaconstant is False. See example for work around.'
-    elif z0s is not None and zetaconstant:  # zeta/depth is constant
-        assert t0s is None, 'will not interpolate in time if zetaconstant is True, do after function call. See header for example.'
-    
-    # find locations of lon0/lat0 in grid space
-    xi0, eta0 = xroms.interp.ll2xe(trisgrid, lon0, lat0)
-
-    # generic dimensions
-    xidim = [dim for dim in varin.dims if 'xi' in dim][0]
-    etadim = [dim for dim in varin.dims if 'eta' in dim][0]
-
-    if z0s is not None:
-        assert np.asarray(lat0).squeeze().shape == np.asarray(z0s).squeeze().shape, 'z0s needs the same shape as lon0/lat0'
-
-        # figure out s coord, whether 's_rho' or 's_w' for varin
-        scoord = [dim for dim in varin.coords if 's' in dim][0]
-        
-        if zetaconstant:
-            zcoord = [dim for dim in varin.coords if 'z' in dim and '0' in dim][0]
-            # find s0 without needing to interpolate in time
-            s0 = []
-            for z0, ie, ix in zip(z0s, eta0, xi0):
-                s0.append(varin.interp({etadim: ie, xidim: ix}).swap_dims({scoord: zcoord}).interp({zcoord:z0})[scoord])#.values
-            s0 = xr.DataArray(s0, dims=["pts"])  # eta0/xi0 already set up this way
-            indexer = {etadim: eta0, xidim: xi0, scoord: s0}
-            varout = varin.interp(indexer)
-
-        else:
-            zcoord = [dim for dim in varin.coords if 'z' in dim and not '0' in dim][0]
-            varout = []
-            for t0, z0, ie, ix in zip(t0s, z0s, eta0, xi0):
-                varout.append(varin.interp({etadim: ie, xidim: ix, 'ocean_time':t0}).swap_dims({scoord: zcoord}).interp({zcoord:z0}))
-            varout = xr.concat(varout, dim='pts')
-    else:
-        varout = varin.interp({etadim: eta0, xidim: xi0})
-
-    return varout
+    return transformed

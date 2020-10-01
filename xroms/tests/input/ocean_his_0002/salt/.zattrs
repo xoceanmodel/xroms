@@ -1,0 +1,9 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "ocean_time",
+        "s_rho",
+        "eta_rho",
+        "xi_rho"
+    ],
+    "coordinates": "lon_rho lat_rho"
+}
