@@ -2,13 +2,12 @@
 
 
 import numpy as np
+import octant
 import pandas as pd
+import pygridgen
 import xarray as xr
 
 from pyproj import Proj
-
-import octant
-import pygridgen
 
 
 def grid():
