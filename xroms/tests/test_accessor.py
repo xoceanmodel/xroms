@@ -13,11 +13,6 @@ ds = xr.open_dataset('xroms/tests/input/ocean_his_0001.nc')
 # combine the two:
 ds = ds.merge(grid1, overwrite_vars=True, compat='override')
 ds, grid = xroms.roms_dataset(ds)
-# ds['Vtransform'] = 2
-# ds.xroms
-# ds, grid = xroms.roms_dataset(ds)
-
-
 
 # functions in test files:
 xl, yl, N = 14, 9, 3
@@ -66,13 +61,13 @@ def test_N2():
     # there is a grid change
     assert np.allclose(ds.xroms.N2[0,1:3,0,0].mean(), var)
     
-# def test_M2():
-#     z_rho_xi1 = np.array([-97.50211538, -50.04230769,  -2.5825    ])
-#     rho_xi0 = xroms.density(temp, salt, z_rho)
-#     rho_xi1 = xroms.density(temp, salt, z_rho_xi1)
-#     drhodxi = (rho_xi1[1] - rho_xi0[1])/(2*dx)
-#     drhodeta = 0
-#     var = np.sqrt(drhodxi**2 + drhodeta**2) * g/rho0
+def test_M2():
+    z_rho_xi1 = np.array([-97.50211538, -50.04230769,  -2.5825    ])
+    rho_xi0 = xroms.density(temp, salt, z_rho)
+    rho_xi1 = xroms.density(temp, salt, z_rho_xi1)
+    drhodxi = (rho_xi1[1] - rho_xi0[1])/(2*dx)
+    drhodeta = 0
+    var = np.sqrt(drhodxi**2 + drhodeta**2) * g/rho0
     
 def test_mld():
     # choose threshold so that z_rho[-2] is the mld

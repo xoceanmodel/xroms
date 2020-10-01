@@ -654,47 +654,7 @@ class xromsDatasetAccessor:
         assert varname in self.ds, 'variable called "varname" must be in Dataset'
         return xroms.to_grid(self.ds[varname], self.grid, hcoord=hcoord, scoord=scoord, 
                              hboundary=hboundary, hfill_value=hfill_value,
-                             sboundary=sboundary, sfill_value=sfill_value)
-  
-
-#     @property
-#     def tris(self):
-        
-#         # triangulation calculations
-#         if self._tris is None:
-#             self._tris = xroms.interp.setup(self.ds)  # setup for all grids
-#         return self._tris
-        
-#     def llzslice(self, varname, lon0, lat0, z0s=None, zetaconstant=False, triplets=False):
-        
-#         self.tris
-#         da = self.ds[varname]
-#         idgrid = xroms.id_grid(da)
-#         tri = self.tris[idgrid]
-#         return xroms.interp.llzslice(da, tri, lon0, lat0, z0s=z0s, zetaconstant=zetaconstant, triplets=triplets)
-        
-        
-#     def llzt(self, varname, lon0, lat0, z0s=None, t0s=None, zetaconstant=False):
-        
-#         self.tris
-#         da = self.ds[varname]
-#         idgrid = xroms.id_grid(da)
-#         tri = self.tris[idgrid]
-#         return xroms.interp.llzt(da, tri, lon0, lat0, z0s=z0s, t0s=t0s, zetaconstant=zetaconstant)
-    
-    
-#     def calc_zslices(self, varname, z0s, zetaconstant=False):
-        
-#         da = self.ds[varname]
-#         return xroms.interp.calc_zslices(da, z0s, zetaconstant=False)    
-    
-    
-#     def ll2xe(self, whichgrid, lon0, lat0, dims=None):
-        
-#         tri = self.tris[whichgrid]
-#         return xroms.interp.ll2xe(tri, lon0, lat0, dims=None)
-    
-    
+                             sboundary=sboundary, sfill_value=sfill_value)    
     
     
 @xr.register_dataarray_accessor("xroms")
@@ -1045,19 +1005,6 @@ class xromsDataArrayAccessor:
         """
         
         return xroms.sel2d(self.da, self.da.cf["longitude"], self.da.cf["latitude"], lon0, lat0)
-    
-
-#     def groupbytime(self, timeperiod, attrs=None, hcoord=None, scoord=None):
-#         '''DOCS'''
-        
-#         return xroms.groupbytime(self.da, self.da.attrs['grid'], timeperiod, attrs=attrs, hcoord=hcoord, scoord=scoord)
-    
-
-#     def downsampletime(self, timefrequency, aggfunction=np.mean, attrs=None, hcoord=None, scoord=None):
-#         '''DOCS'''
-
-#         return xroms.downsampletime(self.da, self.da.attrs['grid'], timefrequency, aggfunction=aggfunction, 
-#                                  attrs=attrs, hcoord=hcoord, scoord=scoord)
         
 
     def gridmean(self, dim):
