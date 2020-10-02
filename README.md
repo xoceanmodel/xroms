@@ -14,8 +14,8 @@ There are functions to...
   * density as calculated in ROMS
   * potential density
   * buoyancy
-  * N^2 (buoyancy frequency/vertical buoyancy gradient)
-  * M^2 (horizontal buoyancy gradient)
+  * $N^2$ (buoyancy frequency/vertical buoyancy gradient)
+  * $M^2$ (horizontal buoyancy gradient)
 * useful functions including:
   * derivatives in all dimensions, accounting for curvilinear grids and sigma layers
   * grid metrics (i.e., grid lengths, areas, and volumes)
@@ -35,28 +35,67 @@ There are functions to...
 
 ## Installation
 
-You can create an environment for this package with conda:
+### Create environment if needed
 
-    conda create --name XROMS python=3.8 --file requirements-conda.txt
+As a first step, you can create an environment for this package with conda if you want:
 
-Then you can install additional required packages with xroms so that it is editable (`-e`):
+    conda create --name XROMS python=3.8 --file requirements.txt
 
+### Install `xroms`
+
+You can choose to install with conda the optional dependencies for full functionality:
+
+    conda install --file requirements-opt.txt
+
+Then choose one of the following to install `xroms` from GitHub:
+
+1. Clone `xroms` into a particular directory then install so that it is editable (`-e`)
+
+    ```
     git clone git@github.com:hetland/xroms.git
     cd xroms
-    pip install -r requirements-pip.txt -e .
+    pip install -e .
+    ```
 
-Or:
+1. Directly install `xroms` from github
 
+    ```
     pip install git+git://github.com/hetland/xroms
+    ```
 
-If you already have an environment you'd like to use or just want to install in your regular Python, you can install with conda, then with pip:
+### Optional additional installation for horizontal interpolation
 
-    conda install --file requirements-conda.txt
-    git clone git@github.com:hetland/xroms.git
-    cd xroms
-    pip install -r requirements-pip.txt -e .
+If you want to be able to horizontally interpolate with `xroms.interpll`, you should install xESMF. This is currently the only way that has worked.
 
-Additionally installing [bottleneck](https://github.com/pydata/bottleneck/) is supposed to improve the speed of `numpy`-based calculations.
+1. Install `ESMF` with mpi support.
+
+    For Mac:
+
+    ```
+    conda install esmf=8.0.1=mpi_openmpi_ha78a60a_0
+    ```
+
+    For Linux:
+
+    ```
+    conda install esmf=8.0.1=mpi_openmpi_hda7c4e6_0
+    ```
+
+1. Install esmpy
+
+    ```
+    conda install esmpy=8.0.1=mpi_openmpi_py38h51f2404_0
+    ```
+
+1. Install xESMF from github (pip version will not work)
+
+    ```
+    pip install git+git://github.com/pangeo-data/xESMF.git#egg=xESMF
+    ```
+
+Notes:
+* Additionally installing [bottleneck](https://github.com/pydata/bottleneck/) is supposed to improve the speed of `numpy`-based calculations.
+* Installing so that package is editable is not required but is convenient. You can remove the `-e` from any installation line to not do that.
 
 
 ## Quick Start

@@ -1,8 +1,18 @@
-import cartopy.geodesic
+import warnings
+
 import numpy as np
 import xarray as xr
 
 import xroms
+
+
+try:
+    import cartopy.geodesic
+except ImportError:
+    warnings.warn(
+        "cartopy is not installed, so `sel2d` and `argsel2d` will not run.",
+        ImportWarning,
+    )
 
 
 def hgrad(

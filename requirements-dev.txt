@@ -18,3 +18,4 @@ setuptools_scm
 sphinx
 twine
 wheel
+zarr
