@@ -1,4 +1,3 @@
-import cartopy
 import numpy as np
 import xarray as xr
 

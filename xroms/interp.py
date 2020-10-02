@@ -1,7 +1,14 @@
+import warnings
+
 import numpy as np
 import xarray as xr
-import xesmf as xe
 import xgcm
+
+
+try:
+    import xesmf as xe
+except ImportError:
+    warnings.warn("xESMF is not installed, so `interpll` will not run.", ImportWarning)
 
 
 def interpll(var, lons, lats, which="pairs"):

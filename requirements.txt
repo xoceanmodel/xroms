@@ -1,0 +1,9 @@
+cf_xarray
+dask
+jupyter
+jupyterlab
+netcdf4
+numba >= 0.49
+numpy
+xarray
+xgcm

@@ -1,0 +1,14 @@
+
+# cartopy is also used for calculating closest
+# grid nodes to a given lon/lat
+cartopy >= 0.18
+cmocean
+datashader >= 0.11
+geoviews
+holoviews
+hvplot
+# For plotting examples
+matplotlib
+
+# if you want to be able to read in zarr files
+zarr

@@ -1,12 +1,20 @@
-from warnings import warn
+import warnings
 
-import cartopy
 import cf_xarray
 import numpy as np
 import xarray as xr
 import xgcm
 
 import xroms
+
+
+try:
+    import cartopy
+except ImportError:
+    warnings.warn(
+        "cartopy is not installed, so the `add_verts` options in `roms_dataset` will not run.",
+        ImportWarning,
+    )
 
 
 xr.set_options(keep_attrs=True)

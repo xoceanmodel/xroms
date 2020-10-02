@@ -1,13 +1,7 @@
 import numpy as np
 import xarray as xr
 
-# import xgcm
-# from warnings import warn
-# import cartopy
 import xroms
-
-
-# import cf_xarray
 
 
 g = 9.81  # m/s^2
