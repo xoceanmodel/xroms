@@ -93,6 +93,16 @@ If you want to be able to horizontally interpolate with `xroms.interpll`, you sh
     pip install git+git://github.com/pangeo-data/xESMF.git#egg=xESMF
     ```
 
+### Recommended: Jupyter Lab extensions
+
+If you are using Jupyter Lab, the Table of Contents and Dask extensions are really helpful:
+
+```
+jupyter labextension install @jupyterlab/toc
+jupyter labextension install dask-labextension
+jupyter serverextension enable dask_labextension
+```
+
 Notes:
 * Additionally installing [bottleneck](https://github.com/pydata/bottleneck/) is supposed to improve the speed of `numpy`-based calculations.
 * Installing so that package is editable is not required but is convenient. You can remove the `-e` from any installation line to not do that.
