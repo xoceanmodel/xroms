@@ -1,3 +1,8 @@
+'''
+Functions to help read in ROMS output.
+'''
+
+
 import warnings
 
 import cf_xarray
@@ -81,6 +86,9 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     ds = ds.rename(rename)
 
     #     ds = ds.rename({'eta_u': 'eta_rho', 'xi_v': 'xi_rho', 'xi_psi': 'xi_u', 'eta_psi': 'eta_v'})
+        
+    # make sure psi grid in coords
+    ds = ds.assign_coords({'lon_psi': ds.lon_psi, 'lat_psi': ds.lat_psi})
 
     # modify attributes for using cf-xarray
     tdims = [dim for dim in ds.dims if dim[:3] == "xi_"]
