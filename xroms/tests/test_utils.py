@@ -7,11 +7,129 @@ import xarray as xr
 import xroms
 
 
-grid = xr.open_dataset("xroms/tests/input/grid.nc")
-ds = xroms.open_netcdf("xroms/tests/input/ocean_his_0001.nc")
-# ds = xr.open_dataset('xroms/tests/input/ocean_his_0001.nc')
+grid1 = xr.open_dataset("xroms/tests/input/grid.nc")
+# ds = xroms.open_netcdf('xroms/tests/input/ocean_his_0001.nc')
+ds = xr.open_dataset("xroms/tests/input/ocean_his_0001.nc")
 # combine the two:
-ds = ds.merge(grid, overwrite_vars=True, compat="override")
+ds = ds.merge(grid1, overwrite_vars=True, compat="override")
+ds, grid = xroms.roms_dataset(ds)
+# # missing psi grid in variables
+# ds = ds.assign_coords({'lon_psi': ds.lon_psi, 'lat_psi': ds.lat_psi})
+
+xl, yl, N = 14, 9, 3
+z_rho = np.array([-97.5025, -50.05, -2.5975])  # eta_rho=0, xi_rho=0
+dz = np.array([33.3, 33.3, 33.3])  # eta_rho=0, xi_rho=0
+dx = 14168.78734979  # when eta_rho=0
+dy = 18467.47219268  # when eta_rho=0
+u = np.linspace(0, 1.2, xl - 1)
+v = np.linspace(-0.1, 0.1, yl - 1)[:, np.newaxis]
+temp = np.linspace(15, 20, N)
+salt = np.linspace(25, 15, N)
+zeta = np.linspace(-0.1, 0.1, xl)
+g = 9.81
+rho0 = 1025
+
+
+def test_ddz():
+    ddz = (salt[2] - salt[0]) / (z_rho[2] - z_rho[0])
+    assert np.allclose(xroms.ddz(ds.salt, grid)[0, 1, 0, 0], ddz)
+
+
+def test_ddeta():
+    ddeta = (v[2] - v[0]) / (2 * dy)
+    assert np.allclose(xroms.ddeta(ds.v, grid)[0, 1, 1, 0], ddeta)
+
+
+def test_ddxi():
+    # compare away from boundaries and for
+    # correct dx value (eta=0)
+    ddxi = (u[2] - u[0]) / (2 * dx)
+    assert np.allclose(xroms.ddxi(ds.u, grid)[0, 1, 0, 1], ddxi)
+
+    
+def test_to_rho():
+    
+    testvars = ['salt', 'u', 'v']
+    for testvar in testvars:
+        var = xroms.to_rho(ds[testvar], grid)
+        # check for correct dims
+        assert 'xi_rho' in var.dims
+        assert 'eta_rho' in var.dims
+
+    
+def test_to_u():
+    
+    testvars = ['salt', 'u', 'v']
+    for testvar in testvars:
+        var = xroms.to_u(ds[testvar], grid)
+        # check for correct dims
+        assert 'xi_u' in var.dims
+        assert 'eta_rho' in var.dims
+
+    
+def test_to_v():
+    
+    testvars = ['salt', 'u', 'v']
+    for testvar in testvars:
+        var = xroms.to_v(ds[testvar], grid)
+        # check for correct dims
+        assert 'xi_rho' in var.dims
+        assert 'eta_v' in var.dims
+
+    
+def test_to_psi():
+    
+    testvars = ['salt', 'u', 'v']
+    for testvar in testvars:
+        var = xroms.to_psi(ds[testvar], grid)
+        # check for correct dims
+        assert 'xi_u' in var.dims
+        assert 'eta_v' in var.dims
+
+    
+def test_to_s_rho():
+    
+    testvars = ['salt', 'u', 'v', 'z_w']
+    for testvar in testvars:
+        var = xroms.to_s_rho(ds[testvar], grid)
+        # check for correct dims
+        assert 's_rho' in var.dims
+
+    
+def test_to_s_w():
+    
+    testvars = ['salt', 'u', 'v', 'z_w']
+    for testvar in testvars:
+        var = xroms.to_s_w(ds[testvar], grid)
+        # check for correct dims
+        assert 's_w' in var.dims
+        
+        
+def test_to_grid():
+    
+    testvars = ['salt', 'u', 'v', 'z_w']
+    for testvar in testvars:
+        for scoord in ['s_rho','s_w']:
+            var = xroms.to_grid(ds[testvar], grid, hcoord='rho', scoord=scoord)
+            # check for correct dims
+            assert scoord in var.dims
+            assert 'eta_rho' in var.dims
+            assert 'xi_rho' in var.dims
+
+            var = xroms.to_grid(ds[testvar], grid, hcoord='u', scoord=scoord)
+            assert scoord in var.dims
+            assert 'eta_rho' in var.dims
+            assert 'xi_u' in var.dims
+
+            var = xroms.to_grid(ds[testvar], grid, hcoord='v', scoord=scoord)
+            assert scoord in var.dims
+            assert 'eta_v' in var.dims
+            assert 'xi_rho' in var.dims
+
+            var = xroms.to_grid(ds[testvar], grid, hcoord='psi', scoord=scoord)
+            assert scoord in var.dims
+            assert 'eta_v' in var.dims
+            assert 'xi_u' in var.dims
 
 
 def test_argsel2d():
@@ -60,15 +178,6 @@ def test_sel2d():
     )
 
 
-# def test_sel2d_list():
-#     '''Test sel2d for lon0/lat0 as list.'''
-
-#     lon0, lat0 = [-95.7,-94.8], [27.4,28.0]
-
-#     assert np.allclose(xroms.sel2d(ds.u, ds.lon_u, ds.lat_u, lon0, lat0).isel(s_rho=0, ocean_time=0), [0.1, 0.7])
-#     assert np.allclose(xroms.sel2d(ds.v, ds.lon_v, ds.lat_v, lon0, lat0).isel(s_rho=0, ocean_time=0), [-0.071429,  0.042857])
-
-
 def test_xisoslice():
     """Test xisoslice function."""
 
@@ -102,3 +211,39 @@ def test_xisoslice():
     lat0 = ds.lat_rho[3, 4]
     res = xroms.xisoslice(ds.lat_rho, lat0, ds.lon_rho, "eta_rho")
     assert np.allclose(res, ds.lon_rho[3, :])
+    
+    
+def test_gridmean():
+    var1 = (ds.salt * ds.dx).cf.sum('X')/ds.dx.cf.sum('X')
+    var2 = xroms.gridmean(ds.salt, grid, 'X')
+    assert np.allclose(var1, var2)
+
+    var1 = (ds.salt * ds.dy).cf.sum('Y')/ds.dy.cf.sum('Y')
+    var2 = xroms.gridmean(ds.salt, grid, 'Y')
+    assert np.allclose(var1, var2)
+    
+    var1 = (ds.u * ds.dx_u).cf.sum('X')/ds.dx_u.cf.sum('X')
+    var2 = xroms.gridmean(ds.u, grid, 'X')
+    assert np.allclose(var1, var2)
+
+    var1 = (ds.u * ds.dy_u).cf.sum('Y')/ds.dy_u.cf.sum('Y')
+    var2 = xroms.gridmean(ds.u, grid, 'Y')
+    assert np.allclose(var1, var2)
+    
+    
+def test_gridsum():
+    var1 = (ds.salt * ds.dx).cf.sum('X')
+    var2 = xroms.gridsum(ds.salt, grid, 'X')
+    assert np.allclose(var1, var2)
+
+    var1 = (ds.salt * ds.dy).cf.sum('Y')
+    var2 = xroms.gridsum(ds.salt, grid, 'Y')
+    assert np.allclose(var1, var2)
+    
+    var1 = (ds.u * ds.dx_u).cf.sum('X')
+    var2 = xroms.gridsum(ds.u, grid, 'X')
+    assert np.allclose(var1, var2)
+
+    var1 = (ds.u * ds.dy_u).cf.sum('Y')
+    var2 = xroms.gridsum(ds.u, grid, 'Y')
+    assert np.allclose(var1, var2)
