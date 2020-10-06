@@ -1,3 +1,7 @@
+'''
+Variables derived from ROMS output are here.
+'''
+
 import numpy as np
 import xarray as xr
 
@@ -37,7 +41,8 @@ def speed(u, v, grid, hboundary="extend", hfill_value=None):
 
     Returns
     -------
-    DataArray of speed calculated on rho/rho grids.
+    DataArray of speed calculated on rho/rho grids. 
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -55,7 +60,7 @@ def speed(u, v, grid, hboundary="extend", hfill_value=None):
     v = xroms.to_rho(v, grid, hboundary=hboundary, hfill_value=hfill_value)
     var = np.sqrt(u ** 2 + v ** 2)
 
-    var.attrs["name"] = "s"
+    var.attrs["name"] = "speed"
     var.attrs["long_name"] = "horizontal speed"
     var.attrs["units"] = "m/s"
     var.attrs["grid"] = grid
@@ -77,6 +82,7 @@ def KE(rho0, speed):
     Returns
     -------
     DataArray of kinetic energy on rho/rho grids.
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -139,6 +145,7 @@ def uv_geostrophic(zeta, f, grid, hboundary="extend", hfill_value=None, which="b
     -------
     DataArrays of components of geostrophic velocity
     calculated on their respective grids.
+    Output is `[T,Y,X]`.
 
     Notes
     -----
@@ -228,6 +235,7 @@ def EKE(ug, vg, grid, hboundary="extend", hfill_value=None):
     Returns
     -------
     DataArray of eddy kinetic energy on rho grid.
+    Output is `[T,Y,X]`.
 
     Notes
     -----
@@ -251,6 +259,7 @@ def EKE(ug, vg, grid, hboundary="extend", hfill_value=None):
     var.attrs["name"] = "EKE"
     var.attrs["long_name"] = "eddy kinetic energy"
     var.attrs["units"] = "m^2/s^2"
+    var.attrs['grid'] = grid
     var.name = var.attrs["name"]
 
     return var
@@ -285,6 +294,7 @@ def dudz(u, grid, sboundary="extend", sfill_value=None):
     Returns
     -------
     DataArray of xi component of vertical shear on u/w grids.
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -334,6 +344,7 @@ def dvdz(v, grid, sboundary="extend", sfill_value=None):
     Returns
     -------
     DataArray of eta component of vertical shear on v/w grids.
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -385,6 +396,7 @@ def vertical_shear(dudz, dvdz, grid, hboundary="extend", hfill_value=None):
     Returns
     -------
     DataArray of vertical shear on rho/w grids.
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -468,6 +480,7 @@ def relative_vorticity(
     Returns
     -------
     DataArray of vertical component of relative vorticity psi/w grids.
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -587,6 +600,7 @@ def ertel(
     Returns
     -------
     DataArray of the Ertel potential vorticity for the input tracer.
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -707,3 +721,58 @@ def ertel(
     )
 
     return epv
+
+
+def w(u, v):
+    """Calculate vertical velocity from u and v [m/s]
+    
+    TO BE INPUT BY VRX.
+
+    Inputs
+    ------
+    u: DataArray
+        xi component of velocity [m/s]
+    v: DataArray
+        eta component of velocity [m/s]
+
+    Returns
+    -------
+    DataArray of vertical component of velocity on [horizontal]/[vertical] grids.
+    Output is `[T,Z,Y,X]`.
+
+    Notes
+    -----
+    [Give calculation]
+
+    Example usage
+    -------------
+    >>> xroms.w(u, v)
+    """
+
+
+def omega(u, v):
+    """Calculate s-grid vertical velocity from u and v [m/s]
+    
+    TO BE INPUT BY VRX.
+
+    Inputs
+    ------
+    u: DataArray
+        xi component of velocity [m/s]
+    v: DataArray
+        eta component of velocity [m/s]
+
+    Returns
+    -------
+    DataArray of vertical component of velocity with respect to the s grid
+    on [horizontal]/[vertical] grids.
+    Output is `[T,Z,Y,X]`.
+
+    Notes
+    -----
+    [Give calculation]
+
+    Example usage
+    -------------
+    >>> xroms.omega(u, v)
+    """

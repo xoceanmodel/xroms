@@ -1,3 +1,7 @@
+'''
+Functions related to density of seawater.
+'''
+
 import numpy as np
 import xarray as xr
 
@@ -23,6 +27,7 @@ def density(temp, salt, z=None):
     Returns
     -------
     DataArray or ndarray of calculated density on rho/rho grids.
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -159,6 +164,7 @@ def potential_density(temp, salt, z=0):
     Returns
     -------
     DataArray or ndarray of calculated potential density on rho/rho grids.
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -193,6 +199,7 @@ def buoyancy(sig0, rho0=1025.0):
     Returns
     -------
     DataArray or ndarray of calculated buoyancy on rho/rho grids.
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -249,6 +256,7 @@ def N2(rho, grid, rho0=1025.0, sboundary="fill", sfill_value=np.nan):
     Returns
     -------
     DataArray of buoyancy frequency squared on rho/w grids.
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -330,6 +338,7 @@ def M2(
     Returns
     -------
     DataArray of the horizontal buoyancy gradient on rho/w grids.
+    Output is `[T,Z,Y,X]`.
 
     Notes
     -----
@@ -388,6 +397,7 @@ def mld(sig0, h, mask, z=None, thresh=0.03):
     Returns
     -------
     DataArray of mixed layer depth on rho horizontal grid.
+    Output is `[T,Y,X]`.
 
     Notes
     -----
