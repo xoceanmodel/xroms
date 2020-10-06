@@ -1,6 +1,6 @@
-'''
+"""
 Variables derived from ROMS output are here.
-'''
+"""
 
 import numpy as np
 import xarray as xr
@@ -41,7 +41,7 @@ def speed(u, v, grid, hboundary="extend", hfill_value=None):
 
     Returns
     -------
-    DataArray of speed calculated on rho/rho grids. 
+    DataArray of speed calculated on rho/rho grids.
     Output is `[T,Z,Y,X]`.
 
     Notes
@@ -259,7 +259,7 @@ def EKE(ug, vg, grid, hboundary="extend", hfill_value=None):
     var.attrs["name"] = "EKE"
     var.attrs["long_name"] = "eddy kinetic energy"
     var.attrs["units"] = "m^2/s^2"
-    var.attrs['grid'] = grid
+    var.attrs["grid"] = grid
     var.name = var.attrs["name"]
 
     return var
@@ -725,7 +725,7 @@ def ertel(
 
 def w(u, v):
     """Calculate vertical velocity from u and v [m/s]
-    
+
     TO BE INPUT BY VRX.
 
     Inputs
@@ -752,7 +752,7 @@ def w(u, v):
 
 def omega(u, v):
     """Calculate s-grid vertical velocity from u and v [m/s]
-    
+
     TO BE INPUT BY VRX.
 
     Inputs

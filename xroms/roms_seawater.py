@@ -1,6 +1,6 @@
-'''
+"""
 Functions related to density of seawater.
-'''
+"""
 
 import numpy as np
 import xarray as xr

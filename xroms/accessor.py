@@ -1,9 +1,9 @@
-'''
-This is an accessor to xarray. It is basically a convenient way to 
-use some of the xroms functions, which has bookkeeping in the 
-background where possible. No functions are available only here; 
+"""
+This is an accessor to xarray. It is basically a convenient way to
+use some of the xroms functions, which has bookkeeping in the
+background where possible. No functions are available only here;
 this connects to functions in other files.
-'''
+"""
 
 import numpy as np
 import xarray as xr
@@ -249,22 +249,21 @@ class xromsDatasetAccessor:
 
         if "ertel" not in self.ds:
             var = xroms.ertel(
-                            self.buoyancy,
-                            self.ds.u,
-                            self.ds.v,
-                            self.ds.f,
-                            self.grid,
-                            hcoord="rho",
-                            scoord="s_rho",
-                            hboundary="extend",
-                            hfill_value=None,
-                            sboundary="extend",
-                            sfill_value=None,
-                        )
+                self.buoyancy,
+                self.ds.u,
+                self.ds.v,
+                self.ds.f,
+                self.grid,
+                hcoord="rho",
+                scoord="s_rho",
+                hboundary="extend",
+                hfill_value=None,
+                sboundary="extend",
+                sfill_value=None,
+            )
             self.ds["ertel"] = var
         return self.ds.ertel
-    
-    
+
     @property
     def w(self):
         """Calculate vertical velocity on [horizontal]/[vertical] grids.
@@ -272,15 +271,14 @@ class xromsDatasetAccessor:
         Notes
         -----
         See `xroms.w` for full docstring.
-        
+
         Example usage
         -------------
         >>> ds.xroms.w
         """
-        
+
         return xroms.w(self.ds.u, self.ds.v)
-    
-    
+
     @property
     def omega(self):
         """Calculate s-grid vertical velocity on [horizontal]/[vertical] grids.
@@ -288,14 +286,13 @@ class xromsDatasetAccessor:
         Notes
         -----
         See `xroms.omega` for full docstring.
-        
+
         Example usage
         -------------
         >>> ds.xroms.omega
         """
-        
+
         return xroms.omega(self.ds.u, self.ds.v)
-        
 
     @property
     def rho(self):
@@ -401,7 +398,6 @@ class xromsDatasetAccessor:
             self.ds["M2"] = var
         return self.ds.M2
 
-    
     def mld(self, thresh=0.03):
         """Calculate mixed layer depth [m].
 
@@ -519,10 +515,10 @@ class xromsDatasetAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        
-        self.ds['temp_storage'] = var
-        var = self.ds['temp_storage'].copy()
-        del self.ds['temp_storage']
+
+        self.ds["temp_storage"] = var
+        var = self.ds["temp_storage"].copy()
+        del self.ds["temp_storage"]
         return var
 
     def ddeta(
@@ -623,10 +619,10 @@ class xromsDatasetAccessor:
             sfill_value=sfill_value,
             attrs=attrs,
         )
-        
-        self.ds['temp_storage'] = var
-        var = self.ds['temp_storage'].copy()
-        del self.ds['temp_storage']
+
+        self.ds["temp_storage"] = var
+        var = self.ds["temp_storage"].copy()
+        del self.ds["temp_storage"]
         return var
 
     def ddz(
@@ -719,10 +715,10 @@ class xromsDatasetAccessor:
             sfill_value=sfill_value,
             attrs=attrs,
         )
-        
-        self.ds['temp_storage'] = var
-        var = self.ds['temp_storage'].copy()
-        del self.ds['temp_storage']
+
+        self.ds["temp_storage"] = var
+        var = self.ds["temp_storage"].copy()
+        del self.ds["temp_storage"]
         return var
 
     def to_grid(
@@ -798,7 +794,7 @@ class xromsDatasetAccessor:
             varname, str
         ), "varname should be a string of the name of a variable stored in the Dataset"
         assert varname in self.ds, 'variable called "varname" must be in Dataset'
-        var =  xroms.to_grid(
+        var = xroms.to_grid(
             self.ds[varname],
             self.grid,
             hcoord=hcoord,
@@ -808,10 +804,10 @@ class xromsDatasetAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        
-        self.ds['temp_storage'] = var
-        var = self.ds['temp_storage'].copy()
-        del self.ds['temp_storage']
+
+        self.ds["temp_storage"] = var
+        var = self.ds["temp_storage"].copy()
+        del self.ds["temp_storage"]
         return var
 
 
@@ -897,9 +893,9 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds['temp_storage'] = var
-        var = self.da.attrs["grid"]._ds['temp_storage'].copy()
-        del self.da.attrs["grid"]._ds['temp_storage']
+        self.da.attrs["grid"]._ds["temp_storage"] = var
+        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
+        del self.da.attrs["grid"]._ds["temp_storage"]
         return var
 
     def ddz(
@@ -983,9 +979,9 @@ class xromsDataArrayAccessor:
             sfill_value=sfill_value,
             attrs=attrs,
         )
-        self.da.attrs["grid"]._ds['temp_storage'] = var
-        var = self.da.attrs["grid"]._ds['temp_storage'].copy()
-        del self.da.attrs["grid"]._ds['temp_storage']
+        self.da.attrs["grid"]._ds["temp_storage"] = var
+        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
+        del self.da.attrs["grid"]._ds["temp_storage"]
         return var
 
     def ddxi(
@@ -1079,9 +1075,9 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds['temp_storage'] = var
-        var = self.da.attrs["grid"]._ds['temp_storage'].copy()
-        del self.da.attrs["grid"]._ds['temp_storage']
+        self.da.attrs["grid"]._ds["temp_storage"] = var
+        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
+        del self.da.attrs["grid"]._ds["temp_storage"]
         return var
 
     def ddeta(
@@ -1175,9 +1171,9 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds['temp_storage'] = var
-        var = self.da.attrs["grid"]._ds['temp_storage'].copy()
-        del self.da.attrs["grid"]._ds['temp_storage']
+        self.da.attrs["grid"]._ds["temp_storage"] = var
+        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
+        del self.da.attrs["grid"]._ds["temp_storage"]
         return var
 
     def argsel2d(self, lon0, lat0):

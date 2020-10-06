@@ -19,8 +19,8 @@ def test_interpll():
 
     # test pairs of points
     ie, ix = 2, 3
-    testvars = ['salt', 'u', 'v', 'z_w']
-    for testvar in testvars:   
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
         varin = ds[testvar]
         lon = ds[testvar].cf["longitude"]
         lat = ds[testvar].cf["latitude"]
@@ -30,20 +30,22 @@ def test_interpll():
 
     # test grid of points
     ie, ix = [2], [3]
-    testvars = ['salt', 'u', 'v', 'z_w']
-    for testvar in testvars:   
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
         varin = ds[testvar]
         lon = ds[testvar].cf["longitude"]
         lat = ds[testvar].cf["latitude"]
         indexer = {varin.cf["Y"].name: ie, varin.cf["X"].name: ix}
-        varout = xroms.interpll(varin, lon.cf.isel(indexer), lat.cf.isel(indexer), which='grid')
+        varout = xroms.interpll(
+            varin, lon.cf.isel(indexer), lat.cf.isel(indexer), which="grid"
+        )
         assert np.allclose(varout.squeeze(), varin.isel(indexer).squeeze())
 
 
 def test_zslice():
-    testvars = ['salt', 'u', 'v', 'z_w']
-    for testvar in testvars:   
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
         varin = ds[testvar]
-        depths = np.asarray(ds[testvar].cf['vertical'][0,:,0,0].values)
-        varout = xroms.isoslice(varin, depths, grid, axis='Z')
-        assert np.allclose(varout.cf.isel(T=0,Y=0,X=0), varin.cf.isel(T=0,Y=0,X=0))
+        depths = np.asarray(ds[testvar].cf["vertical"][0, :, 0, 0].values)
+        varout = xroms.isoslice(varin, depths, grid, axis="Z")
+        assert np.allclose(varout.cf.isel(T=0, Y=0, X=0), varin.cf.isel(T=0, Y=0, X=0))

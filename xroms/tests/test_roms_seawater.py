@@ -16,7 +16,7 @@ ds = xr.open_dataset("xroms/tests/input/ocean_his_0001.nc")
 ds = ds.merge(grid1, overwrite_vars=True, compat="override")
 ds, grid = xroms.roms_dataset(ds)
 # missing psi grid in variables
-ds = ds.assign_coords({'lon_psi': ds.lon_psi, 'lat_psi': ds.lat_psi})
+ds = ds.assign_coords({"lon_psi": ds.lon_psi, "lat_psi": ds.lat_psi})
 
 # functions in test files:
 xl, yl, N = 14, 9, 3
@@ -32,7 +32,6 @@ g = 9.81
 rho0 = 1025
 
 
-
 def test_rho():
     rho = xroms.density(temp, salt, z_rho)
     xrho = xroms.density(ds.temp, ds.salt, ds.z_rho)
@@ -44,7 +43,7 @@ def test_potential_density():
     xsig0 = xroms.potential_density(ds.temp, ds.salt)
     assert np.allclose(xsig0[0, :, 0, 0], sig0)
 
-    
+
 def test_buoyancy():
     xsig0 = xroms.potential_density(ds.temp, ds.salt)
     xbuoy = xroms.buoyancy(xsig0)
@@ -52,7 +51,7 @@ def test_buoyancy():
     buoy = -g * sig0 / rho0
     assert np.allclose(xbuoy[0, :, 0, 0], buoy)
 
-    
+
 def test_N2():
     rho = xroms.density(temp, salt, z_rho)
     drhodz = (rho[2] - rho[0]) / (z_rho[2] - z_rho[0])
@@ -79,5 +78,7 @@ def test_N2():
 def test_mld():
     # choose threshold so that z_rho[-2] is the mld
     xsig0 = xroms.density(ds.temp, ds.salt, 0)
-    thresh = xsig0[0,-2,0,0] - xsig0[0,-1,0,0]
-    assert np.allclose(xroms.mld(xsig0, ds.h, ds.mask_rho, thresh=thresh)[0, 0, 0], z_rho[-2])
+    thresh = xsig0[0, -2, 0, 0] - xsig0[0, -1, 0, 0]
+    assert np.allclose(
+        xroms.mld(xsig0, ds.h, ds.mask_rho, thresh=thresh)[0, 0, 0], z_rho[-2]
+    )

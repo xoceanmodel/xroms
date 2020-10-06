@@ -1,6 +1,6 @@
-'''
+"""
 Interpolation functions.
-'''
+"""
 
 import warnings
 
