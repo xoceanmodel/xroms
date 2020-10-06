@@ -1,3 +1,8 @@
+"""
+Functions that act on DataArrays or Datasets.
+"""
+
+
 import warnings
 
 import numpy as np

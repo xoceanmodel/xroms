@@ -1,4 +1,5 @@
-"""Test accessor functions."""
+"""Test accessor functions by ensuring accessor and xroms
+functions return same values."""
 
 import cartopy
 import numpy as np
@@ -16,100 +17,369 @@ ds = xr.open_dataset("xroms/tests/input/ocean_his_0001.nc")
 ds = ds.merge(grid1, overwrite_vars=True, compat="override")
 ds, grid = xroms.roms_dataset(ds)
 
-# functions in test files:
-xl, yl, N = 14, 9, 3
-z_rho = np.array([-97.5025, -50.05, -2.5975])  # eta_rho=0, xi_rho=0
-dx = 14168.78734979  # when eta_rho=0
-dy = 18467.47219268  # when eta_rho=0
-u = np.linspace(0, 1.2, xl - 1)
-v = np.linspace(-0.1, 0.1, yl - 1)[:, np.newaxis]
-temp = np.linspace(15, 20, N)
-salt = np.linspace(25, 15, N)
-zeta = np.linspace(-0.1, 0.1, xl)
-g = 9.81
-rho0 = 1025
-
 
 def test_grid():
     assert isinstance(ds.xroms.grid, xgrid.Grid)
 
 
-def test_ddz():
-    ddz = (salt[2] - salt[0]) / (z_rho[2] - z_rho[0])
-    assert np.allclose(ds.xroms.ddz("salt")[0, 1, 0, 0], ddz)
-
-
-def test_ddeta():
-    ddeta = (v[2] - v[0]) / (2 * dy)
-    assert np.allclose(ds.xroms.ddeta("v")[0, 1, 1, 0], ddeta)
-
-
-def test_ddxi():
-    # compare away from boundaries and for
-    # correct dx value (eta=0)
-    ddxi = (u[2] - u[0]) / (2 * dx)
-    assert np.allclose(ds.xroms.ddxi("u")[0, 1, 0, 1], ddxi)
-
-
-def test_z_rho():
-    assert np.allclose(ds.z_rho[0, :, 0, 0], z_rho)
-
-
-def test_rho():
-    assert np.allclose(ds.xroms.rho[0, :, 0, 0], xroms.density(temp, salt, z_rho))
-
-
-def test_sig0():
-    assert np.allclose(ds.xroms.sig0[0, :, 0, 0], xroms.density(temp, salt, 0))
-
-
-def test_N2():
-    rho = xroms.density(temp, salt, z_rho)
-    drhodz = (rho[2] - rho[0]) / (z_rho[2] - z_rho[0])
-    var = -g * drhodz / rho0
-    # compare above estimate with two averaged since
-    # there is a grid change
-    assert np.allclose(ds.xroms.N2[0, 1:3, 0, 0].mean(), var)
-
-
-def test_M2():
-    z_rho_xi1 = np.array([-97.50211538, -50.04230769, -2.5825])
-    rho_xi0 = xroms.density(temp, salt, z_rho)
-    rho_xi1 = xroms.density(temp, salt, z_rho_xi1)
-    drhodxi = (rho_xi1[1] - rho_xi0[1]) / (2 * dx)
-    drhodeta = 0
-    var = np.sqrt(drhodxi ** 2 + drhodeta ** 2) * g / rho0
-
-
-def test_mld():
-    # choose threshold so that z_rho[-2] is the mld
-    sig0 = xroms.density(temp, salt, 0)
-    thresh = sig0[-2] - sig0[-1]
-    assert np.allclose(ds.xroms.mld(thresh=thresh)[0, 0, 0], z_rho[-2])
-
-
 def test_speed():
-    assert np.allclose(
-        ds.xroms.speed.mean(), np.sqrt(u ** 2 + v ** 2).mean(), rtol=1e-2
-    )
+
+    acc = ds.xroms.speed
+
+    assert np.allclose(acc, xroms.speed(ds.u, ds.v, grid))
+
+    # also check attributes
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    # cf-xarray: make sure all Axes and Coordinates available in output
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
 
 
 def test_KE():
-    rho = xroms.density(temp, salt, z_rho)[:, np.newaxis, np.newaxis]
-    s2 = (u ** 2 + v ** 2)[np.newaxis, :, :]
-    KE = 0.5 * rho * s2
-    assert np.allclose(
-        ds.xroms.KE.xroms.to_grid(hcoord="psi").mean(), KE.mean(), rtol=1e-2
-    )
+
+    s = xroms.speed(ds.u, ds.v, grid)
+    acc = ds.xroms.KE
+
+    assert np.allclose(acc, xroms.KE(ds.rho0, s))
+
+    # also check attributes
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    # cf-xarray: make sure all Axes and Coordinates available in output
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
 
 
-def test_relative_vorticity():
-    assert np.allclose(ds.xroms.vort, 0)
+def test_uv_geostrophic():
+
+    acc = ds.xroms.ug
+    assert np.allclose(acc, xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="xi"))
+    # also check attributes
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    # cf-xarray: make sure all Axes and Coordinates available in output
+    items = ["T", "X", "Y", "longitude", "latitude", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+    acc = ds.xroms.vg
+    assert np.allclose(acc, xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="eta"))
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "longitude", "latitude", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_EKE():
+
+    acc = ds.xroms.EKE
+    xug, xvg = xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="both")
+    assert np.allclose(acc, xroms.EKE(xug, xvg, grid))
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "longitude", "latitude", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
 
 
 def test_dudz():
-    assert np.allclose(ds.xroms.dudz, 0)
+    acc = ds.xroms.dudz
+    assert np.allclose(acc, xroms.dudz(ds.u, grid))
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
 
 
 def test_dvdz():
-    assert np.allclose(ds.xroms.dvdz, 0)
+    acc = ds.xroms.dvdz
+    assert np.allclose(acc, xroms.dvdz(ds.v, grid))
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_vertical_shear():
+    xdudz = ds.xroms.dudz
+    xdvdz = ds.xroms.dvdz
+    acc = ds.xroms.vertical_shear
+    assert np.allclose(acc, xroms.vertical_shear(xdudz, xdvdz, grid))
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_relative_vorticity():
+    acc = ds.xroms.vort
+    assert np.allclose(acc, 0)
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_ertel():
+    acc = ds.xroms.ertel
+    xsig0 = xroms.potential_density(ds.temp, ds.salt)
+    xbuoy = xroms.buoyancy(xsig0)
+    assert np.allclose(acc, xroms.ertel(xbuoy, ds.u, ds.v, ds.f, grid))
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_w():
+    # VRX
+    pass
+
+
+#     acc = ds.xroms.w
+#     assert np.allclose(acc, xroms.w(ds.u, ds.v, grid))
+#     acc.name == acc.attrs['name']
+#     acc.attrs['grid'] == ds.xroms.grid
+#     items = ['T','X','Y','Z','longitude','latitude','vertical','time']
+#     assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_omega():
+    # VRX
+    pass
+
+
+#     acc = ds.xroms.omega
+#     assert np.allclose(acc, xroms.omega(ds.u, ds.v, grid))
+#     acc.name == acc.attrs['name']
+#     acc.attrs['grid'] == ds.xroms.grid
+#     items = ['T','X','Y','Z','longitude','latitude','vertical','time']
+#     assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_rho():
+    acc = ds.xroms.rho
+    assert np.allclose(acc, xroms.density(ds.temp, ds.salt, ds.z_rho))
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_sig0():
+    acc = ds.xroms.sig0
+    assert np.allclose(acc, xroms.potential_density(ds.temp, ds.salt, 0))
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_buoyancy():
+    acc = ds.xroms.buoyancy
+    xsig0 = xroms.potential_density(ds.temp, ds.salt)
+    assert np.allclose(acc, xroms.buoyancy(xsig0))
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_N2():
+    acc = ds.xroms.N2
+    xrho = xroms.density(ds.temp, ds.salt, ds.z_rho)
+    assert np.allclose(acc, xroms.N2(xrho, grid), equal_nan=True)
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_M2():
+    acc = ds.xroms.M2
+    xrho = xroms.density(ds.temp, ds.salt, ds.z_rho)
+    assert np.allclose(acc, xroms.M2(xrho, grid), equal_nan=True)
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_mld():
+    acc = ds.xroms.mld(thresh=0.03)
+    sig0 = xroms.potential_density(ds.temp, ds.salt, 0)
+    assert np.allclose(acc, xroms.mld(sig0, ds.h, ds.mask_rho), equal_nan=True)
+    acc.name == acc.attrs["name"]
+    acc.attrs["grid"] == ds.xroms.grid
+    items = ["T", "X", "Y", "longitude", "latitude", "time"]
+    assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_ddxi():
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
+        acc = ds[testvar].xroms.ddxi()
+        assert np.allclose(acc, xroms.ddxi(ds[testvar], grid))
+        acc.name == acc.attrs["name"]
+        acc.attrs["grid"] == ds.xroms.grid
+        items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+        assert set(items).issubset(acc.cf.get_valid_keys())
+
+        acc = ds.xroms.ddxi(testvar)
+        assert np.allclose(acc, xroms.ddxi(ds[testvar], grid))
+        acc.name == acc.attrs["name"]
+        acc.attrs["grid"] == ds.xroms.grid
+        items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+        assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_ddeta():
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
+        acc = ds[testvar].xroms.ddeta()
+        assert np.allclose(acc, xroms.ddeta(ds[testvar], grid))
+        acc.name == acc.attrs["name"]
+        acc.attrs["grid"] == ds.xroms.grid
+        items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+        assert set(items).issubset(acc.cf.get_valid_keys())
+
+        acc = ds.xroms.ddeta(testvar)
+        assert np.allclose(acc, xroms.ddeta(ds[testvar], grid))
+        acc.name == acc.attrs["name"]
+        acc.attrs["grid"] == ds.xroms.grid
+        items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+        assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_ddz():
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
+        acc = ds[testvar].xroms.ddz()
+        assert np.allclose(acc, xroms.ddz(ds[testvar], grid))
+        acc.name == acc.attrs["name"]
+        acc.attrs["grid"] == ds.xroms.grid
+        items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+        assert set(items).issubset(acc.cf.get_valid_keys())
+
+        acc = ds.xroms.ddz(testvar)
+        assert np.allclose(acc, xroms.ddz(ds[testvar], grid))
+        acc.name == acc.attrs["name"]
+        acc.attrs["grid"] == ds.xroms.grid
+        items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+        assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_to_grid():
+
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
+        for scoord in ["s_w", "s_rho"]:
+            for hcoord in ["rho", "u", "v", "psi"]:
+                acc = ds[testvar].xroms.to_grid(hcoord=hcoord, scoord=scoord)
+                assert np.allclose(
+                    acc, xroms.to_grid(ds[testvar], grid, hcoord=hcoord, scoord=scoord)
+                )
+                acc.name == acc.attrs["name"]
+                acc.attrs["grid"] == ds.xroms.grid
+                items = [
+                    "T",
+                    "X",
+                    "Y",
+                    "Z",
+                    "longitude",
+                    "latitude",
+                    "vertical",
+                    "time",
+                ]
+                assert set(items).issubset(acc.cf.get_valid_keys())
+
+                acc = ds.xroms.to_grid(testvar, hcoord=hcoord, scoord=scoord)
+                assert np.allclose(
+                    acc, xroms.to_grid(ds[testvar], grid, hcoord=hcoord, scoord=scoord)
+                )
+                acc.name == acc.attrs["name"]
+                acc.attrs["grid"] == ds.xroms.grid
+                items = [
+                    "T",
+                    "X",
+                    "Y",
+                    "Z",
+                    "longitude",
+                    "latitude",
+                    "vertical",
+                    "time",
+                ]
+                assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_sel2d():
+    lon0, lat0 = -94.8, 28.0
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
+        acc = ds[testvar].xroms.sel2d(lon0, lat0)
+        out = xroms.sel2d(
+            ds[testvar],
+            ds[testvar].cf["longitude"],
+            ds[testvar].cf["latitude"],
+            lon0,
+            lat0,
+        )
+        assert np.allclose(acc, out)
+        acc.name == acc.attrs["name"]
+        acc.attrs["grid"] == ds.xroms.grid
+        items = ["T", "X", "Y", "Z", "longitude", "latitude", "vertical", "time"]
+        assert set(items).issubset(acc.cf.get_valid_keys())
+
+
+def test_argsel2d():
+    lon0, lat0 = -94.8, 28.0
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
+        inds = ds[testvar].xroms.argsel2d(lon0, lat0)
+        outinds = xroms.argsel2d(
+            ds[testvar].cf["longitude"], ds[testvar].cf["latitude"], lon0, lat0
+        )
+        assert np.allclose(inds, outinds)
+
+
+def test_gridmean():
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
+        axis = "X"
+        var1 = ds[testvar].xroms.gridmean(axis)
+        var2 = xroms.gridmean(ds[testvar], grid, axis)
+        assert np.allclose(var1, var2)
+
+
+def test_gridsum():
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
+        axis = "X"
+        var1 = ds[testvar].xroms.gridsum(axis)
+        var2 = xroms.gridsum(ds[testvar], grid, axis)
+        assert np.allclose(var1, var2)
+
+
+def test_interpll():
+    ie, ix = 2, 3
+    indexer = {"eta_rho": [ie], "xi_rho": [ix]}
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
+        var1 = xroms.interpll(
+            ds[testvar], ds.lon_rho.isel(indexer), ds.lat_rho.isel(indexer)
+        )
+        var2 = ds[testvar].xroms.interpll(
+            ds.lon_rho.isel(indexer), ds.lat_rho.isel(indexer)
+        )
+        assert np.allclose(var1, var2)
+
+
+def test_zslice():
+    testvars = ["salt", "u", "v", "z_w"]
+    for testvar in testvars:
+        varin = ds[testvar]
+        depths = np.asarray(ds[testvar].cf["vertical"][0, :, 0, 0].values)
+        varout = xroms.isoslice(varin, depths, grid, axis="Z")
+        varcomp = ds[testvar].xroms.isoslice(depths, axis="Z")
+        assert np.allclose(
+            varout.cf.isel(T=0, Y=0, X=0), varcomp.cf.isel(T=0, Y=0, X=0)
+        )

@@ -7,6 +7,11 @@ from glob import glob
 import xroms
 
 
+def test_imports():
+    import xroms
+    import xroms.roms_seawater
+
+
 def test_open_netcdf():
     """Test xroms.open_netcdf()."""
 
