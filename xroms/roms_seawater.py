@@ -369,7 +369,7 @@ def M2(
 
     var.attrs["name"] = "M2"
     var.attrs["long_name"] = "horizontal buoyancy gradient"
-    var.attrs["units"] = "1/s"
+    var.attrs["units"] = "1/s^2"
     var.attrs["grid"] = grid
     var.name = var.attrs["name"]
 
