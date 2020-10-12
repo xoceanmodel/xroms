@@ -226,65 +226,74 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
         else:
             key = "z"
 
-    # save key names for later
-    lonkey = var.cf["longitude"].name
-    latkey = var.cf["latitude"].name
-    zkey = var.cf["vertical"].name
-
     # perform interpolation
     transformed = grid.transform(var, axis, iso_values, target_data=iso_array)
 
     if key not in transformed.coords:
         transformed = transformed.assign_coords({key: iso_array})
 
-    # perform interpolation for other coordinates if needed
-    if zkey not in transformed.coords:
-        transformedZ = grid.transform(
-            var[zkey], axis, iso_values, target_data=iso_array
-        )
-        transformed = transformed.assign_coords({zkey: transformedZ})
-
-    if latkey not in transformed.coords:
-        # this interpolation won't work for certain combinations of var[latkey] and iso_array
-        # without the following step
-        if "T" in iso_array.cf.get_valid_keys():
-            iso_array = iso_array.cf.isel(T=0).drop_vars(
-                iso_array.cf["T"].name, errors="ignore"
-            )
-        if "Z" in iso_array.cf.get_valid_keys():
-            iso_array = iso_array.cf.isel(Z=0).drop_vars(
-                iso_array.cf["Z"].name, errors="ignore"
-            )
-        transformedlat = grid.transform(
-            var[latkey], axis, iso_values, target_data=iso_array
-        )
-        transformed = transformed.assign_coords({latkey: transformedlat})
-
-    if lonkey not in transformed.coords:
-        # this interpolation won't work for certain combinations of var[latkey] and iso_array
-        # without the following step
-        if "T" in iso_array.cf.get_valid_keys():
-            iso_array = iso_array.cf.isel(T=0).drop_vars(
-                iso_array.cf["T"].name, errors="ignore"
-            )
-        if "Z" in iso_array.cf.get_valid_keys():
-            iso_array = iso_array.cf.isel(Z=0).drop_vars(
-                iso_array.cf["Z"].name, errors="ignore"
-            )
-        transformedlon = grid.transform(
-            var[lonkey], axis, iso_values, target_data=iso_array
-        )
-        transformed = transformed.assign_coords({lonkey: transformedlon})
-
-    transformed[zkey].attrs["positive"] = "up"
-    transformed[lonkey].attrs["standard_name"] = "longitude"
-    transformed[latkey].attrs["standard_name"] = "latitude"
-
     # bring along attributes for cf-xarray
     transformed[key].attrs["axis"] = axis
     transformed.attrs["grid"] = grid
     # add original attributes back in
     transformed.attrs = {**attrs, **transformed.attrs}
+
+    # save key names for later
+    # perform interpolation for other coordinates if needed
+    if "longitude" in var.cf.get_valid_keys():
+        lonkey = var.cf["longitude"].name
+
+        if lonkey not in transformed.coords:
+            # this interpolation won't work for certain combinations of var[latkey] and iso_array
+            # without the following step
+            if "T" in iso_array.cf.get_valid_keys():
+                iso_array = iso_array.cf.isel(T=0).drop_vars(
+                    iso_array.cf["T"].name, errors="ignore"
+                )
+            if "Z" in iso_array.cf.get_valid_keys():
+                iso_array = iso_array.cf.isel(Z=0).drop_vars(
+                    iso_array.cf["Z"].name, errors="ignore"
+                )
+            transformedlon = grid.transform(
+                var[lonkey], axis, iso_values, target_data=iso_array
+            )
+            transformed = transformed.assign_coords({lonkey: transformedlon})
+
+        transformed[lonkey].attrs["standard_name"] = "longitude"
+        
+    if "latitude" in var.cf.get_valid_keys():
+        latkey = var.cf["latitude"].name
+        
+        if latkey not in transformed.coords:
+            # this interpolation won't work for certain combinations of var[latkey] and iso_array
+            # without the following step
+            if "T" in iso_array.cf.get_valid_keys():
+                iso_array = iso_array.cf.isel(T=0).drop_vars(
+                    iso_array.cf["T"].name, errors="ignore"
+                )
+            if "Z" in iso_array.cf.get_valid_keys():
+                iso_array = iso_array.cf.isel(Z=0).drop_vars(
+                    iso_array.cf["Z"].name, errors="ignore"
+                )
+            transformedlat = grid.transform(
+                var[latkey], axis, iso_values, target_data=iso_array
+            )
+            transformed = transformed.assign_coords({latkey: transformedlat})
+
+        transformed[latkey].attrs["standard_name"] = "latitude"
+
+    if "vertical" in var.cf.get_valid_keys():
+        zkey = var.cf["vertical"].name
+        
+        if zkey not in transformed.coords:
+            transformedZ = grid.transform(
+                var[zkey], axis, iso_values, target_data=iso_array
+            )
+            transformed = transformed.assign_coords({zkey: transformedZ})
+            
+        transformed[zkey].attrs["positive"] = "up"
+        
+    transformed = transformed.squeeze().cf.guess_coord_axis()
 
     # reorder back to normal ordering in case changed
     transformed = transformed.cf.transpose(
