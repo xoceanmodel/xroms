@@ -147,7 +147,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     z_w0.attrs = {'long_name': 'depth of W-points', 'field': 'z_w0, scalar', 'units': 'm'}
 
     ds.coords["z_w"] = z_w.cf.transpose(
-        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w.cf.get_valid_keys()]
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w.cf.axes()]
     )
     #     ds.coords['z_w'] = z_w.transpose('ocean_time', 's_w', 'eta_rho', 'xi_rho', transpose_coords=False)
     ds.coords["z_w_u"] = grid.interp(ds.z_w, "X")
@@ -158,7 +158,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     ds.coords["z_w_psi"].attrs = {'long_name': 'depth of PSI-points on vertical W grid', 'time': 'ocean_time', 'field': 'z_w_psi, scalar, series', 'units': 'm'}
 
     ds.coords["z_rho"] = z_rho.cf.transpose(
-        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho.cf.get_valid_keys()]
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho.cf.axes()]
     )
     #     ds.coords['z_rho'] = z_rho.transpose('ocean_time', 's_rho', 'eta_rho', 'xi_rho', transpose_coords=False)
     ds.coords["z_rho_u"] = grid.interp(ds.z_rho, "X")
@@ -172,7 +172,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     ds.coords["z_rho_psi"].attrs = {'long_name': 'depth of PSI-points on vertical RHO grid', 'time': 'ocean_time', 'field': 'z_rho_psi, scalar, series', 'units': 'm'}
     
     ds.coords["z_rho0"] = z_rho0.cf.transpose(
-        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho0.cf.get_valid_keys()]
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_rho0.cf.axes()]
     )
     #     ds.coords['z_rho0'] = z_rho0.transpose('s_rho', 'eta_rho', 'xi_rho', transpose_coords=False)
     ds.coords["z_rho_u0"] = grid.interp(ds.z_rho0, "X")
@@ -185,7 +185,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     ds.coords["z_rho_psi0"].attrs = {'long_name': 'depth of PSI-points on vertical RHO grid', 'field': 'z_rho_psi0, scalar', 'units': 'm'}
 
     ds.coords["z_w0"] = z_w0.cf.transpose(
-        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w0.cf.get_valid_keys()]
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in z_w0.cf.axes()]
     )
     #     ds.coords['z_w0'] = z_w0.transpose('s_w', 'eta_rho', 'xi_rho', transpose_coords=False)
     ds.coords["z_w_u0"] = grid.interp(ds.z_w0, "X")

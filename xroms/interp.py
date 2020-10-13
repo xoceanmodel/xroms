@@ -64,7 +64,7 @@ def interpll(var, lons, lats, which="pairs"):
 
     # make sure dimensions are in typical cf ordering (T, Z, Y, X)
     var = var.cf.transpose(
-        *[dim for dim in ["T", "Z", "Y", "X"] if dim in var.cf.get_valid_keys()]
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in var.cf.axes]
     )
 
     # force lons/lats to be 1D arrays
@@ -240,17 +240,17 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
 
     # save key names for later
     # perform interpolation for other coordinates if needed
-    if "longitude" in var.cf.get_valid_keys():
+    if "longitude" in var.cf.coordinates:
         lonkey = var.cf["longitude"].name
 
         if lonkey not in transformed.coords:
             # this interpolation won't work for certain combinations of var[latkey] and iso_array
             # without the following step
-            if "T" in iso_array.cf.get_valid_keys():
+            if "T" in iso_array.cf.axes:
                 iso_array = iso_array.cf.isel(T=0).drop_vars(
                     iso_array.cf["T"].name, errors="ignore"
                 )
-            if "Z" in iso_array.cf.get_valid_keys():
+            if "Z" in iso_array.cf.axes:
                 iso_array = iso_array.cf.isel(Z=0).drop_vars(
                     iso_array.cf["Z"].name, errors="ignore"
                 )
@@ -261,17 +261,17 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
 
         transformed[lonkey].attrs["standard_name"] = "longitude"
         
-    if "latitude" in var.cf.get_valid_keys():
+    if "latitude" in var.cf.coordinates:
         latkey = var.cf["latitude"].name
         
         if latkey not in transformed.coords:
             # this interpolation won't work for certain combinations of var[latkey] and iso_array
             # without the following step
-            if "T" in iso_array.cf.get_valid_keys():
+            if "T" in iso_array.cf.axes:
                 iso_array = iso_array.cf.isel(T=0).drop_vars(
                     iso_array.cf["T"].name, errors="ignore"
                 )
-            if "Z" in iso_array.cf.get_valid_keys():
+            if "Z" in iso_array.cf.axes:
                 iso_array = iso_array.cf.isel(Z=0).drop_vars(
                     iso_array.cf["Z"].name, errors="ignore"
                 )
@@ -282,7 +282,7 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
 
         transformed[latkey].attrs["standard_name"] = "latitude"
 
-    if "vertical" in var.cf.get_valid_keys():
+    if "vertical" in var.cf.coordinates:
         zkey = var.cf["vertical"].name
         
         if zkey not in transformed.coords:
@@ -297,7 +297,7 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
 
     # reorder back to normal ordering in case changed
     transformed = transformed.cf.transpose(
-        *[dim for dim in ["T", "Z", "Y", "X"] if dim in transformed.cf.get_valid_keys()]
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in transformed.cf.axes]
     )
 
     return transformed
