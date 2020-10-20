@@ -35,6 +35,7 @@ from .utilities import (
     to_u,
     to_v,
     xisoslice,
-    subset
+    subset,
+    order
 )
 from .xroms import open_mfnetcdf, open_netcdf, open_zarr, roms_dataset

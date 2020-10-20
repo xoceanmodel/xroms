@@ -21,6 +21,7 @@ There are functions to...
   * grid metrics (i.e., grid lengths, areas, and volumes)
   * subset horizontal grid such that the staggered grids are consistent
   * easily change horizontal and vertical grids using `xgcm` grid objects
+  * easily reorder to dimensional convention
   * slice along a fixed value
   * wrapper for interpolation in longitude/latitude and for fixed depths
   * mixed-layer depth

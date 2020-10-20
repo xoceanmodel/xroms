@@ -1450,3 +1450,23 @@ class xromsDataArrayAccessor:
             iso_array=iso_array,
             axis=axis,
         )
+    
+    def order(self):
+        """Reorder self to typical dimensional ordering.
+
+        Returns
+        -------
+        DataArray with dimensional order ['T', 'Z', 'Y', 'X'], or whatever subset of
+        dimensions are present in var.
+
+        Notes
+        -----
+        Do not consider previously-selected dimensions that are kept on as coordinates but 
+        cannot be transposed anymore. This is accomplished with `.reset_coords(drop=True)`.
+
+        Example usage
+        -------------
+        >>> ds.temp.xroms.order()
+        """
+        
+        return xroms.order(self.da)

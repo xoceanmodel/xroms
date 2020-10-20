@@ -63,7 +63,7 @@ def interpll(var, lons, lats, which="pairs"):
     var = var.rename({lonkey: "lon", latkey: "lat"})
 
     # make sure dimensions are in typical cf ordering (T, Z, Y, X)
-    var = var.cf.transpose(*[dim for dim in ["T", "Z", "Y", "X"] if dim in var.cf.axes])
+    var = xroms.order(var)
 
     # force lons/lats to be 1D arrays
     lats = np.asarray(lats).flatten()
@@ -258,10 +258,10 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
             transformed = transformed.assign_coords({lonkey: transformedlon})
 
         transformed[lonkey].attrs["standard_name"] = "longitude"
-
+        
     if "latitude" in var.cf.coordinates:
         latkey = var.cf["latitude"].name
-
+        
         if latkey not in transformed.coords:
             # this interpolation won't work for certain combinations of var[latkey] and iso_array
             # without the following step
@@ -282,20 +282,18 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
 
     if "vertical" in var.cf.coordinates:
         zkey = var.cf["vertical"].name
-
+        
         if zkey not in transformed.coords:
             transformedZ = grid.transform(
                 var[zkey], axis, iso_values, target_data=iso_array
             )
             transformed = transformed.assign_coords({zkey: transformedZ})
-
+            
         transformed[zkey].attrs["positive"] = "up"
-
+        
     transformed = transformed.squeeze().cf.guess_coord_axis()
 
     # reorder back to normal ordering in case changed
-    transformed = transformed.cf.transpose(
-        *[dim for dim in ["T", "Z", "Y", "X"] if dim in transformed.cf.axes]
-    )
+    transformed = xroms.order(transformed)
 
     return transformed

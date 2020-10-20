@@ -1358,3 +1358,30 @@ def subset(ds, X=None, Y=None):
         ds = ds.isel(eta_rho=Y, eta_v=slice(Y.start,Y.stop-1))
         
     return ds
+
+
+def order(var):
+    """Reorder var to typical dimensional ordering.
+    
+    Inputs
+    ------
+    var: DataArray
+        Variable to operate on.    
+    
+    Returns
+    -------
+    DataArray with dimensional order ['T', 'Z', 'Y', 'X'], or whatever subset of
+    dimensions are present in var.
+    
+    Notes
+    -----
+    Do not consider previously-selected dimensions that are kept on as coordinates but 
+    cannot be transposed anymore. This is accomplished with `.reset_coords(drop=True)`.
+    
+    Example usage
+    -------------
+    >>> xroms.order(var)
+    """
+    
+    return var.cf.transpose(
+        *[dim for dim in ["T", "Z", "Y", "X"] if dim in var.reset_coords(drop=True).cf.axes])
