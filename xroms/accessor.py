@@ -516,9 +516,9 @@ class xromsDatasetAccessor:
             sfill_value=sfill_value,
         )
 
-        self.ds["temp_storage"] = var
-        var = self.ds["temp_storage"].copy()
-        del self.ds["temp_storage"]
+        self.ds[var.name] = var
+        var = self.ds[var.name].copy()
+        del self.ds[var.name]
         return var
 
     def ddeta(
@@ -620,9 +620,9 @@ class xromsDatasetAccessor:
             attrs=attrs,
         )
 
-        self.ds["temp_storage"] = var
-        var = self.ds["temp_storage"].copy()
-        del self.ds["temp_storage"]
+        self.ds[var.name] = var
+        var = self.ds[var.name].copy()
+        del self.ds[var.name]
         return var
 
     def ddz(
@@ -716,9 +716,9 @@ class xromsDatasetAccessor:
             attrs=attrs,
         )
 
-        self.ds["temp_storage"] = var
-        var = self.ds["temp_storage"].copy()
-        del self.ds["temp_storage"]
+        self.ds[var.name] = var
+        var = self.ds[var.name].copy()
+        del self.ds[var.name]
         return var
 
     def to_grid(
@@ -805,10 +805,44 @@ class xromsDatasetAccessor:
             sfill_value=sfill_value,
         )
 
-        self.ds["temp_storage"] = var
-        var = self.ds["temp_storage"].copy()
-        del self.ds["temp_storage"]
+        self.ds[var.name] = var
+        var = self.ds[var.name].copy()
+        del self.ds[var.name]
         return var
+    
+    def subset(self, X=None, Y=None):
+        """Subset model output horizontally using isel, properly accounting for horizontal grids.
+
+        Inputs
+        ------
+        X: slice, optional
+            Slice in X dimension using form `X=slice(start, stop, step)`. For example,
+            >>> X=slice(20,40,2)
+            Indices are used for rho grid, and psi grid is reduced accordingly.
+        Y: slice, optional
+            Slice in Y dimension using form `Y=slice(start, stop, step)`. For example,
+            >>> Y=slice(20,40,2)
+            Indices are used for rho grid, and psi grid is reduced accordingly.
+
+        Returns
+        -------
+        Dataset with form as if model had been run at the subsetted size. That is, the outermost
+        cells of the rho grid are like ghost cells and the psi grid is one inward from this size
+        in each direction.
+
+        Notes
+        -----
+        X and Y must be slices, not single numbers.
+
+        Example usage
+        -------------
+        Subset only in Y direction:
+        >>> ds.xroms.subset(Y=slice(50,100))
+        Subset in X and Y:
+        >>> ds.xroms.subset(X=slice(20,40), Y=slice(50,100))
+        """
+        
+        return xroms.subset(ds, X=X, Y=Y)
 
 
 @xr.register_dataarray_accessor("xroms")
@@ -893,9 +927,9 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds["temp_storage"] = var
-        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
-        del self.da.attrs["grid"]._ds["temp_storage"]
+        self.da.attrs["grid"]._ds[var.name] = var
+        var = self.da.attrs["grid"]._ds[var.name].copy()
+        del self.da.attrs["grid"]._ds[var.name]
         return var
 
     def ddz(
@@ -979,9 +1013,9 @@ class xromsDataArrayAccessor:
             sfill_value=sfill_value,
             attrs=attrs,
         )
-        self.da.attrs["grid"]._ds["temp_storage"] = var
-        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
-        del self.da.attrs["grid"]._ds["temp_storage"]
+        self.da.attrs["grid"]._ds[var.name] = var
+        var = self.da.attrs["grid"]._ds[var.name].copy()
+        del self.da.attrs["grid"]._ds[var.name]
         return var
 
     def ddxi(
@@ -1075,9 +1109,9 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds["temp_storage"] = var
-        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
-        del self.da.attrs["grid"]._ds["temp_storage"]
+        self.da.attrs["grid"]._ds[var.name] = var
+        var = self.da.attrs["grid"]._ds[var.name].copy()
+        del self.da.attrs["grid"]._ds[var.name]
         return var
 
     def ddeta(
@@ -1171,9 +1205,9 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds["temp_storage"] = var
-        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
-        del self.da.attrs["grid"]._ds["temp_storage"]
+        self.da.attrs["grid"]._ds[var.name] = var
+        var = self.da.attrs["grid"]._ds[var.name].copy()
+        del self.da.attrs["grid"]._ds[var.name]
         return var
 
     def argsel2d(self, lon0, lat0):
