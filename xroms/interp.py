@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 import xarray as xr
 import xgcm
+import xroms
 
 
 try:
@@ -244,11 +245,11 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
         if lonkey not in transformed.coords:
             # this interpolation won't work for certain combinations of var[latkey] and iso_array
             # without the following step
-            if "T" in iso_array.cf.axes:
+            if "T" in iso_array.reset_coords(drop=True).cf.axes:
                 iso_array = iso_array.cf.isel(T=0).drop_vars(
                     iso_array.cf["T"].name, errors="ignore"
                 )
-            if "Z" in iso_array.cf.axes:
+            if "Z" in iso_array.reset_coords(drop=True).cf.axes:
                 iso_array = iso_array.cf.isel(Z=0).drop_vars(
                     iso_array.cf["Z"].name, errors="ignore"
                 )
@@ -265,11 +266,11 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
         if latkey not in transformed.coords:
             # this interpolation won't work for certain combinations of var[latkey] and iso_array
             # without the following step
-            if "T" in iso_array.cf.axes:
+            if "T" in iso_array.reset_coords(drop=True).cf.axes:
                 iso_array = iso_array.cf.isel(T=0).drop_vars(
                     iso_array.cf["T"].name, errors="ignore"
                 )
-            if "Z" in iso_array.cf.axes:
+            if "Z" in iso_array.reset_coords(drop=True).cf.axes:
                 iso_array = iso_array.cf.isel(Z=0).drop_vars(
                     iso_array.cf["Z"].name, errors="ignore"
                 )
