@@ -32,14 +32,16 @@ There are functions to...
   * calculating climatologies
   * various calculations
 * provide/track attributes and coordinates through functions
-  * wraps `cf-xarray` to generalize coordinate and dimension calling.
+  * wraps [`cf-xarray`](https://cf-xarray.readthedocs.io/en/latest/) to generalize coordinate and dimension calling.
+* ability to automatically choose colormaps for plotting with `xarray`
+  * wraps `xcmocean` for this
 
 
 ## Installation
 
 ### Create environment if needed
 
-As a first step, you can create an environment for this package with conda if you want:
+As a first step, you can create an environment for this package with conda if you want. If you do this, you'll need to git clone the package first as below.
 
     conda create --name XROMS python=3.8 --file requirements.txt
 
@@ -48,6 +50,10 @@ As a first step, you can create an environment for this package with conda if yo
 You can choose to install with conda the optional dependencies for full functionality:
 
     conda install --file requirements-opt.txt
+    
+and to install optional dependency `xcmocean`:
+
+    pip install git+git://github.com/kthyng/xcmocean
 
 Then choose one of the following to install `xroms` from GitHub:
 

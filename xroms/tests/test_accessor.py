@@ -17,6 +17,37 @@ ds = xr.open_dataset("xroms/tests/input/ocean_his_0001.nc")
 ds = ds.merge(grid1, overwrite_vars=True, compat="override")
 ds, grid = xroms.roms_dataset(ds)
 
+axesTZYX = ['T','Z','Y','X']
+axesTYX = ['T','Y','X']
+coordnamesTZYX = ['time','vertical','latitude','longitude']
+coordnamesTYX = ['time','latitude','longitude']
+
+dim_dict = {'rho': {'s_rho': ['ocean_time','s_rho','eta_rho', 'xi_rho'],
+                    's_w': ['ocean_time','s_w','eta_rho', 'xi_rho'],
+                    None: ['ocean_time','eta_rho', 'xi_rho']},
+            'u': {'s_rho': ['ocean_time','s_rho','eta_rho', 'xi_u'],
+                  's_w': ['ocean_time','s_w','eta_rho', 'xi_u'],
+                  None: ['ocean_time','eta_rho', 'xi_u']},
+            'v': {'s_rho': ['ocean_time','s_rho','eta_v', 'xi_rho'],
+                  's_w': ['ocean_time','s_w','eta_v', 'xi_rho'],
+                  None: ['ocean_time','eta_v', 'xi_rho']},
+            'psi': {'s_rho': ['ocean_time','s_rho','eta_v', 'xi_u'],
+                    's_w': ['ocean_time','s_w','eta_v', 'xi_u'],
+                    None: ['ocean_time','eta_v', 'xi_u']}}
+
+coord_dict = {'rho': {'s_rho': ['ocean_time','z_rho','lat_rho','lon_rho'],
+                    's_w': ['ocean_time','z_w','lat_rho','lon_rho'],
+                     None: ['ocean_time','lat_rho','lon_rho']},
+            'u': {'s_rho': ['ocean_time','z_rho_u','lat_u','lon_u'],
+                    's_w': ['ocean_time','z_w_u','lat_u','lon_u'],
+                 None: ['ocean_time','lat_u','lon_u']},
+            'v': {'s_rho': ['ocean_time','z_rho_v','lat_v','lon_v'],
+                    's_w': ['ocean_time','z_w_v','lat_v','lon_v'],
+                 None: ['ocean_time','lat_v','lon_v']},
+            'psi': {'s_rho': ['ocean_time','z_rho_psi','lat_psi','lon_psi'],
+                    's_w': ['ocean_time','z_w_psi','lat_psi','lon_psi'],
+                   None: ['ocean_time','lat_psi','lon_psi']}}
+
 
 def test_grid():
     assert isinstance(ds.xroms.grid, xgrid.Grid)
@@ -29,14 +60,16 @@ def test_speed():
     assert np.allclose(acc, xroms.speed(ds.u, ds.v, grid))
 
     # also check attributes
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
     # cf-xarray: make sure all Axes and Coordinates available in output
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
-
+    hcoord = 'rho'; scoord = 's_rho'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 def test_KE():
 
@@ -46,13 +79,16 @@ def test_KE():
     assert np.allclose(acc, xroms.KE(ds.rho0, s))
 
     # also check attributes
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
     # cf-xarray: make sure all Axes and Coordinates available in output
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    hcoord = 'rho'; scoord = 's_rho'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_uv_geostrophic():
@@ -60,22 +96,28 @@ def test_uv_geostrophic():
     acc = ds.xroms.ug
     assert np.allclose(acc, xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="xi"))
     # also check attributes
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
     # cf-xarray: make sure all Axes and Coordinates available in output
-    axes = ["T", "X", "Y"]
-    coords = ["longitude", "latitude", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    hcoord = 'u'; scoord = None
+    dims = dim_dict[hcoord][scoord]; axes = axesTYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
     acc = ds.xroms.vg
     assert np.allclose(acc, xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="eta"))
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y"]
-    coords = ["longitude", "latitude", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'v'; scoord = None
+    dims = dim_dict[hcoord][scoord]; axes = axesTYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_EKE():
@@ -83,34 +125,43 @@ def test_EKE():
     acc = ds.xroms.EKE
     xug, xvg = xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="both")
     assert np.allclose(acc, xroms.EKE(xug, xvg, grid))
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y"]
-    coords = ["longitude", "latitude", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'rho'; scoord = None
+    dims = dim_dict[hcoord][scoord]; axes = axesTYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_dudz():
     acc = ds.xroms.dudz
     assert np.allclose(acc, xroms.dudz(ds.u, grid))
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'u'; scoord = 's_w'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_dvdz():
     acc = ds.xroms.dvdz
     assert np.allclose(acc, xroms.dvdz(ds.v, grid))
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'v'; scoord = 's_w'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_vertical_shear():
@@ -118,23 +169,29 @@ def test_vertical_shear():
     xdvdz = ds.xroms.dvdz
     acc = ds.xroms.vertical_shear
     assert np.allclose(acc, xroms.vertical_shear(xdudz, xdvdz, grid))
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'rho'; scoord = 's_w'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_relative_vorticity():
     acc = ds.xroms.vort
     assert np.allclose(acc, 0)
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'psi'; scoord = 's_w'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_ertel():
@@ -142,12 +199,15 @@ def test_ertel():
     xsig0 = xroms.potential_density(ds.temp, ds.salt)
     xbuoy = xroms.buoyancy(xsig0)
     assert np.allclose(acc, xroms.ertel(xbuoy, ds.u, ds.v, ds.f, grid))
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'rho'; scoord = 's_rho'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_w():
@@ -179,142 +239,191 @@ def test_omega():
 def test_rho():
     acc = ds.xroms.rho
     assert np.allclose(acc, xroms.density(ds.temp, ds.salt, ds.z_rho))
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'rho'; scoord = 's_rho'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_sig0():
     acc = ds.xroms.sig0
     assert np.allclose(acc, xroms.potential_density(ds.temp, ds.salt, 0))
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'rho'; scoord = 's_rho'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_buoyancy():
     acc = ds.xroms.buoyancy
     xsig0 = xroms.potential_density(ds.temp, ds.salt)
     assert np.allclose(acc, xroms.buoyancy(xsig0))
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'rho'; scoord = 's_rho'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_N2():
     acc = ds.xroms.N2
     xrho = xroms.density(ds.temp, ds.salt, ds.z_rho)
     assert np.allclose(acc, xroms.N2(xrho, grid), equal_nan=True)
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'rho'; scoord = 's_w'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_M2():
     acc = ds.xroms.M2
     xrho = xroms.density(ds.temp, ds.salt, ds.z_rho)
     assert np.allclose(acc, xroms.M2(xrho, grid), equal_nan=True)
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y", "Z"]
-    coords = ["longitude", "latitude", "vertical", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'rho'; scoord = 's_w'
+    dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_mld():
     acc = ds.xroms.mld(thresh=0.03)
     sig0 = xroms.potential_density(ds.temp, ds.salt, 0)
     assert np.allclose(acc, xroms.mld(sig0, ds.h, ds.mask_rho), equal_nan=True)
-    acc.name == acc.attrs["name"]
-    acc.attrs["grid"] == ds.xroms.grid
-    axes = ["T", "X", "Y"]
-    coords = ["longitude", "latitude", "time"]
-    assert set(axes).issubset(acc.cf.axes)
-    assert set(coords).issubset(acc.cf.coordinates)
+    assert acc.name == acc.attrs["name"]
+    assert isinstance(acc.attrs['grid'], xgrid.Grid)
+    hcoord = 'rho'; scoord = None
+    dims = dim_dict[hcoord][scoord]; axes = axesTYX
+    coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTYX
+    for ax, dim in zip(axes, dims):
+        assert acc.cf[ax].name == dim
+    for coordname, coord in zip(coordnames, coords):
+        assert acc.cf[coordname].name == coord
 
 
 def test_ddxi():
-    testvars = ["salt", "u", "v", "z_w"]
+    testvars = ["salt", "u", "v"]
     for testvar in testvars:
         acc = ds[testvar].xroms.ddxi()
         assert np.allclose(acc, xroms.ddxi(ds[testvar], grid))
-        acc.name == acc.attrs["name"]
-        acc.attrs["grid"] == ds.xroms.grid
-        axes = ["T", "X", "Y", "Z"]
-        coords = ["longitude", "latitude", "vertical", "time"]
-        assert set(axes).issubset(acc.cf.axes)
-        assert set(coords).issubset(acc.cf.coordinates)
+        assert acc.name == acc.attrs["name"]
+        assert isinstance(acc.attrs['grid'], xgrid.Grid)
+        if testvar == 'salt':
+            hcoord = 'u'
+            scoord = 's_w'
+        elif testvar == 'u':
+            hcoord = 'rho'
+            scoord = 's_w'
+        elif testvar == 'v':
+            hcoord = 'psi'
+            scoord = 's_w'
+        dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+        coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX    
+        for ax, dim in zip(axes, dims):
+            assert acc.cf[ax].name == dim
+        for coordname, coord in zip(coordnames, coords):
+            assert acc.cf[coordname].name == coord
 
         acc = ds.xroms.ddxi(testvar)
         assert np.allclose(acc, xroms.ddxi(ds[testvar], grid))
-        acc.name == acc.attrs["name"]
-        acc.attrs["grid"] == ds.xroms.grid
-        axes = ["T", "X", "Y", "Z"]
-        coords = ["longitude", "latitude", "vertical", "time"]
-        assert set(axes).issubset(acc.cf.axes)
-        assert set(coords).issubset(acc.cf.coordinates)
+        assert acc.name == acc.attrs["name"]
+        assert isinstance(acc.attrs['grid'], xgrid.Grid)
+        for ax, dim in zip(axes, dims):
+            assert acc.cf[ax].name == dim
+        for coordname, coord in zip(coordnames, coords):
+            assert acc.cf[coordname].name == coord
 
 
 def test_ddeta():
-    testvars = ["salt", "u", "v", "z_w"]
+    testvars = ["salt", "u", "v"]
     for testvar in testvars:
         acc = ds[testvar].xroms.ddeta()
         assert np.allclose(acc, xroms.ddeta(ds[testvar], grid))
-        acc.name == acc.attrs["name"]
-        acc.attrs["grid"] == ds.xroms.grid
-        axes = ["T", "X", "Y", "Z"]
-        coords = ["longitude", "latitude", "vertical", "time"]
-        assert set(axes).issubset(acc.cf.axes)
-        assert set(coords).issubset(acc.cf.coordinates)
+        assert acc.name == acc.attrs["name"]
+        assert isinstance(acc.attrs['grid'], xgrid.Grid)
+        if testvar == 'salt':
+            hcoord = 'v'
+            scoord = 's_w'
+        elif testvar == 'u':
+            hcoord = 'psi'
+            scoord = 's_w'
+        elif testvar == 'v':
+            hcoord = 'rho'
+            scoord = 's_w'
+        dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+        coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX    
+        for ax, dim in zip(axes, dims):
+            assert acc.cf[ax].name == dim
+        for coordname, coord in zip(coordnames, coords):
+            assert acc.cf[coordname].name == coord
 
         acc = ds.xroms.ddeta(testvar)
         assert np.allclose(acc, xroms.ddeta(ds[testvar], grid))
-        acc.name == acc.attrs["name"]
-        acc.attrs["grid"] == ds.xroms.grid
-        axes = ["T", "X", "Y", "Z"]
-        coords = ["longitude", "latitude", "vertical", "time"]
-        assert set(axes).issubset(acc.cf.axes)
-        assert set(coords).issubset(acc.cf.coordinates)
+        assert acc.name == acc.attrs["name"]
+        assert isinstance(acc.attrs['grid'], xgrid.Grid)
+        for ax, dim in zip(axes, dims):
+            assert acc.cf[ax].name == dim
+        for coordname, coord in zip(coordnames, coords):
+            assert acc.cf[coordname].name == coord
 
 
 def test_ddz():
-    testvars = ["salt", "u", "v", "z_w"]
+    testvars = ["salt", "u", "v"]
     for testvar in testvars:
         acc = ds[testvar].xroms.ddz()
         assert np.allclose(acc, xroms.ddz(ds[testvar], grid))
-        acc.name == acc.attrs["name"]
-        acc.attrs["grid"] == ds.xroms.grid
-        axes = ["T", "X", "Y", "Z"]
-        coords = ["longitude", "latitude", "vertical", "time"]
-        assert set(axes).issubset(acc.cf.axes)
-        assert set(coords).issubset(acc.cf.coordinates)
+        assert acc.name == acc.attrs["name"]
+        assert isinstance(acc.attrs['grid'], xgrid.Grid)
+        dims = list(ds[testvar].dims); axes = axesTZYX
+        coords = [ds[testvar].cf[coordname].name for coordname in coordnamesTZYX]; coordnames = coordnamesTZYX
+        # correct dim and coord in derivative direction
+        if grid.axes['Z']._get_axis_coord(ds[testvar])[1] == 's_rho':
+            dims[1] = 's_w'
+            coords[1] = coords[1].replace('rho','w')
+        else:
+            dims[1] = 's_rho'
+            coords[1] = coords[1].replace('w','rho')
+        for ax, dim in zip(axes, dims):
+            assert acc.cf[ax].name == dim
+        for coordname, coord in zip(coordnames, coords):
+            assert acc.cf[coordname].name == coord
 
         acc = ds.xroms.ddz(testvar)
         assert np.allclose(acc, xroms.ddz(ds[testvar], grid))
-        acc.name == acc.attrs["name"]
-        acc.attrs["grid"] == ds.xroms.grid
-        axes = ["T", "X", "Y", "Z"]
-        coords = ["longitude", "latitude", "vertical", "time"]
-        assert set(axes).issubset(acc.cf.axes)
-        assert set(coords).issubset(acc.cf.coordinates)
+        assert acc.name == acc.attrs["name"]
+        assert isinstance(acc.attrs['grid'], xgrid.Grid)
+        for ax, dim in zip(axes, dims):
+            assert acc.cf[ax].name == dim
+        for coordname, coord in zip(coordnames, coords):
+            assert acc.cf[coordname].name == coord
 
 
 def test_to_grid():
 
-    testvars = ["salt", "u", "v", "z_w"]
+    testvars = ["salt", "u", "v"]
     for testvar in testvars:
         for scoord in ["s_w", "s_rho"]:
             for hcoord in ["rho", "u", "v", "psi"]:
@@ -322,25 +431,27 @@ def test_to_grid():
                 assert np.allclose(
                     acc, xroms.to_grid(ds[testvar], grid, hcoord=hcoord, scoord=scoord)
                 )
-                acc.name == acc.attrs["name"]
-                acc.attrs["grid"] == ds.xroms.grid
-                axes = ["T", "X", "Y", "Z"]
-                coords = ["longitude", "latitude", "vertical", "time"]
-                assert set(axes).issubset(acc.cf.axes)
-                assert set(coords).issubset(acc.cf.coordinates)
+                assert acc.name == acc.attrs["name"]
+                assert isinstance(acc.attrs['grid'], xgrid.Grid)
+                dims = dim_dict[hcoord][scoord]; axes = axesTZYX
+                coords = coord_dict[hcoord][scoord]; coordnames = coordnamesTZYX
+                for ax, dim in zip(axes, dims):
+                    assert acc.cf[ax].name == dim
+                for coordname, coord in zip(coordnames, coords):
+                    assert acc.cf[coordname].name == coord
 
                 acc = ds.xroms.to_grid(testvar, hcoord=hcoord, scoord=scoord)
                 assert np.allclose(
                     acc, xroms.to_grid(ds[testvar], grid, hcoord=hcoord, scoord=scoord)
                 )
-                acc.name == acc.attrs["name"]
-                acc.attrs["grid"] == ds.xroms.grid
-                axes = ["T", "X", "Y", "Z"]
-                coords = ["longitude", "latitude", "vertical", "time"]
-                assert set(axes).issubset(acc.cf.axes)
-                assert set(coords).issubset(acc.cf.coordinates)
+                assert acc.name == acc.attrs["name"]
+                assert isinstance(acc.attrs['grid'], xgrid.Grid)
+                for ax, dim in zip(axes, dims):
+                    assert acc.cf[ax].name == dim
+                for coordname, coord in zip(coordnames, coords):
+                    assert acc.cf[coordname].name == coord
 
-
+                    
 def test_sel2d():
     lon0, lat0 = -94.8, 28.0
     testvars = ["salt", "u", "v", "z_w"]
@@ -354,12 +465,14 @@ def test_sel2d():
             lat0,
         )
         assert np.allclose(acc, out)
-        acc.name == acc.attrs["name"]
-        acc.attrs["grid"] == ds.xroms.grid
-        axes = ["T", "X", "Y", "Z"]
-        coords = ["longitude", "latitude", "vertical", "time"]
-        assert set(axes).issubset(acc.cf.axes)
-        assert set(coords).issubset(acc.cf.coordinates)
+        assert acc.name == testvar
+        assert isinstance(acc.attrs['grid'], xgrid.Grid)
+        dims = ds[testvar].dims; axes = axesTZYX
+        coords = [ds[testvar].cf[coordname].name for coordname in coordnamesTZYX]; coordnames = coordnamesTZYX
+        for ax, dim in zip(axes, dims):
+            assert acc.cf[ax].name == dim
+        for coordname, coord in zip(coordnames, coords):
+            assert acc.cf[coordname].name == coord
 
 
 def test_argsel2d():
@@ -376,19 +489,19 @@ def test_argsel2d():
 def test_gridmean():
     testvars = ["salt", "u", "v", "z_w"]
     for testvar in testvars:
-        axis = "X"
-        var1 = ds[testvar].xroms.gridmean(axis)
-        var2 = xroms.gridmean(ds[testvar], grid, axis)
-        assert np.allclose(var1, var2)
+        for axis in ['Z','Y','X']:
+            var1 = ds[testvar].xroms.gridmean(axis)
+            var2 = xroms.gridmean(ds[testvar], grid, axis)
+            assert np.allclose(var1, var2)
 
 
 def test_gridsum():
     testvars = ["salt", "u", "v", "z_w"]
     for testvar in testvars:
-        axis = "X"
-        var1 = ds[testvar].xroms.gridsum(axis)
-        var2 = xroms.gridsum(ds[testvar], grid, axis)
-        assert np.allclose(var1, var2)
+        for axis in ['Z','Y','X']:
+            var1 = ds[testvar].xroms.gridsum(axis)
+            var2 = xroms.gridsum(ds[testvar], grid, axis)
+            assert np.allclose(var1, var2)
 
 
 def test_interpll():

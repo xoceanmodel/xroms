@@ -23,6 +23,9 @@ class xromsDatasetAccessor:
     def __init__(self, ds):
 
         self.ds = ds
+        
+        # extra for getting coordinates but changes variables
+        self._ds = ds.copy(deep=True)
 
         # if ds wasn't read in with an xroms load function, it probably doesn't have a grid object
         if "grid" not in ds.attrs:
@@ -399,7 +402,7 @@ class xromsDatasetAccessor:
         return self.ds.M2
 
     def mld(self, thresh=0.03):
-        """Calculate mixed layer depth [m].
+        """Calculate mixed layer depth [m] on rho grid.
 
         Inputs
         ------
@@ -516,10 +519,8 @@ class xromsDatasetAccessor:
             sfill_value=sfill_value,
         )
 
-        self.ds[var.name] = var
-        var = self.ds[var.name].copy()
-        del self.ds[var.name]
-        return var
+        self._ds[var.name] = var
+        return self._ds[var.name]
 
     def ddeta(
         self,
@@ -620,10 +621,8 @@ class xromsDatasetAccessor:
             attrs=attrs,
         )
 
-        self.ds[var.name] = var
-        var = self.ds[var.name].copy()
-        del self.ds[var.name]
-        return var
+        self._ds[var.name] = var
+        return self._ds[var.name]
 
     def ddz(
         self,
@@ -716,10 +715,8 @@ class xromsDatasetAccessor:
             attrs=attrs,
         )
 
-        self.ds[var.name] = var
-        var = self.ds[var.name].copy()
-        del self.ds[var.name]
-        return var
+        self._ds[var.name] = var
+        return self._ds[var.name]
 
     def to_grid(
         self,
@@ -805,10 +802,8 @@ class xromsDatasetAccessor:
             sfill_value=sfill_value,
         )
 
-        self.ds[var.name] = var
-        var = self.ds[var.name].copy()
-        del self.ds[var.name]
-        return var
+        self._ds[var.name] = var
+        return self._ds[var.name]
     
     def subset(self, X=None, Y=None):
         """Subset model output horizontally using isel, properly accounting for horizontal grids.
@@ -850,6 +845,10 @@ class xromsDataArrayAccessor:
     def __init__(self, da):
 
         self.da = da
+        
+        # make copy of ds that I can use to stash DataArrays to
+        # retrieve coords without changing original ds.
+        self.ds = self.da.attrs["grid"]._ds.copy(deep=True)
 
     def to_grid(
         self,
@@ -927,10 +926,8 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds[var.name] = var
-        var = self.da.attrs["grid"]._ds[var.name].copy()
-        del self.da.attrs["grid"]._ds[var.name]
-        return var
+        self.ds[var.name] = var
+        return self.ds[var.name]
 
     def ddz(
         self,
@@ -1013,10 +1010,8 @@ class xromsDataArrayAccessor:
             sfill_value=sfill_value,
             attrs=attrs,
         )
-        self.da.attrs["grid"]._ds[var.name] = var
-        var = self.da.attrs["grid"]._ds[var.name].copy()
-        del self.da.attrs["grid"]._ds[var.name]
-        return var
+        self.ds[var.name] = var
+        return self.ds[var.name]
 
     def ddxi(
         self,
@@ -1109,10 +1104,8 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds[var.name] = var
-        var = self.da.attrs["grid"]._ds[var.name].copy()
-        del self.da.attrs["grid"]._ds[var.name]
-        return var
+        self.ds[var.name] = var
+        return self.ds[var.name]
 
     def ddeta(
         self,
@@ -1205,10 +1198,8 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds[var.name] = var
-        var = self.da.attrs["grid"]._ds[var.name].copy()
-        del self.da.attrs["grid"]._ds[var.name]
-        return var
+        self.ds[var.name] = var
+        return self.ds[var.name]
 
     def argsel2d(self, lon0, lat0):
         """Find the indices of coordinate pair closest to another point.

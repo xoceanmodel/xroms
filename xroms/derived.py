@@ -173,7 +173,7 @@ def uv_geostrophic(zeta, f, grid, hboundary="extend", hfill_value=None, which="b
             / xroms.to_u(f, grid, hboundary=hboundary, hfill_value=hfill_value)
         )
 
-        ug.attrs["name"] = "u_geo"
+        ug.attrs["name"] = "ug"
         ug.attrs["long_name"] = "geostrophic u velocity"
         ug.attrs["units"] = "m/s"  # inherits grid from T
         ug.name = ug.attrs["name"]
@@ -189,7 +189,7 @@ def uv_geostrophic(zeta, f, grid, hboundary="extend", hfill_value=None, which="b
             / xroms.to_v(f, grid, hboundary=hboundary, hfill_value=hfill_value)
         )
 
-        vg.attrs["name"] = "v_geo"
+        vg.attrs["name"] = "vg"
         vg.attrs["long_name"] = "geostrophic v velocity"
         vg.attrs["units"] = "m/s"  # inherits grid from T
         vg.name = vg.attrs["name"]
