@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 import xarray as xr
 import xgcm
+
 import xroms
 
 
@@ -259,10 +260,10 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
             transformed = transformed.assign_coords({lonkey: transformedlon})
 
         transformed[lonkey].attrs["standard_name"] = "longitude"
-        
+
     if "latitude" in var.cf.coordinates:
         latkey = var.cf["latitude"].name
-        
+
         if latkey not in transformed.coords:
             # this interpolation won't work for certain combinations of var[latkey] and iso_array
             # without the following step
@@ -283,15 +284,15 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
 
     if "vertical" in var.cf.coordinates:
         zkey = var.cf["vertical"].name
-        
+
         if zkey not in transformed.coords:
             transformedZ = grid.transform(
                 var[zkey], axis, iso_values, target_data=iso_array
             )
             transformed = transformed.assign_coords({zkey: transformedZ})
-            
+
         transformed[zkey].attrs["positive"] = "up"
-        
+
     transformed = transformed.squeeze().cf.guess_coord_axis()
 
     # reorder back to normal ordering in case changed

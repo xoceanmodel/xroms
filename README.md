@@ -50,7 +50,7 @@ As a first step, you can create an environment for this package with conda if yo
 You can choose to install with conda the optional dependencies for full functionality:
 
     conda install --file requirements-opt.txt
-    
+
 and to install optional dependency `xcmocean`:
 
     pip install git+git://github.com/kthyng/xcmocean

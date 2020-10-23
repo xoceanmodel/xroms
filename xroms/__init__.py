@@ -26,7 +26,9 @@ from .utilities import (
     gridmean,
     gridsum,
     hgrad,
+    order,
     sel2d,
+    subset,
     to_grid,
     to_psi,
     to_rho,
@@ -35,7 +37,5 @@ from .utilities import (
     to_u,
     to_v,
     xisoslice,
-    subset,
-    order
 )
 from .xroms import open_mfnetcdf, open_netcdf, open_zarr, roms_dataset

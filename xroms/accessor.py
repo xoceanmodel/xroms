@@ -23,7 +23,7 @@ class xromsDatasetAccessor:
     def __init__(self, ds):
 
         self.ds = ds
-        
+
         # extra for getting coordinates but changes variables
         self._ds = ds.copy(deep=True)
 
@@ -804,7 +804,7 @@ class xromsDatasetAccessor:
 
         self._ds[var.name] = var
         return self._ds[var.name]
-    
+
     def subset(self, X=None, Y=None):
         """Subset model output horizontally using isel, properly accounting for horizontal grids.
 
@@ -836,7 +836,7 @@ class xromsDatasetAccessor:
         Subset in X and Y:
         >>> ds.xroms.subset(X=slice(20,40), Y=slice(50,100))
         """
-        
+
         return xroms.subset(ds, X=X, Y=Y)
 
 
@@ -845,7 +845,7 @@ class xromsDataArrayAccessor:
     def __init__(self, da):
 
         self.da = da
-        
+
         # make copy of ds that I can use to stash DataArrays to
         # retrieve coords without changing original ds.
         self.ds = self.da.attrs["grid"]._ds.copy(deep=True)
@@ -1441,7 +1441,7 @@ class xromsDataArrayAccessor:
             iso_array=iso_array,
             axis=axis,
         )
-    
+
     def order(self):
         """Reorder self to typical dimensional ordering.
 
@@ -1452,12 +1452,12 @@ class xromsDataArrayAccessor:
 
         Notes
         -----
-        Do not consider previously-selected dimensions that are kept on as coordinates but 
+        Do not consider previously-selected dimensions that are kept on as coordinates but
         cannot be transposed anymore. This is accomplished with `.reset_coords(drop=True)`.
 
         Example usage
         -------------
         >>> ds.temp.xroms.order()
         """
-        
+
         return xroms.order(self.da)
