@@ -404,7 +404,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
 
     #     ds.attrs['grid'] = grid  # causes recursion error
     # also put grid into every variable with at least 2D
-    for var in ds.variables:
+    for var in ds.data_vars:
         if ds[var].ndim > 1:
             ds[var].attrs["grid"] = grid
 
