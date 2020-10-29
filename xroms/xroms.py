@@ -100,8 +100,9 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     tdims = [dim for dim in ds.dims if dim[:4] == "eta_"]
     for dim in tdims:
         ds[dim] = (dim, np.arange(ds.sizes[dim]), {"axis": "Y"})
-    ds.ocean_time.attrs["axis"] = "T"
-    ds.ocean_time.attrs["standard_name"] = "time"
+    if 'ocean_time' in ds.keys():
+        ds.ocean_time.attrs["axis"] = "T"
+        ds.ocean_time.attrs["standard_name"] = "time"
     tcoords = [coord for coord in ds.coords if coord[:2] == "s_"]
     for coord in tcoords:
         ds[coord].attrs["axis"] = "Z"
