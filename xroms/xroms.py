@@ -126,7 +126,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
         Vtransform = ds.Vtransform
 
     assert (
-        Vtransform is not None
+        Vtransform in [1,2]
     ), "Need a Vtransform of 1 or 2, either in the Dataset or input to the function."
 
     if Vtransform == 1:
