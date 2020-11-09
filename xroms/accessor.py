@@ -837,7 +837,7 @@ class xromsDatasetAccessor:
         >>> ds.xroms.subset(X=slice(20,40), Y=slice(50,100))
         """
 
-        return xroms.subset(ds, X=X, Y=Y)
+        return xroms.subset(self.ds, X=X, Y=Y)
 
 
 @xr.register_dataarray_accessor("xroms")
