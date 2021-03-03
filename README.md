@@ -39,6 +39,8 @@ There are functions to...
 
 ## Installation
 
+You need to have `conda` installed for these installation instructions. You'll have best results if you use the channel `conda-forge`, which you can prioritize with `conda config --add channels conda-forge --force`.
+
 ### Create environment if needed
 
 As a first step, you can create an environment for this package with conda if you want. If you do this, you'll need to git clone the package first as below.
