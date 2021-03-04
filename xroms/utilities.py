@@ -1311,3 +1311,82 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     out = xr.where(check, out / 2, out)
 
     return out
+
+
+def subset(ds, X=None, Y=None):
+    """Subset model output horizontally using isel, properly accounting for horizontal grids.
+
+    Inputs
+    ------
+    ds: xarray Dataset
+        Dataset of ROMS model output. Assumes that full regular grid setup is
+        available and has been read in using xroms so that dimension names
+        have been updated.
+    X: slice, optional
+        Slice in X dimension using form `X=slice(start, stop, step)`. For example,
+        >>> X=slice(20,40,2)
+        Indices are used for rho grid, and psi grid is reduced accordingly.
+    Y: slice, optional
+        Slice in Y dimension using form `Y=slice(start, stop, step)`. For example,
+        >>> Y=slice(20,40,2)
+        Indices are used for rho grid, and psi grid is reduced accordingly.
+
+    Returns
+    -------
+    Dataset with form as if model had been run at the subsetted size. That is, the outermost
+    cells of the rho grid are like ghost cells and the psi grid is one inward from this size
+    in each direction.
+
+    Notes
+    -----
+    X and Y must be slices, not single numbers.
+
+    Example usage
+    -------------
+    Subset only in Y direction:
+    >>> xroms.subset(ds, Y=slice(50,100))
+    Subset in X and Y:
+    >>> xroms.subset(ds, X=slice(20,40), Y=slice(50,100))
+    """
+
+    if X is not None:
+        assert isinstance(X, slice), "X must be a slice, e.g., slice(50,100)"
+        ds = ds.isel(xi_rho=X, xi_u=slice(X.start, X.stop - 1))
+
+    if Y is not None:
+        assert isinstance(Y, slice), "Y must be a slice, e.g., slice(50,100)"
+        ds = ds.isel(eta_rho=Y, eta_v=slice(Y.start, Y.stop - 1))
+
+    return ds
+
+
+def order(var):
+    """Reorder var to typical dimensional ordering.
+
+    Inputs
+    ------
+    var: DataArray
+        Variable to operate on.
+
+    Returns
+    -------
+    DataArray with dimensional order ['T', 'Z', 'Y', 'X'], or whatever subset of
+    dimensions are present in var.
+
+    Notes
+    -----
+    Do not consider previously-selected dimensions that are kept on as coordinates but
+    cannot be transposed anymore. This is accomplished with `.reset_coords(drop=True)`.
+
+    Example usage
+    -------------
+    >>> xroms.order(var)
+    """
+
+    return var.cf.transpose(
+        *[
+            dim
+            for dim in ["T", "Z", "Y", "X"]
+            if dim in var.reset_coords(drop=True).cf.axes
+        ]
+    )

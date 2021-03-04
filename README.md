@@ -19,7 +19,9 @@ There are functions to...
 * useful functions including:
   * derivatives in all dimensions, accounting for curvilinear grids and sigma layers
   * grid metrics (i.e., grid lengths, areas, and volumes)
+  * subset horizontal grid such that the staggered grids are consistent
   * easily change horizontal and vertical grids using `xgcm` grid objects
+  * easily reorder to dimensional convention
   * slice along a fixed value
   * wrapper for interpolation in longitude/latitude and for fixed depths
   * mixed-layer depth
@@ -30,14 +32,18 @@ There are functions to...
   * calculating climatologies
   * various calculations
 * provide/track attributes and coordinates through functions
-  * wraps `cf-xarray` to generalize coordinate and dimension calling.
+  * wraps [`cf-xarray`](https://cf-xarray.readthedocs.io/en/latest/) to generalize coordinate and dimension calling.
+* ability to automatically choose colormaps for plotting with `xarray`
+  * wraps `xcmocean` for this
 
 
 ## Installation
 
+You need to have `conda` installed for these installation instructions. You'll have best results if you use the channel `conda-forge`, which you can prioritize with `conda config --add channels conda-forge --force`.
+
 ### Create environment if needed
 
-As a first step, you can create an environment for this package with conda if you want:
+As a first step, you can create an environment for this package with conda if you want. If you do this, you'll need to git clone the package first as below.
 
     conda create --name XROMS python=3.8 --file requirements.txt
 
@@ -46,6 +52,10 @@ As a first step, you can create an environment for this package with conda if yo
 You can choose to install with conda the optional dependencies for full functionality:
 
     conda install --file requirements-opt.txt
+
+and to install optional dependency `xcmocean`:
+
+    pip install git+git://github.com/kthyng/xcmocean
 
 Then choose one of the following to install `xroms` from GitHub:
 

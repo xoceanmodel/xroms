@@ -24,6 +24,9 @@ class xromsDatasetAccessor:
 
         self.ds = ds
 
+        # extra for getting coordinates but changes variables
+        self._ds = ds.copy(deep=True)
+
         # if ds wasn't read in with an xroms load function, it probably doesn't have a grid object
         if "grid" not in ds.attrs:
             self.ds, grid = xroms.roms_dataset(self.ds)
@@ -399,7 +402,7 @@ class xromsDatasetAccessor:
         return self.ds.M2
 
     def mld(self, thresh=0.03):
-        """Calculate mixed layer depth [m].
+        """Calculate mixed layer depth [m] on rho grid.
 
         Inputs
         ------
@@ -516,10 +519,8 @@ class xromsDatasetAccessor:
             sfill_value=sfill_value,
         )
 
-        self.ds["temp_storage"] = var
-        var = self.ds["temp_storage"].copy()
-        del self.ds["temp_storage"]
-        return var
+        self._ds[var.name] = var
+        return self._ds[var.name]
 
     def ddeta(
         self,
@@ -620,10 +621,8 @@ class xromsDatasetAccessor:
             attrs=attrs,
         )
 
-        self.ds["temp_storage"] = var
-        var = self.ds["temp_storage"].copy()
-        del self.ds["temp_storage"]
-        return var
+        self._ds[var.name] = var
+        return self._ds[var.name]
 
     def ddz(
         self,
@@ -716,10 +715,8 @@ class xromsDatasetAccessor:
             attrs=attrs,
         )
 
-        self.ds["temp_storage"] = var
-        var = self.ds["temp_storage"].copy()
-        del self.ds["temp_storage"]
-        return var
+        self._ds[var.name] = var
+        return self._ds[var.name]
 
     def to_grid(
         self,
@@ -805,10 +802,42 @@ class xromsDatasetAccessor:
             sfill_value=sfill_value,
         )
 
-        self.ds["temp_storage"] = var
-        var = self.ds["temp_storage"].copy()
-        del self.ds["temp_storage"]
-        return var
+        self._ds[var.name] = var
+        return self._ds[var.name]
+
+    def subset(self, X=None, Y=None):
+        """Subset model output horizontally using isel, properly accounting for horizontal grids.
+
+        Inputs
+        ------
+        X: slice, optional
+            Slice in X dimension using form `X=slice(start, stop, step)`. For example,
+            >>> X=slice(20,40,2)
+            Indices are used for rho grid, and psi grid is reduced accordingly.
+        Y: slice, optional
+            Slice in Y dimension using form `Y=slice(start, stop, step)`. For example,
+            >>> Y=slice(20,40,2)
+            Indices are used for rho grid, and psi grid is reduced accordingly.
+
+        Returns
+        -------
+        Dataset with form as if model had been run at the subsetted size. That is, the outermost
+        cells of the rho grid are like ghost cells and the psi grid is one inward from this size
+        in each direction.
+
+        Notes
+        -----
+        X and Y must be slices, not single numbers.
+
+        Example usage
+        -------------
+        Subset only in Y direction:
+        >>> ds.xroms.subset(Y=slice(50,100))
+        Subset in X and Y:
+        >>> ds.xroms.subset(X=slice(20,40), Y=slice(50,100))
+        """
+
+        return xroms.subset(self.ds, X=X, Y=Y)
 
 
 @xr.register_dataarray_accessor("xroms")
@@ -816,6 +845,10 @@ class xromsDataArrayAccessor:
     def __init__(self, da):
 
         self.da = da
+
+        # make copy of ds that I can use to stash DataArrays to
+        # retrieve coords without changing original ds.
+        self.ds = self.da.attrs["grid"]._ds.copy(deep=True)
 
     def to_grid(
         self,
@@ -893,10 +926,8 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds["temp_storage"] = var
-        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
-        del self.da.attrs["grid"]._ds["temp_storage"]
-        return var
+        self.ds[var.name] = var
+        return self.ds[var.name]
 
     def ddz(
         self,
@@ -979,10 +1010,8 @@ class xromsDataArrayAccessor:
             sfill_value=sfill_value,
             attrs=attrs,
         )
-        self.da.attrs["grid"]._ds["temp_storage"] = var
-        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
-        del self.da.attrs["grid"]._ds["temp_storage"]
-        return var
+        self.ds[var.name] = var
+        return self.ds[var.name]
 
     def ddxi(
         self,
@@ -1075,10 +1104,8 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds["temp_storage"] = var
-        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
-        del self.da.attrs["grid"]._ds["temp_storage"]
-        return var
+        self.ds[var.name] = var
+        return self.ds[var.name]
 
     def ddeta(
         self,
@@ -1171,10 +1198,8 @@ class xromsDataArrayAccessor:
             sboundary=sboundary,
             sfill_value=sfill_value,
         )
-        self.da.attrs["grid"]._ds["temp_storage"] = var
-        var = self.da.attrs["grid"]._ds["temp_storage"].copy()
-        del self.da.attrs["grid"]._ds["temp_storage"]
-        return var
+        self.ds[var.name] = var
+        return self.ds[var.name]
 
     def argsel2d(self, lon0, lat0):
         """Find the indices of coordinate pair closest to another point.
@@ -1416,3 +1441,23 @@ class xromsDataArrayAccessor:
             iso_array=iso_array,
             axis=axis,
         )
+
+    def order(self):
+        """Reorder self to typical dimensional ordering.
+
+        Returns
+        -------
+        DataArray with dimensional order ['T', 'Z', 'Y', 'X'], or whatever subset of
+        dimensions are present in var.
+
+        Notes
+        -----
+        Do not consider previously-selected dimensions that are kept on as coordinates but
+        cannot be transposed anymore. This is accomplished with `.reset_coords(drop=True)`.
+
+        Example usage
+        -------------
+        >>> ds.temp.xroms.order()
+        """
+
+        return xroms.order(self.da)
