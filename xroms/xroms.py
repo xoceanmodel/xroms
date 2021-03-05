@@ -86,12 +86,21 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     ds = ds.rename(rename)
 
     #     ds = ds.rename({'eta_u': 'eta_rho', 'xi_v': 'xi_rho', 'xi_psi': 'xi_u', 'eta_psi': 'eta_v'})
+    
+    # Use spherical flag to determine if has lat/lon or not
+    # If not present, try to guess its value
+    if not 'spherical' in ds:
+        if 'lon_rho' in ds:
+            ds['spherical'] = 1
+        else:
+            ds['spherical'] = 0
 
     # make sure psi grid in coords
-    if "lon_psi" in ds.keys():
-        ds = ds.assign_coords({"lon_psi": ds.lon_psi})
-    if "lat_psi" in ds.keys():
-        ds = ds.assign_coords({"lat_psi": ds.lat_psi})
+    if ds.spherical:
+        if "lon_psi" in ds.keys():
+            ds = ds.assign_coords({"lon_psi": ds.lon_psi})
+        if "lat_psi" in ds.keys():
+            ds = ds.assign_coords({"lat_psi": ds.lat_psi})
 
     # modify attributes for using cf-xarray
     tdims = [dim for dim in ds.dims if dim[:3] == "xi_"]
@@ -107,12 +116,13 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     for coord in tcoords:
         ds[coord].attrs["axis"] = "Z"
     # make sure lon/lat have standard names
-    tcoords = [coord for coord in ds.coords if coord[:4] == "lon_"]
-    for coord in tcoords:
-        ds[coord].attrs["standard_name"] = "longitude"
-    tcoords = [coord for coord in ds.coords if coord[:4] == "lat_"]
-    for coord in tcoords:
-        ds[coord].attrs["standard_name"] = "latitude"
+    if ds.spherical:
+        tcoords = [coord for coord in ds.coords if coord[:4] == "lon_"]
+        for coord in tcoords:
+            ds[coord].attrs["standard_name"] = "longitude"
+        tcoords = [coord for coord in ds.coords if coord[:4] == "lat_"]
+        for coord in tcoords:
+            ds[coord].attrs["standard_name"] = "latitude"
 
     coords = {
         "X": {"center": "xi_rho", "inner": "xi_u"},
@@ -263,7 +273,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     }
 
     # add vert grid, esp for plotting pcolormesh
-    if add_verts:
+    if ds.spherical and add_verts:
         import pygridgen
 
         pc = cartopy.crs.PlateCarree()
