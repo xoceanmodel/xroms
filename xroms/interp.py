@@ -2,8 +2,9 @@
 Interpolation functions.
 """
 
-import warnings
 import sys
+import warnings
+
 import numpy as np
 import xarray as xr
 import xgcm
@@ -58,7 +59,7 @@ def interpll(var, lons, lats, which="pairs"):
     To return 2D pairs of points, in this case a 3x3 array of points:
     >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='grid')
     """
-    
+
     # make sure that xesmf was read in for this function to run
     try:
         xe
