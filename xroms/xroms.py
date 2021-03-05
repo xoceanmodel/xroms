@@ -89,7 +89,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     
     # Use spherical flag to determine if has lat/lon or not
     # If not present, try to guess its value
-    if not 'spherical' in ds:
+    if (not 'spherical' in ds) or (not ds['spherical'] in [0,1]):
         if 'lon_rho' in ds:
             ds['spherical'] = 1
         else:
