@@ -101,7 +101,13 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
             ds = ds.assign_coords({"lon_psi": ds.lon_psi})
         if "lat_psi" in ds.keys():
             ds = ds.assign_coords({"lat_psi": ds.lat_psi})
-
+            
+    # check if dataset has depths or is just 1 layer
+    if ('s_rho' in ds) and (ds.s_rho.size > 1):
+        ds['3d'] = True
+    else:
+        ds['3d'] = False
+    
     # modify attributes for using cf-xarray
     tdims = [dim for dim in ds.dims if dim[:3] == "xi_"]
     for dim in tdims:
@@ -112,9 +118,12 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     if "ocean_time" in ds.keys():
         ds.ocean_time.attrs["axis"] = "T"
         ds.ocean_time.attrs["standard_name"] = "time"
-    tcoords = [coord for coord in ds.coords if coord[:2] == "s_"]
-    for coord in tcoords:
-        ds[coord].attrs["axis"] = "Z"
+    
+    if ds['3d']:
+        tcoords = [coord for coord in ds.coords if coord[:2] == "s_"]
+        for coord in tcoords:
+            ds[coord].attrs["axis"] = "Z"
+
     # make sure lon/lat have standard names
     if ds.spherical:
         tcoords = [coord for coord in ds.coords if coord[:4] == "lon_"]
@@ -135,142 +144,144 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     if "Vtransform" in ds.variables.keys():
         Vtransform = ds.Vtransform
 
-    assert Vtransform in [
-        1,
-        2,
-    ], "Need a Vtransform of 1 or 2, either in the Dataset or input to the function."
+    if ds['3d']:
+        assert Vtransform in [
+            1,
+            2,
+        ], "Need a Vtransform of 1 or 2, either in the Dataset or input to the function."
 
-    if Vtransform == 1:
-        Zo_rho = ds.hc * (ds.s_rho - ds.Cs_r) + ds.Cs_r * ds.h
-        z_rho = Zo_rho + ds.zeta * (1 + Zo_rho / ds.h)
-        Zo_w = ds.hc * (ds.s_w - ds.Cs_w) + ds.Cs_w * ds.h
-        z_w = Zo_w + ds.zeta * (1 + Zo_w / ds.h)
+    if ds['3d']:
+        if Vtransform == 1:
+            Zo_rho = ds.hc * (ds.s_rho - ds.Cs_r) + ds.Cs_r * ds.h
+            z_rho = Zo_rho + ds.zeta * (1 + Zo_rho / ds.h)
+            Zo_w = ds.hc * (ds.s_w - ds.Cs_w) + ds.Cs_w * ds.h
+            z_w = Zo_w + ds.zeta * (1 + Zo_w / ds.h)
+            # also include z coordinates with mean sea level (constant over time)
+            z_rho0 = Zo_rho
+            z_w0 = Zo_w
+        elif Vtransform == 2:
+            Zo_rho = (ds.hc * ds.s_rho + ds.Cs_r * ds.h) / (ds.hc + ds.h)
+            z_rho = ds.zeta + (ds.zeta + ds.h) * Zo_rho
+            Zo_w = (ds.hc * ds.s_w + ds.Cs_w * ds.h) / (ds.hc + ds.h)
+            z_w = ds.zeta + (ds.zeta + ds.h) * Zo_w
+            # also include z coordinates with mean sea level (constant over time)
+            z_rho0 = ds.h * Zo_rho
+            z_w0 = ds.h * Zo_w
+        z_rho.attrs = {
+            "long_name": "depth of RHO-points",
+            "time": "ocean_time",
+            "field": "z_rho, scalar, series",
+            "units": "m",
+        }
+        z_rho0.attrs = {
+            "long_name": "depth of RHO-points",
+            "field": "z_rho0, scalar",
+            "units": "m",
+        }
+        z_w.attrs = {
+            "long_name": "depth of W-points",
+            "time": "ocean_time",
+            "field": "z_w, scalar, series",
+            "units": "m",
+        }
+        z_w0.attrs = {
+            "long_name": "depth of W-points",
+            "field": "z_w0, scalar",
+            "units": "m",
+        }
+
+        ds.coords["z_w"] = xroms.order(z_w)
+        ds.coords["z_w_u"] = grid.interp(ds.z_w, "X")
+        ds.coords["z_w_u"].attrs = {
+            "long_name": "depth of U-points on vertical W grid",
+            "time": "ocean_time",
+            "field": "z_w_u, scalar, series",
+            "units": "m",
+        }
+        ds.coords["z_w_v"] = grid.interp(ds.z_w, "Y")
+        ds.coords["z_w_v"].attrs = {
+            "long_name": "depth of V-points on vertical W grid",
+            "time": "ocean_time",
+            "field": "z_w_v, scalar, series",
+            "units": "m",
+        }
+        ds.coords["z_w_psi"] = grid.interp(ds.z_w_u, "Y")
+        ds.coords["z_w_psi"].attrs = {
+            "long_name": "depth of PSI-points on vertical W grid",
+            "time": "ocean_time",
+            "field": "z_w_psi, scalar, series",
+            "units": "m",
+        }
+
+        ds.coords["z_rho"] = xroms.order(z_rho)
+        ds.coords["z_rho_u"] = grid.interp(ds.z_rho, "X")
+        ds.coords["z_rho_u"].attrs = {
+            "long_name": "depth of U-points on vertical RHO grid",
+            "time": "ocean_time",
+            "field": "z_rho_u, scalar, series",
+            "units": "m",
+        }
+
+        ds.coords["z_rho_v"] = grid.interp(ds.z_rho, "Y")
+        ds.coords["z_rho_v"].attrs = {
+            "long_name": "depth of V-points on vertical RHO grid",
+            "time": "ocean_time",
+            "field": "z_rho_v, scalar, series",
+            "units": "m",
+        }
+
+        ds.coords["z_rho_psi"] = grid.interp(ds.z_rho_u, "Y")
         # also include z coordinates with mean sea level (constant over time)
-        z_rho0 = Zo_rho
-        z_w0 = Zo_w
-    elif Vtransform == 2:
-        Zo_rho = (ds.hc * ds.s_rho + ds.Cs_r * ds.h) / (ds.hc + ds.h)
-        z_rho = ds.zeta + (ds.zeta + ds.h) * Zo_rho
-        Zo_w = (ds.hc * ds.s_w + ds.Cs_w * ds.h) / (ds.hc + ds.h)
-        z_w = ds.zeta + (ds.zeta + ds.h) * Zo_w
-        # also include z coordinates with mean sea level (constant over time)
-        z_rho0 = ds.h * Zo_rho
-        z_w0 = ds.h * Zo_w
-    z_rho.attrs = {
-        "long_name": "depth of RHO-points",
-        "time": "ocean_time",
-        "field": "z_rho, scalar, series",
-        "units": "m",
-    }
-    z_rho0.attrs = {
-        "long_name": "depth of RHO-points",
-        "field": "z_rho0, scalar",
-        "units": "m",
-    }
-    z_w.attrs = {
-        "long_name": "depth of W-points",
-        "time": "ocean_time",
-        "field": "z_w, scalar, series",
-        "units": "m",
-    }
-    z_w0.attrs = {
-        "long_name": "depth of W-points",
-        "field": "z_w0, scalar",
-        "units": "m",
-    }
+        ds.coords["z_rho_psi"].attrs = {
+            "long_name": "depth of PSI-points on vertical RHO grid",
+            "time": "ocean_time",
+            "field": "z_rho_psi, scalar, series",
+            "units": "m",
+        }
 
-    ds.coords["z_w"] = xroms.order(z_w)
-    ds.coords["z_w_u"] = grid.interp(ds.z_w, "X")
-    ds.coords["z_w_u"].attrs = {
-        "long_name": "depth of U-points on vertical W grid",
-        "time": "ocean_time",
-        "field": "z_w_u, scalar, series",
-        "units": "m",
-    }
-    ds.coords["z_w_v"] = grid.interp(ds.z_w, "Y")
-    ds.coords["z_w_v"].attrs = {
-        "long_name": "depth of V-points on vertical W grid",
-        "time": "ocean_time",
-        "field": "z_w_v, scalar, series",
-        "units": "m",
-    }
-    ds.coords["z_w_psi"] = grid.interp(ds.z_w_u, "Y")
-    ds.coords["z_w_psi"].attrs = {
-        "long_name": "depth of PSI-points on vertical W grid",
-        "time": "ocean_time",
-        "field": "z_w_psi, scalar, series",
-        "units": "m",
-    }
+        ds.coords["z_rho0"] = xroms.order(z_rho0)
+        ds.coords["z_rho_u0"] = grid.interp(ds.z_rho0, "X")
+        ds.coords["z_rho_u0"].attrs = {
+            "long_name": "depth of U-points on vertical RHO grid",
+            "field": "z_rho_u0, scalar",
+            "units": "m",
+        }
 
-    ds.coords["z_rho"] = xroms.order(z_rho)
-    ds.coords["z_rho_u"] = grid.interp(ds.z_rho, "X")
-    ds.coords["z_rho_u"].attrs = {
-        "long_name": "depth of U-points on vertical RHO grid",
-        "time": "ocean_time",
-        "field": "z_rho_u, scalar, series",
-        "units": "m",
-    }
+        ds.coords["z_rho_v0"] = grid.interp(ds.z_rho0, "Y")
+        ds.coords["z_rho_v0"].attrs = {
+            "long_name": "depth of V-points on vertical RHO grid",
+            "field": "z_rho_v0, scalar",
+            "units": "m",
+        }
 
-    ds.coords["z_rho_v"] = grid.interp(ds.z_rho, "Y")
-    ds.coords["z_rho_v"].attrs = {
-        "long_name": "depth of V-points on vertical RHO grid",
-        "time": "ocean_time",
-        "field": "z_rho_v, scalar, series",
-        "units": "m",
-    }
+        ds.coords["z_rho_psi0"] = grid.interp(ds.z_rho_u0, "Y")
+        ds.coords["z_rho_psi0"].attrs = {
+            "long_name": "depth of PSI-points on vertical RHO grid",
+            "field": "z_rho_psi0, scalar",
+            "units": "m",
+        }
 
-    ds.coords["z_rho_psi"] = grid.interp(ds.z_rho_u, "Y")
-    # also include z coordinates with mean sea level (constant over time)
-    ds.coords["z_rho_psi"].attrs = {
-        "long_name": "depth of PSI-points on vertical RHO grid",
-        "time": "ocean_time",
-        "field": "z_rho_psi, scalar, series",
-        "units": "m",
-    }
+        ds.coords["z_w0"] = xroms.order(z_w0)
+        ds.coords["z_w_u0"] = grid.interp(ds.z_w0, "X")
+        ds.coords["z_w_u0"].attrs = {
+            "long_name": "depth of U-points on vertical W grid",
+            "field": "z_w_u0, scalar",
+            "units": "m",
+        }
 
-    ds.coords["z_rho0"] = xroms.order(z_rho0)
-    ds.coords["z_rho_u0"] = grid.interp(ds.z_rho0, "X")
-    ds.coords["z_rho_u0"].attrs = {
-        "long_name": "depth of U-points on vertical RHO grid",
-        "field": "z_rho_u0, scalar",
-        "units": "m",
-    }
+        ds.coords["z_w_v0"] = grid.interp(ds.z_w0, "Y")
+        ds.coords["z_w_v0"].attrs = {
+            "long_name": "depth of V-points on vertical W grid",
+            "field": "z_w_v0, scalar",
+            "units": "m",
+        }
 
-    ds.coords["z_rho_v0"] = grid.interp(ds.z_rho0, "Y")
-    ds.coords["z_rho_v0"].attrs = {
-        "long_name": "depth of V-points on vertical RHO grid",
-        "field": "z_rho_v0, scalar",
-        "units": "m",
-    }
-
-    ds.coords["z_rho_psi0"] = grid.interp(ds.z_rho_u0, "Y")
-    ds.coords["z_rho_psi0"].attrs = {
-        "long_name": "depth of PSI-points on vertical RHO grid",
-        "field": "z_rho_psi0, scalar",
-        "units": "m",
-    }
-
-    ds.coords["z_w0"] = xroms.order(z_w0)
-    ds.coords["z_w_u0"] = grid.interp(ds.z_w0, "X")
-    ds.coords["z_w_u0"].attrs = {
-        "long_name": "depth of U-points on vertical W grid",
-        "field": "z_w_u0, scalar",
-        "units": "m",
-    }
-
-    ds.coords["z_w_v0"] = grid.interp(ds.z_w0, "Y")
-    ds.coords["z_w_v0"].attrs = {
-        "long_name": "depth of V-points on vertical W grid",
-        "field": "z_w_v0, scalar",
-        "units": "m",
-    }
-
-    ds.coords["z_w_psi0"] = grid.interp(ds.z_w_u0, "Y")
-    ds.coords["z_w_psi0"].attrs = {
-        "long_name": "depth of PSI-points on vertical W grid",
-        "field": "z_w_psi0, scalar",
-        "units": "m",
-    }
+        ds.coords["z_w_psi0"] = grid.interp(ds.z_w_u0, "Y")
+        ds.coords["z_w_psi0"].attrs = {
+            "long_name": "depth of PSI-points on vertical W grid",
+            "field": "z_w_psi0, scalar",
+            "units": "m",
+        }
 
     # add vert grid, esp for plotting pcolormesh
     if ds.spherical and add_verts:
@@ -395,126 +406,127 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
         "field": "dy_psi, scalar",
     }
 
-    ds["dz"] = grid.diff(ds.z_w, "Z")
-    ds["dz"].attrs = {
-        "long_name": "vertical layer thickness on vertical RHO grid",
-        "time": "ocean_time",
-        "field": "dz, scalar, series",
-        "units": "m",
-    }
+    if ds['3d']:
+        ds["dz"] = grid.diff(ds.z_w, "Z")
+        ds["dz"].attrs = {
+            "long_name": "vertical layer thickness on vertical RHO grid",
+            "time": "ocean_time",
+            "field": "dz, scalar, series",
+            "units": "m",
+        }
 
-    ds["dz_w"] = grid.diff(ds.z_rho, "Z", boundary="fill")
-    ds["dz_w"].attrs = {
-        "long_name": "vertical layer thickness on vertical W grid",
-        "time": "ocean_time",
-        "field": "dz_w, scalar, series",
-        "units": "m",
-    }
+        ds["dz_w"] = grid.diff(ds.z_rho, "Z", boundary="fill")
+        ds["dz_w"].attrs = {
+            "long_name": "vertical layer thickness on vertical W grid",
+            "time": "ocean_time",
+            "field": "dz_w, scalar, series",
+            "units": "m",
+        }
 
-    ds["dz_u"] = grid.interp(ds.dz, "X")
-    ds["dz_u"].attrs = {
-        "long_name": "vertical layer thickness on vertical RHO grid on U grid",
-        "time": "ocean_time",
-        "field": "dz_u, scalar, series",
-        "units": "m",
-    }
+        ds["dz_u"] = grid.interp(ds.dz, "X")
+        ds["dz_u"].attrs = {
+            "long_name": "vertical layer thickness on vertical RHO grid on U grid",
+            "time": "ocean_time",
+            "field": "dz_u, scalar, series",
+            "units": "m",
+        }
 
-    ds["dz_w_u"] = grid.interp(ds.dz_w, "X")
-    ds["dz_w_u"].attrs = {
-        "long_name": "vertical layer thickness on vertical W grid on U grid",
-        "time": "ocean_time",
-        "field": "dz_w_u, scalar, series",
-        "units": "m",
-    }
+        ds["dz_w_u"] = grid.interp(ds.dz_w, "X")
+        ds["dz_w_u"].attrs = {
+            "long_name": "vertical layer thickness on vertical W grid on U grid",
+            "time": "ocean_time",
+            "field": "dz_w_u, scalar, series",
+            "units": "m",
+        }
 
-    ds["dz_v"] = grid.interp(ds.dz, "Y")
-    ds["dz_v"].attrs = {
-        "long_name": "vertical layer thickness on vertical RHO grid on V grid",
-        "time": "ocean_time",
-        "field": "dz_v, scalar, series",
-        "units": "m",
-    }
+        ds["dz_v"] = grid.interp(ds.dz, "Y")
+        ds["dz_v"].attrs = {
+            "long_name": "vertical layer thickness on vertical RHO grid on V grid",
+            "time": "ocean_time",
+            "field": "dz_v, scalar, series",
+            "units": "m",
+        }
 
-    ds["dz_w_v"] = grid.interp(ds.dz_w, "Y")
-    ds["dz_w_v"].attrs = {
-        "long_name": "vertical layer thickness on vertical W grid on V grid",
-        "time": "ocean_time",
-        "field": "dz_w_v, scalar, series",
-        "units": "m",
-    }
+        ds["dz_w_v"] = grid.interp(ds.dz_w, "Y")
+        ds["dz_w_v"].attrs = {
+            "long_name": "vertical layer thickness on vertical W grid on V grid",
+            "time": "ocean_time",
+            "field": "dz_w_v, scalar, series",
+            "units": "m",
+        }
 
-    ds["dz_psi"] = grid.interp(ds.dz_v, "X")
-    ds["dz_psi"].attrs = {
-        "long_name": "vertical layer thickness on vertical RHO grid on PSI grid",
-        "time": "ocean_time",
-        "field": "dz_psi, scalar, series",
-        "units": "m",
-    }
+        ds["dz_psi"] = grid.interp(ds.dz_v, "X")
+        ds["dz_psi"].attrs = {
+            "long_name": "vertical layer thickness on vertical RHO grid on PSI grid",
+            "time": "ocean_time",
+            "field": "dz_psi, scalar, series",
+            "units": "m",
+        }
 
-    ds["dz_w_psi"] = grid.interp(ds.dz_w_v, "X")
-    ds["dz_w_psi"].attrs = {
-        "long_name": "vertical layer thickness on vertical W grid on PSI grid",
-        "time": "ocean_time",
-        "field": "dz_w_psi, scalar, series",
-        "units": "m",
-    }
+        ds["dz_w_psi"] = grid.interp(ds.dz_w_v, "X")
+        ds["dz_w_psi"].attrs = {
+            "long_name": "vertical layer thickness on vertical W grid on PSI grid",
+            "time": "ocean_time",
+            "field": "dz_w_psi, scalar, series",
+            "units": "m",
+        }
 
-    # also include z coordinates with mean sea level (constant over time)
-    ds["dz0"] = grid.diff(ds.z_w0, "Z")
-    ds["dz0"].attrs = {
-        "long_name": "vertical layer thickness on vertical RHO grid",
-        "field": "dz0, scalar",
-        "units": "m",
-    }
+        # also include z coordinates with mean sea level (constant over time)
+        ds["dz0"] = grid.diff(ds.z_w0, "Z")
+        ds["dz0"].attrs = {
+            "long_name": "vertical layer thickness on vertical RHO grid",
+            "field": "dz0, scalar",
+            "units": "m",
+        }
 
-    ds["dz_w0"] = grid.diff(ds.z_rho0, "Z", boundary="fill")
-    ds["dz_w0"].attrs = {
-        "long_name": "vertical layer thickness on vertical W grid",
-        "field": "dz_w0, scalar",
-        "units": "m",
-    }
+        ds["dz_w0"] = grid.diff(ds.z_rho0, "Z", boundary="fill")
+        ds["dz_w0"].attrs = {
+            "long_name": "vertical layer thickness on vertical W grid",
+            "field": "dz_w0, scalar",
+            "units": "m",
+        }
 
-    ds["dz_u0"] = grid.interp(ds.dz0, "X")
-    ds["dz_u0"].attrs = {
-        "long_name": "vertical layer thickness on vertical RHO grid on U grid",
-        "field": "dz_u0, scalar",
-        "units": "m",
-    }
+        ds["dz_u0"] = grid.interp(ds.dz0, "X")
+        ds["dz_u0"].attrs = {
+            "long_name": "vertical layer thickness on vertical RHO grid on U grid",
+            "field": "dz_u0, scalar",
+            "units": "m",
+        }
 
-    ds["dz_w_u0"] = grid.interp(ds.dz_w0, "X")
-    ds["dz_w_u0"].attrs = {
-        "long_name": "vertical layer thickness on vertical W grid on U grid",
-        "field": "dz_w_u0, scalar",
-        "units": "m",
-    }
+        ds["dz_w_u0"] = grid.interp(ds.dz_w0, "X")
+        ds["dz_w_u0"].attrs = {
+            "long_name": "vertical layer thickness on vertical W grid on U grid",
+            "field": "dz_w_u0, scalar",
+            "units": "m",
+        }
 
-    ds["dz_v0"] = grid.interp(ds.dz0, "Y")
-    ds["dz_v0"].attrs = {
-        "long_name": "vertical layer thickness on vertical RHO grid on V grid",
-        "field": "dz_v0, scalar",
-        "units": "m",
-    }
+        ds["dz_v0"] = grid.interp(ds.dz0, "Y")
+        ds["dz_v0"].attrs = {
+            "long_name": "vertical layer thickness on vertical RHO grid on V grid",
+            "field": "dz_v0, scalar",
+            "units": "m",
+        }
 
-    ds["dz_w_v0"] = grid.interp(ds.dz_w0, "Y")
-    ds["dz_w_v0"].attrs = {
-        "long_name": "vertical layer thickness on vertical W grid on V grid",
-        "field": "dz_w_v0, scalar",
-        "units": "m",
-    }
+        ds["dz_w_v0"] = grid.interp(ds.dz_w0, "Y")
+        ds["dz_w_v0"].attrs = {
+            "long_name": "vertical layer thickness on vertical W grid on V grid",
+            "field": "dz_w_v0, scalar",
+            "units": "m",
+        }
 
-    ds["dz_psi0"] = grid.interp(ds.dz_v0, "X")
-    ds["dz_psi0"].attrs = {
-        "long_name": "vertical layer thickness on vertical RHO grid on PSI grid",
-        "field": "dz_psi0, scalar",
-        "units": "m",
-    }
+        ds["dz_psi0"] = grid.interp(ds.dz_v0, "X")
+        ds["dz_psi0"].attrs = {
+            "long_name": "vertical layer thickness on vertical RHO grid on PSI grid",
+            "field": "dz_psi0, scalar",
+            "units": "m",
+        }
 
-    ds["dz_w_psi0"] = grid.interp(ds.dz_w_v0, "X")
-    ds["dz_w_psi0"].attrs = {
-        "long_name": "vertical layer thickness on vertical W grid on PSI grid",
-        "field": "dz_w_psi0, scalar",
-        "units": "m",
-    }
+        ds["dz_w_psi0"] = grid.interp(ds.dz_w_v0, "X")
+        ds["dz_w_psi0"].attrs = {
+            "long_name": "vertical layer thickness on vertical W grid on PSI grid",
+            "field": "dz_w_psi0, scalar",
+            "units": "m",
+        }
 
     # grid areas
     ds["dA"] = ds.dx * ds.dy
@@ -546,61 +558,62 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     }
 
     # volume
-    ds["dV"] = ds.dz * ds.dx * ds.dy  # rho vertical, rho horizontal
-    ds["dV"].attrs = {
-        "long_name": "volume metric in XI and ETA and S on RHO/RHO grids",
-        "units": "meter3",
-        "field": "dV, scalar",
-    }
+    if ds['3d']:
+        ds["dV"] = ds.dz * ds.dx * ds.dy  # rho vertical, rho horizontal
+        ds["dV"].attrs = {
+            "long_name": "volume metric in XI and ETA and S on RHO/RHO grids",
+            "units": "meter3",
+            "field": "dV, scalar",
+        }
 
-    ds["dV_w"] = ds.dz_w * ds.dx * ds.dy  # w vertical, rho horizontal
-    ds["dV_w"].attrs = {
-        "long_name": "volume metric in XI and ETA and S on RHO/W grids",
-        "units": "meter3",
-        "field": "dV_w, scalar",
-    }
+        ds["dV_w"] = ds.dz_w * ds.dx * ds.dy  # w vertical, rho horizontal
+        ds["dV_w"].attrs = {
+            "long_name": "volume metric in XI and ETA and S on RHO/W grids",
+            "units": "meter3",
+            "field": "dV_w, scalar",
+        }
 
-    ds["dV_u"] = ds.dz_u * ds.dx_u * ds.dy_u  # rho vertical, u horizontal
-    ds["dV_u"].attrs = {
-        "long_name": "volume metric in XI and ETA and S on U/RHO grids",
-        "units": "meter3",
-        "field": "dV_u, scalar",
-    }
+        ds["dV_u"] = ds.dz_u * ds.dx_u * ds.dy_u  # rho vertical, u horizontal
+        ds["dV_u"].attrs = {
+            "long_name": "volume metric in XI and ETA and S on U/RHO grids",
+            "units": "meter3",
+            "field": "dV_u, scalar",
+        }
 
-    ds["dV_w_u"] = ds.dz_w_u * ds.dx_u * ds.dy_u  # w vertical, u horizontal
-    ds["dV_w_u"].attrs = {
-        "long_name": "volume metric in XI and ETA and S on U/W grids",
-        "units": "meter3",
-        "field": "dV_w_u, scalar",
-    }
+        ds["dV_w_u"] = ds.dz_w_u * ds.dx_u * ds.dy_u  # w vertical, u horizontal
+        ds["dV_w_u"].attrs = {
+            "long_name": "volume metric in XI and ETA and S on U/W grids",
+            "units": "meter3",
+            "field": "dV_w_u, scalar",
+        }
 
-    ds["dV_v"] = ds.dz_v * ds.dx_v * ds.dy_v  # rho vertical, v horizontal
-    ds["dV_v"].attrs = {
-        "long_name": "volume metric in XI and ETA and S on V/RHO grids",
-        "units": "meter3",
-        "field": "dV_v, scalar",
-    }
+        ds["dV_v"] = ds.dz_v * ds.dx_v * ds.dy_v  # rho vertical, v horizontal
+        ds["dV_v"].attrs = {
+            "long_name": "volume metric in XI and ETA and S on V/RHO grids",
+            "units": "meter3",
+            "field": "dV_v, scalar",
+        }
 
-    ds["dV_w_v"] = ds.dz_w_v * ds.dx_v * ds.dy_v  # w vertical, v horizontal
-    ds["dV_w_v"].attrs = {
-        "long_name": "volume metric in XI and ETA and S on V/W grids",
-        "units": "meter3",
-        "field": "dV_w_v, scalar",
-    }
+        ds["dV_w_v"] = ds.dz_w_v * ds.dx_v * ds.dy_v  # w vertical, v horizontal
+        ds["dV_w_v"].attrs = {
+            "long_name": "volume metric in XI and ETA and S on V/W grids",
+            "units": "meter3",
+            "field": "dV_w_v, scalar",
+        }
 
-    ds["dV_psi"] = ds.dz_psi * ds.dx_psi * ds.dy_psi  # rho vertical, psi horizontal
-    ds["dV_psi"].attrs = {
-        "long_name": "volume metric in XI and ETA and S on PSI/RHO grids",
-        "units": "meter3",
-        "field": "dV_psi, scalar",
-    }
+        ds["dV_psi"] = ds.dz_psi * ds.dx_psi * ds.dy_psi  # rho vertical, psi horizontal
+        ds["dV_psi"].attrs = {
+            "long_name": "volume metric in XI and ETA and S on PSI/RHO grids",
+            "units": "meter3",
+            "field": "dV_psi, scalar",
+        }
 
-    ds["dV_w_psi"] = ds.dz_w_psi * ds.dx_psi * ds.dy_psi  # w vertical, psi horizontal
-    ds["dV_w_psi"].attrs = {
-        "long_name": "volume metric in XI and ETA and S on PSI/W grids",
-        "units": "meter3",
-        "field": "dV_w_psi, scalar",
-    }
+        ds["dV_w_psi"] = ds.dz_w_psi * ds.dx_psi * ds.dy_psi  # w vertical, psi horizontal
+        ds["dV_w_psi"].attrs = {
+            "long_name": "volume metric in XI and ETA and S on PSI/W grids",
+            "units": "meter3",
+            "field": "dV_w_psi, scalar",
+        }
 
     if "rho0" not in ds:
         ds["rho0"] = 1025  # kg/m^3
@@ -625,37 +638,47 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     #     for coord in tcoords:
     #         ds[coord].attrs['cell_measures'] = 'area: cell_area'
     #     # add coordinates attributes for variables
-    if "positive" in ds.s_rho.attrs:
-        ds.s_rho.attrs.pop("positive")
-    if "positive" in ds.s_w.attrs:
-        ds.s_w.attrs.pop("positive")
-    #     ds['z_rho'].attrs['positive'] = 'up'
-    tcoords = [coord for coord in ds.coords if coord[:2] == "z_" and "0" not in coord]
-    for coord in tcoords:
-        ds[coord].attrs["positive"] = "up"
-    #         ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'Y'})
-    #     ds['z_rho'].attrs['vertical'] = 'depth'
-    #     ds['temp'].attrs['coordinates'] = 'lon_rho lat_rho z_rho ocean_time'
-    #     [del ds[var].encoding['coordinates'] for var in ds.variables if 'coordinates' in ds[var].encoding]
+    if ds['3d']:
+        if "positive" in ds.s_rho.attrs:
+            ds.s_rho.attrs.pop("positive")
+        if "positive" in ds.s_w.attrs:
+            ds.s_w.attrs.pop("positive")
+        #     ds['z_rho'].attrs['positive'] = 'up'
+        tcoords = [coord for coord in ds.coords if coord[:2] == "z_" and "0" not in coord]
+        for coord in tcoords:
+            ds[coord].attrs["positive"] = "up"
+        #         ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'Y'})
+        #     ds['z_rho'].attrs['vertical'] = 'depth'
+        #     ds['temp'].attrs['coordinates'] = 'lon_rho lat_rho z_rho ocean_time'
+        #     [del ds[var].encoding['coordinates'] for var in ds.variables if 'coordinates' in ds[var].encoding]
+        
     for var in ds.variables:
         if "coordinates" in ds[var].encoding:
             del ds[var].encoding["coordinates"]
 
-    metrics = {
-        ("X",): ["dx", "dx_u", "dx_v", "dx_psi"],  # X distances
-        ("Y",): ["dy", "dy_u", "dy_v", "dy_psi"],  # Y distances
-        ("Z",): [
-            "dz",
-            "dz_u",
-            "dz_v",
-            "dz_w",
-            "dz_w_u",
-            "dz_w_v",
-            "dz_psi",
-            "dz_w_psi",
-        ],  # Z distances
-        ("X", "Y"): ["dA"],  # Areas
-    }
+    if ds['3d']:
+        metrics = {
+            ("X",): ["dx", "dx_u", "dx_v", "dx_psi"],  # X distances
+            ("Y",): ["dy", "dy_u", "dy_v", "dy_psi"],  # Y distances
+            ("Z",): [
+                "dz",
+                "dz_u",
+                "dz_v",
+                "dz_w",
+                "dz_w_u",
+                "dz_w_v",
+                "dz_psi",
+                "dz_w_psi",
+            ],  # Z distances
+            ("X", "Y"): ["dA"],  # Areas
+        }
+    else:  # 2d
+        metrics = {
+            ("X",): ["dx", "dx_u", "dx_v", "dx_psi"],  # X distances
+            ("Y",): ["dy", "dy_u", "dy_v", "dy_psi"],  # Y distances
+            ("X", "Y"): ["dA"],  # Areas
+        }
+
     grid = xgcm.Grid(ds, coords=coords, metrics=metrics, periodic=[])
 
     #     ds.attrs['grid'] = grid  # causes recursion error
@@ -859,3 +882,15 @@ def open_zarr(
     ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
 
     return ds
+
+
+def save(ds, filename='output.nc'):
+    
+    # have to remove the grid objects because they can't be saved
+    for var in ds.data_vars:
+        if 'grid' in ds[var].attrs:
+            del(ds[var].attrs["grid"])
+            
+    ds.to_netcdf(filename)
+    
+    
