@@ -101,13 +101,13 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
             ds = ds.assign_coords({"lon_psi": ds.lon_psi})
         if "lat_psi" in ds.keys():
             ds = ds.assign_coords({"lat_psi": ds.lat_psi})
-            
+
     # check if dataset has depths or is just 1 layer
-    if ('s_rho' in ds) and (ds.s_rho.size > 1):
-        ds['3d'] = True
+    if ("s_rho" in ds) and (ds.s_rho.size > 1):
+        ds["3d"] = True
     else:
-        ds['3d'] = False
-    
+        ds["3d"] = False
+
     # modify attributes for using cf-xarray
     tdims = [dim for dim in ds.dims if dim[:3] == "xi_"]
     for dim in tdims:
@@ -118,8 +118,8 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     if "ocean_time" in ds.keys():
         ds.ocean_time.attrs["axis"] = "T"
         ds.ocean_time.attrs["standard_name"] = "time"
-    
-    if ds['3d']:
+
+    if ds["3d"]:
         tcoords = [coord for coord in ds.coords if coord[:2] == "s_"]
         for coord in tcoords:
             ds[coord].attrs["axis"] = "Z"
@@ -144,13 +144,13 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     if "Vtransform" in ds.variables.keys():
         Vtransform = ds.Vtransform
 
-    if ds['3d']:
+    if ds["3d"]:
         assert Vtransform in [
             1,
             2,
         ], "Need a Vtransform of 1 or 2, either in the Dataset or input to the function."
 
-    if ds['3d']:
+    if ds["3d"]:
         if Vtransform == 1:
             Zo_rho = ds.hc * (ds.s_rho - ds.Cs_r) + ds.Cs_r * ds.h
             z_rho = Zo_rho + ds.zeta * (1 + Zo_rho / ds.h)
@@ -406,7 +406,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
         "field": "dy_psi, scalar",
     }
 
-    if ds['3d']:
+    if ds["3d"]:
         ds["dz"] = grid.diff(ds.z_w, "Z")
         ds["dz"].attrs = {
             "long_name": "vertical layer thickness on vertical RHO grid",
@@ -558,7 +558,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     }
 
     # volume
-    if ds['3d']:
+    if ds["3d"]:
         ds["dV"] = ds.dz * ds.dx * ds.dy  # rho vertical, rho horizontal
         ds["dV"].attrs = {
             "long_name": "volume metric in XI and ETA and S on RHO/RHO grids",
@@ -608,7 +608,9 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
             "field": "dV_psi, scalar",
         }
 
-        ds["dV_w_psi"] = ds.dz_w_psi * ds.dx_psi * ds.dy_psi  # w vertical, psi horizontal
+        ds["dV_w_psi"] = (
+            ds.dz_w_psi * ds.dx_psi * ds.dy_psi
+        )  # w vertical, psi horizontal
         ds["dV_w_psi"].attrs = {
             "long_name": "volume metric in XI and ETA and S on PSI/W grids",
             "units": "meter3",
@@ -638,25 +640,27 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     #     for coord in tcoords:
     #         ds[coord].attrs['cell_measures'] = 'area: cell_area'
     #     # add coordinates attributes for variables
-    if ds['3d']:
+    if ds["3d"]:
         if "positive" in ds.s_rho.attrs:
             ds.s_rho.attrs.pop("positive")
         if "positive" in ds.s_w.attrs:
             ds.s_w.attrs.pop("positive")
         #     ds['z_rho'].attrs['positive'] = 'up'
-        tcoords = [coord for coord in ds.coords if coord[:2] == "z_" and "0" not in coord]
+        tcoords = [
+            coord for coord in ds.coords if coord[:2] == "z_" and "0" not in coord
+        ]
         for coord in tcoords:
             ds[coord].attrs["positive"] = "up"
         #         ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'Y'})
         #     ds['z_rho'].attrs['vertical'] = 'depth'
         #     ds['temp'].attrs['coordinates'] = 'lon_rho lat_rho z_rho ocean_time'
         #     [del ds[var].encoding['coordinates'] for var in ds.variables if 'coordinates' in ds[var].encoding]
-        
+
     for var in ds.variables:
         if "coordinates" in ds[var].encoding:
             del ds[var].encoding["coordinates"]
 
-    if ds['3d']:
+    if ds["3d"]:
         metrics = {
             ("X",): ["dx", "dx_u", "dx_v", "dx_psi"],  # X distances
             ("Y",): ["dy", "dy_u", "dy_v", "dy_psi"],  # Y distances
@@ -884,13 +888,11 @@ def open_zarr(
     return ds
 
 
-def save(ds, filename='output.nc'):
-    
+def save(ds, filename="output.nc"):
+
     # have to remove the grid objects because they can't be saved
     for var in ds.data_vars:
-        if 'grid' in ds[var].attrs:
-            del(ds[var].attrs["grid"])
-            
+        if "grid" in ds[var].attrs:
+            del ds[var].attrs["grid"]
+
     ds.to_netcdf(filename)
-    
-    
