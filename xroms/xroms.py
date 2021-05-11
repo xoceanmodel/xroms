@@ -86,14 +86,14 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None):
     ds = ds.rename(rename)
 
     #     ds = ds.rename({'eta_u': 'eta_rho', 'xi_v': 'xi_rho', 'xi_psi': 'xi_u', 'eta_psi': 'eta_v'})
-    
+
     # Use spherical flag to determine if has lat/lon or not
     # If not present, try to guess its value
-    if (not 'spherical' in ds) or (not ds['spherical'] in [0,1]):
-        if 'lon_rho' in ds:
-            ds['spherical'] = 1
+    if (not "spherical" in ds) or (not ds["spherical"] in [0, 1]):
+        if "lon_rho" in ds:
+            ds["spherical"] = 1
         else:
-            ds['spherical'] = 0
+            ds["spherical"] = 0
 
     # make sure psi grid in coords
     if ds.spherical:
