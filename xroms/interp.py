@@ -2,6 +2,7 @@
 Interpolation functions.
 """
 
+import sys
 import warnings
 
 import numpy as np
@@ -13,8 +14,8 @@ import xroms
 
 try:
     import xesmf as xe
-except ImportError:
-    warnings.warn("xESMF is not installed, so `interpll` will not run.", ImportWarning)
+except ModuleNotFoundError:
+    warnings.warn("xESMF is not installed, so `interpll` will not run.")
 
 
 def interpll(var, lons, lats, which="pairs"):
@@ -58,6 +59,13 @@ def interpll(var, lons, lats, which="pairs"):
     To return 2D pairs of points, in this case a 3x3 array of points:
     >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='grid')
     """
+
+    # make sure that xesmf was read in for this function to run
+    try:
+        xe
+    except NameError:
+        print("xESMF is not installed, so `interpll` will not run.")
+        return
 
     # rename coords for use with xESMF
     lonkey = [coord for coord in var.coords if "lon_" in coord][0]

@@ -531,7 +531,7 @@ def test_to_grid():
 
 def test_sel2d():
     lon0, lat0 = -94.8, 28.0
-    testvars = ["salt", "u", "v", "z_w"]
+    testvars = ["salt", "u", "v"]
     for testvar in testvars:
         acc = ds[testvar].xroms.sel2d(lon0, lat0)
         out = xroms.sel2d(
@@ -556,7 +556,7 @@ def test_sel2d():
 
 def test_argsel2d():
     lon0, lat0 = -94.8, 28.0
-    testvars = ["salt", "u", "v", "z_w"]
+    testvars = ["salt", "u", "v"]
     for testvar in testvars:
         inds = ds[testvar].xroms.argsel2d(lon0, lat0)
         outinds = xroms.argsel2d(
@@ -566,7 +566,7 @@ def test_argsel2d():
 
 
 def test_gridmean():
-    testvars = ["salt", "u", "v", "z_w"]
+    testvars = ["salt", "u", "v"]
     for testvar in testvars:
         for axis in ["Z", "Y", "X"]:
             var1 = ds[testvar].xroms.gridmean(axis)
@@ -575,7 +575,7 @@ def test_gridmean():
 
 
 def test_gridsum():
-    testvars = ["salt", "u", "v", "z_w"]
+    testvars = ["salt", "u", "v"]
     for testvar in testvars:
         for axis in ["Z", "Y", "X"]:
             var1 = ds[testvar].xroms.gridsum(axis)
@@ -586,7 +586,7 @@ def test_gridsum():
 def test_interpll():
     ie, ix = 2, 3
     indexer = {"eta_rho": [ie], "xi_rho": [ix]}
-    testvars = ["salt", "u", "v", "z_w"]
+    testvars = ["salt", "u", "v"]
     for testvar in testvars:
         var1 = xroms.interpll(
             ds[testvar], ds.lon_rho.isel(indexer), ds.lat_rho.isel(indexer)
@@ -598,7 +598,7 @@ def test_interpll():
 
 
 def test_zslice():
-    testvars = ["salt", "u", "v", "z_w"]
+    testvars = ["salt", "u", "v"]
     for testvar in testvars:
         varin = ds[testvar]
         depths = np.asarray(ds[testvar].cf["vertical"][0, :, 0, 0].values)

@@ -143,8 +143,9 @@ def density(temp, salt, z=None):
         var.attrs["long_name"] = "density"
         var.attrs["units"] = "kg/m^3"  # inherits grid from temp
         var.name = var.attrs["name"]
-        var.coords["lon_rho"].attrs["standard_name"] = "longitude"
-        var.coords["lat_rho"].attrs["standard_name"] = "latitude"
+        if "lon_rho" in var:
+            var.coords["lon_rho"].attrs["standard_name"] = "longitude"
+            var.coords["lat_rho"].attrs["standard_name"] = "latitude"
 
     return var
 
