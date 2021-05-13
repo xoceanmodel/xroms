@@ -741,8 +741,7 @@ def open_netcdf(
 
     words = ("Model location should be given as string or `pathlib.Path`."
              "If you have list of multiple locations, use `open_mfdataset`.")
-    assert isinstance(file, str), words
-    assert isinstance(file, pathlib.Path), words
+    assert isinstance(file, (str, pathlib.Path)), words
 
     ds = xr.open_dataset(file, chunks=chunks, **xrargs)
 
