@@ -1,4 +1,5 @@
 # `xroms`
+[![DOI](https://zenodo.org/badge/265067025.svg)](https://zenodo.org/badge/latestdoi/265067025)
 
 `xroms` contains functions for commonly used scripts for working with ROMS output in xarray.
 
