@@ -43,7 +43,7 @@ def test_interpll():
                 varin, lon.cf.isel(indexer), lat.cf.isel(indexer), which="grid"
             )
             assert np.allclose(varout.squeeze(), varin.isel(indexer).squeeze())
-            
+
     # put back the way it was for testing
     xroms.XESMF_AVAILABLE = XESMF_AVAILABLE
 

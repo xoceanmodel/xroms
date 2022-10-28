@@ -599,7 +599,7 @@ def test_interpll():
                 ds.lon_rho.isel(indexer), ds.lat_rho.isel(indexer)
             )
             assert np.allclose(var1, var2)
-            
+
     # put back the way it was for testing
     xroms.XESMF_AVAILABLE = XESMF_AVAILABLE
 
