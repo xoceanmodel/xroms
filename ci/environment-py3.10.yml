@@ -11,7 +11,8 @@ dependencies:
   - numba >= 0.49
   - numpy
   - xarray
-  - xgcm
+  - xgcm == 0.5.1
+  - zarr
   ##############
   - pytest
   - pip:
