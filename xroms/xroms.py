@@ -7,6 +7,7 @@ import warnings
 
 import cf_xarray
 import numpy as np
+import pathlib
 import xarray as xr
 import xgcm
 
@@ -738,8 +739,9 @@ def open_netcdf(
     >>> ds = xroms.open_netcdf(file)
     """
 
-    words = "Model location should be given as string. If have list of multiple locations, use `open_mfdataset`."
-    assert isinstance(file, str), words
+    words = ("Model location should be given as string or `pathlib.Path`."
+             "If you have list of multiple locations, use `open_mfdataset`.")
+    assert isinstance(file, (str, pathlib.Path)), words
 
     ds = xr.open_dataset(file, chunks=chunks, **xrargs)
 
