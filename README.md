@@ -124,7 +124,7 @@ Notes:
 After installation, read in model output with one of three load methods:
  * `xroms.open_netcdf(filename)`: if model output is in a single netcdf file or at a single thredds address;
  * `xroms.open_mfnetcdf(filenames)`: if model output is available in multiple accessible local netcdf files;
- * `xroms.open_zarr(locations)`: if model output is avilable in multiple accessible zarr directories.
+ * `xroms.open_zarr(locations)`: if model output is available in multiple accessible zarr directories.
 More information about reading in model output is available in Jupyter notebook `examples/io.pynb`.
 
 Other common tasks to do with model output using `xroms` as well as other packages are demonstrated in additional Jupyter notebooks:

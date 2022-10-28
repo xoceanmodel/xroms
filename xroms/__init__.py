@@ -1,7 +1,6 @@
-try:
-    from ._version import __version__
-except ImportError:
-    __version__ = "unknown"
+"""Initialize xroms."""
+
+from pkg_resources import DistributionNotFound, get_distribution
 
 import xroms.accessor
 
@@ -39,3 +38,15 @@ from .utilities import (
     xisoslice,
 )
 from .xroms import open_mfnetcdf, open_netcdf, open_zarr, roms_dataset
+
+
+try:
+    __version__ = get_distribution("xroms").version
+except DistributionNotFound:
+    # package is not installed
+    __version__ = "unknown"
+
+# try:
+#     from ._version import __version__
+# except ImportError:
+#     __version__ = "unknown"
