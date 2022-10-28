@@ -1172,7 +1172,7 @@ def gridsum(var, grid, dim):
 def xisoslice(iso_array, iso_value, projected_array, coord):
     """Calculate an isosurface.
 
-    This function has been possibly superceded by isoslice
+    This function has been possibly superseded by isoslice
     that wraps `xgcm.grid.transform` for the following reasons,
     but more testing is needed:
     * The implementation of `xgcm.grid.transform` is more robust

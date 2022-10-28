@@ -3,11 +3,11 @@ Functions to help read in ROMS output.
 """
 
 
+import pathlib
 import warnings
 
 import cf_xarray
 import numpy as np
-import pathlib
 import xarray as xr
 import xgcm
 
@@ -739,8 +739,10 @@ def open_netcdf(
     >>> ds = xroms.open_netcdf(file)
     """
 
-    words = ("Model location should be given as string or `pathlib.Path`."
-             "If you have list of multiple locations, use `open_mfdataset`.")
+    words = (
+        "Model location should be given as string or `pathlib.Path`."
+        "If you have list of multiple locations, use `open_mfdataset`."
+    )
     assert isinstance(file, (str, pathlib.Path)), words
 
     ds = xr.open_dataset(file, chunks=chunks, **xrargs)
@@ -891,6 +893,7 @@ def open_zarr(
 
 
 def save(ds, filename="output.nc"):
+    """Save to file."""
 
     # have to remove the grid objects because they can't be saved
     for var in ds.data_vars:

@@ -20,6 +20,8 @@ g = 9.81  # m/s^2
 
 @xr.register_dataset_accessor("xroms")
 class xromsDatasetAccessor:
+    """Accessor for Datasets."""
+
     def __init__(self, ds):
 
         self.ds = ds
@@ -842,6 +844,8 @@ class xromsDatasetAccessor:
 
 @xr.register_dataarray_accessor("xroms")
 class xromsDataArrayAccessor:
+    """Accessor for DataArrays."""
+
     def __init__(self, da):
 
         self.da = da

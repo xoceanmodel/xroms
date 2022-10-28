@@ -12,10 +12,10 @@ import xgcm
 import xroms
 
 
-try:
-    import xesmf as xe
-except ModuleNotFoundError:
-    warnings.warn("xESMF is not installed, so `interpll` will not run.")
+# try:
+#     import xesmf as xe
+# except ModuleNotFoundError:
+#     warnings.warn("xESMF is not installed, so `interpll` will not run.")
 
 
 def interpll(var, lons, lats, which="pairs"):
@@ -61,11 +61,13 @@ def interpll(var, lons, lats, which="pairs"):
     """
 
     # make sure that xesmf was read in for this function to run
-    try:
-        xe
-    except NameError:
-        print("xESMF is not installed, so `interpll` will not run.")
-        return
+    if not xroms.XESMF_AVAILABLE:
+        raise ModuleNotFoundError("xESMF is not installed, so `interpll` will not run.")
+    # try:
+    #     xe
+    # except NameError:
+    #     print("xESMF is not installed, so `interpll` will not run.")
+    #     return None
 
     # rename coords for use with xESMF
     lonkey = [coord for coord in var.coords if "lon_" in coord][0]
