@@ -1,5 +1,6 @@
 # `xroms`
 [![DOI](https://zenodo.org/badge/265067025.svg)](https://zenodo.org/badge/latestdoi/265067025)
+
 [![Build Status](https://img.shields.io/github/workflow/status/xoceanmodel/xroms/Tests?logo=github&style=for-the-badge)](https://github.com/xoceanmodel/xroms/actions)
 [![Code Coverage](https://img.shields.io/codecov/c/github/xoceanmodel/xroms.svg?style=for-the-badge)](https://codecov.io/gh/xoceanmodel/xroms)
 [![License:MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
