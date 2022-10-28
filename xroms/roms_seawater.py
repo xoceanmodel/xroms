@@ -89,53 +89,53 @@ def density(temp, salt, z=None):
     den1 = (
         Q00
         + Q01 * temp
-        + Q02 * temp ** 2
-        + Q03 * temp ** 3
-        + Q04 * temp ** 4
-        + Q05 * temp ** 5
+        + Q02 * temp**2
+        + Q03 * temp**3
+        + Q04 * temp**4
+        + Q05 * temp**5
         + U00 * salt
         + U01 * salt * temp
-        + U02 * salt * temp ** 2
-        + U03 * salt * temp ** 3
-        + U04 * salt * temp ** 4
+        + U02 * salt * temp**2
+        + U03 * salt * temp**3
+        + U04 * salt * temp**4
         + V00 * salt * sqrtS
         + V01 * salt * sqrtS * temp
-        + V02 * salt * sqrtS * temp ** 2
-        + W00 * salt ** 2
+        + V02 * salt * sqrtS * temp**2
+        + W00 * salt**2
     )
     K0 = (
         A00
         + A01 * temp
-        + A02 * temp ** 2
-        + A03 * temp ** 3
-        + A04 * temp ** 4
+        + A02 * temp**2
+        + A03 * temp**3
+        + A04 * temp**4
         + B00 * salt
         + B01 * salt * temp
-        + B02 * salt * temp ** 2
-        + B03 * salt * temp ** 3
+        + B02 * salt * temp**2
+        + B03 * salt * temp**3
         + D00 * salt * sqrtS
         + D01 * salt * sqrtS * temp
-        + D02 * salt * sqrtS * temp ** 2
+        + D02 * salt * sqrtS * temp**2
     )
     K1 = (
         E00
         + E01 * temp
-        + E02 * temp ** 2
-        + E03 * temp ** 3
+        + E02 * temp**2
+        + E03 * temp**3
         + F00 * salt
         + F01 * salt * temp
-        + F02 * salt * temp ** 2
+        + F02 * salt * temp**2
         + G00 * salt * sqrtS
     )
     K2 = (
         G01
         + G02 * temp
-        + G03 * temp ** 2
+        + G03 * temp**2
         + H00 * salt
         + H01 * salt * temp
-        + H02 * salt * temp ** 2
+        + H02 * salt * temp**2
     )
-    bulk = K0 - K1 * z + K2 * z ** 2
+    bulk = K0 - K1 * z + K2 * z**2
     var = (den1 * bulk) / (bulk + 0.1 * z)
 
     if isinstance(var, xr.DataArray):
@@ -366,7 +366,7 @@ def M2(
         sfill_value=sfill_value,
     )
     # combine
-    var = np.sqrt(drhodxi ** 2 + drhodeta ** 2) * g / rho0
+    var = np.sqrt(drhodxi**2 + drhodeta**2) * g / rho0
 
     var.attrs["name"] = "M2"
     var.attrs["long_name"] = "horizontal buoyancy gradient"

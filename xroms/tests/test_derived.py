@@ -38,7 +38,7 @@ def test_speed():
     xvar = xroms.speed(ds.u, ds.v, grid)
 
     # calculate own version of speed
-    var = np.sqrt(u ** 2 + v ** 2)
+    var = np.sqrt(u**2 + v**2)
 
     # these aren't identical because of grid shifting
     assert np.allclose(xvar.mean(), var.mean(), rtol=1e-2)
@@ -46,7 +46,7 @@ def test_speed():
 
 def test_KE():
     rho = xroms.density(temp, salt, z_rho)[:, np.newaxis, np.newaxis]
-    s2 = (u ** 2 + v ** 2)[np.newaxis, :, :]
+    s2 = (u**2 + v**2)[np.newaxis, :, :]
     KE = 0.5 * rho * s2
 
     # xroms
@@ -79,7 +79,7 @@ def test_EKE():
     # correct dx value (eta=0)
     dzetadxi = (zeta[2] - zeta[0]) / (2 * dx)
     ug = -g * dzetadxi / f
-    EKE = 0.5 * (ug ** 2 + vg ** 2)
+    EKE = 0.5 * (ug**2 + vg**2)
 
     xug, xvg = xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="both")
 
