@@ -1,0 +1,19 @@
+name: test_env_intake-axds
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  ############## These will have to be adjusted to your specific project
+  - cf_xarray
+  - dask
+  - netcdf4
+  - numba >= 0.49
+  - numpy
+  - xarray
+  - xgcm
+  ##############
+  - pytest
+  - pip:
+    - codecov
+    - pytest-cov
+    - coverage[toml]
