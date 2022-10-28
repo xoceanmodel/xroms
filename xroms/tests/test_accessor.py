@@ -1,7 +1,6 @@
 """Test accessor functions by ensuring accessor and xroms
 functions return same values."""
 
-import cartopy
 import numpy as np
 import xarray as xr
 

@@ -1,6 +1,5 @@
 """Test interpolation functions with known coordinates to make sure results are correct"""
 
-import cartopy
 import numpy as np
 import xarray as xr
 
