@@ -94,20 +94,22 @@ def interpll(var, lons, lats, which="pairs"):
     # Perform interpolation
     varint = regridder(var, keep_attrs=True)
 
-    # check for presence of z coord with interpolated output
-    zkey_varint = [
-        coord for coord in varint.coords if "z_" in coord and "0" not in coord
-    ]
+    # the following commented code was supposed to add the z coordinate if it was missing
+    # but was incorrect. A variation of it may need to be added back in. Oct 2022 KMT
+    # # check for presence of z coord with interpolated output
+    # zkey_varint = [
+    #     coord for coord in varint.coords if "z_" in coord and "0" not in coord
+    # ]
 
-    # get z coordinates to go with interpolated output if not available
-    if zkey_varint == []:
-        zkey = [coord for coord in var.coords if "z_" in coord and "0" not in coord][
-            0
-        ]  # str
-        zint = regridder(var[zkey], keep_attrs=True)
+    # # get z coordinates to go with interpolated output if not available
+    # if zkey_varint == []:
+    #     zkey = [coord for coord in var.coords if "z_" in coord and "0" not in coord][
+    #         0
+    #     ]  # str
+    #     zint = regridder(var[zkey], keep_attrs=True)
 
-        # add coords
-        varint = varint.assign_coords({zkey: zint})
+    #     # add coords
+    #     varint = varint.assign_coords({zkey: zint})
 
     # add attributes for cf-xarray
     if which == "pairs":

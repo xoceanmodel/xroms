@@ -58,7 +58,7 @@ def speed(u, v, grid, hboundary="extend", hfill_value=None):
 
     u = xroms.to_rho(u, grid, hboundary=hboundary, hfill_value=hfill_value)
     v = xroms.to_rho(v, grid, hboundary=hboundary, hfill_value=hfill_value)
-    var = np.sqrt(u ** 2 + v ** 2)
+    var = np.sqrt(u**2 + v**2)
 
     var.attrs["name"] = "speed"
     var.attrs["long_name"] = "horizontal speed"
@@ -96,7 +96,7 @@ def KE(rho0, speed):
 
     assert isinstance(speed, xr.DataArray), "speed must be DataArray"
 
-    var = 0.5 * rho0 * speed ** 2
+    var = 0.5 * rho0 * speed**2
 
     var.attrs["name"] = "KE"
     var.attrs["long_name"] = "kinetic energy"
@@ -254,7 +254,7 @@ def EKE(ug, vg, grid, hboundary="extend", hfill_value=None):
     ug = xroms.to_rho(ug, grid, hboundary=hboundary, hfill_value=hfill_value)
     vg = xroms.to_rho(vg, grid, hboundary=hboundary, hfill_value=hfill_value)
 
-    var = 0.5 * (ug ** 2 + vg ** 2)
+    var = 0.5 * (ug**2 + vg**2)
 
     var.attrs["name"] = "EKE"
     var.attrs["long_name"] = "eddy kinetic energy"
@@ -414,7 +414,7 @@ def vertical_shear(dudz, dvdz, grid, hboundary="extend", hfill_value=None):
     dudz = xroms.to_rho(dudz, grid, hboundary=hboundary, hfill_value=hfill_value)
     dvdz = xroms.to_rho(dvdz, grid, hboundary=hboundary, hfill_value=hfill_value)
 
-    var = np.sqrt(dudz ** 2 + dvdz ** 2)
+    var = np.sqrt(dudz**2 + dvdz**2)
 
     var.attrs["name"] = "shear"
     var.attrs["long_name"] = "vertical shear"
