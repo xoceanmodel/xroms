@@ -1,6 +1,7 @@
 """Test interpolation functions with known coordinates to make sure results are correct"""
 
 import numpy as np
+import pytest
 import xarray as xr
 
 import xroms
@@ -15,30 +16,36 @@ ds, grid = xroms.roms_dataset(ds)
 
 
 def test_interpll():
+    XESMF_AVAILABLE = xroms.XESMF_AVAILABLE
+    xroms.XESMF_AVAILABLE = False
 
-    # test pairs of points
-    ie, ix = 2, 3
-    testvars = ["salt", "u", "v", "z_w"]
-    for testvar in testvars:
-        varin = ds[testvar]
-        lon = ds[testvar].cf["longitude"]
-        lat = ds[testvar].cf["latitude"]
-        indexer = {varin.cf["Y"].name: [ie], varin.cf["X"].name: [ix]}
-        varout = xroms.interpll(varin, lon.isel(indexer), lat.isel(indexer))
-        assert np.allclose(varout.squeeze(), varin.isel(indexer).squeeze())
+    with pytest.raises(ModuleNotFoundError):
+        # test pairs of points
+        ie, ix = 2, 3
+        testvars = ["salt", "u", "v", "z_w"]
+        for testvar in testvars:
+            varin = ds[testvar]
+            lon = ds[testvar].cf["longitude"]
+            lat = ds[testvar].cf["latitude"]
+            indexer = {varin.cf["Y"].name: [ie], varin.cf["X"].name: [ix]}
+            varout = xroms.interpll(varin, lon.isel(indexer), lat.isel(indexer))
+            assert np.allclose(varout.squeeze(), varin.isel(indexer).squeeze())
 
-    # test grid of points
-    ie, ix = [2], [3]
-    testvars = ["salt", "u", "v", "z_w"]
-    for testvar in testvars:
-        varin = ds[testvar]
-        lon = ds[testvar].cf["longitude"]
-        lat = ds[testvar].cf["latitude"]
-        indexer = {varin.cf["Y"].name: ie, varin.cf["X"].name: ix}
-        varout = xroms.interpll(
-            varin, lon.cf.isel(indexer), lat.cf.isel(indexer), which="grid"
-        )
-        assert np.allclose(varout.squeeze(), varin.isel(indexer).squeeze())
+        # test grid of points
+        ie, ix = [2], [3]
+        testvars = ["salt", "u", "v", "z_w"]
+        for testvar in testvars:
+            varin = ds[testvar]
+            lon = ds[testvar].cf["longitude"]
+            lat = ds[testvar].cf["latitude"]
+            indexer = {varin.cf["Y"].name: ie, varin.cf["X"].name: ix}
+            varout = xroms.interpll(
+                varin, lon.cf.isel(indexer), lat.cf.isel(indexer), which="grid"
+            )
+            assert np.allclose(varout.squeeze(), varin.isel(indexer).squeeze())
+            
+    # put back the way it was for testing
+    xroms.XESMF_AVAILABLE = XESMF_AVAILABLE
 
 
 def test_zslice():

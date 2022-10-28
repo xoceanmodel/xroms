@@ -50,3 +50,11 @@ except DistributionNotFound:
 #     from ._version import __version__
 # except ImportError:
 #     __version__ = "unknown"
+
+# to manage whether xesmf is installed or not
+try:
+    import xesmf as xe
+
+    XESMF_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    XESMF_AVAILABLE = False  # pragma: no cover

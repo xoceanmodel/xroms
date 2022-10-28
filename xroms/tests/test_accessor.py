@@ -2,6 +2,7 @@
 functions return same values."""
 
 import numpy as np
+import pytest
 import xarray as xr
 
 from xgcm import grid as xgrid
@@ -583,17 +584,24 @@ def test_gridsum():
 
 
 def test_interpll():
-    ie, ix = 2, 3
-    indexer = {"eta_rho": [ie], "xi_rho": [ix]}
-    testvars = ["salt", "u", "v"]
-    for testvar in testvars:
-        var1 = xroms.interpll(
-            ds[testvar], ds.lon_rho.isel(indexer), ds.lat_rho.isel(indexer)
-        )
-        var2 = ds[testvar].xroms.interpll(
-            ds.lon_rho.isel(indexer), ds.lat_rho.isel(indexer)
-        )
-        assert np.allclose(var1, var2)
+    XESMF_AVAILABLE = xroms.XESMF_AVAILABLE
+    xroms.XESMF_AVAILABLE = False
+
+    with pytest.raises(ModuleNotFoundError):
+        ie, ix = 2, 3
+        indexer = {"eta_rho": [ie], "xi_rho": [ix]}
+        testvars = ["salt", "u", "v"]
+        for testvar in testvars:
+            var1 = xroms.interpll(
+                ds[testvar], ds.lon_rho.isel(indexer), ds.lat_rho.isel(indexer)
+            )
+            var2 = ds[testvar].xroms.interpll(
+                ds.lon_rho.isel(indexer), ds.lat_rho.isel(indexer)
+            )
+            assert np.allclose(var1, var2)
+            
+    # put back the way it was for testing
+    xroms.XESMF_AVAILABLE = XESMF_AVAILABLE
 
 
 def test_zslice():
