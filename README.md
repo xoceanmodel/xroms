@@ -65,14 +65,14 @@ You can choose to install with conda the optional dependencies for full function
 
 and to install optional dependency `xcmocean`:
 
-    pip install git+git://github.com/kthyng/xcmocean
+    pip install git+https://github.com/pangeo-data/xcmocean
 
 Then choose one of the following to install `xroms` from GitHub:
 
 1. Clone `xroms` into a particular directory then install so that it is editable (`-e`)
 
     ```
-    git clone git@github.com:hetland/xroms.git
+    git clone https://github.com/xoceanmodel/xroms.git
     cd xroms
     pip install -e .
     ```
@@ -80,7 +80,7 @@ Then choose one of the following to install `xroms` from GitHub:
 1. Directly install `xroms` from github
 
     ```
-    pip install git+git://github.com/hetland/xroms
+    pip install git+https://github.com/xoceanmodel/xroms
     ```
 
 ### Optional additional installation for horizontal interpolation
@@ -110,7 +110,7 @@ If you want to be able to horizontally interpolate with `xroms.interpll`, you sh
 1. Install xESMF from github (pip version will not work)
 
     ```
-    pip install git+git://github.com/pangeo-data/xESMF.git#egg=xESMF
+    pip install git+https://github.com/pangeo-data/xESMF.git#egg=xESMF
     ```
 
 ### Recommended: Jupyter Lab extensions
