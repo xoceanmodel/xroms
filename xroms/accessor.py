@@ -29,10 +29,25 @@ class xromsDatasetAccessor:
         # extra for getting coordinates but changes variables
         self._ds = ds.copy(deep=True)
 
-        # if ds wasn't read in with an xroms load function, it probably doesn't have a grid object
-        if "grid" not in ds.attrs:
+        # self.ds, grid = xroms.roms_dataset(self.ds)
+
+    def set_grid(self, grid):
+        """If you already have a grid object and don't want to rerun
+
+        Or, you want to have more options in the grid setup, input it to the xroms accessor this way.
+
+        Examples
+        --------
+        >>> ds.xroms.set_grid(grid)
+        """
+        self._grid = grid
+
+    @property
+    def grid(self):
+        if not hasattr(self, "_grid"):
             self.ds, grid = xroms.roms_dataset(self.ds)
-            self.grid = grid
+            self._grid = grid
+        return self._grid
 
     @property
     def speed(self):
@@ -420,7 +435,9 @@ class xromsDatasetAccessor:
         >>> ds.xroms.mld(thresh=0.03).isel(ocean_time=0).plot(vmin=-20, vmax=0)
         """
 
-        return xroms.mld(self.sig0, self.ds.h, self.ds.mask_rho, thresh=thresh)
+        return xroms.mld(
+            self.sig0, self.grid, self.ds.h, self.ds.mask_rho, thresh=thresh
+        )
 
     def ddxi(
         self,
@@ -850,12 +867,13 @@ class xromsDataArrayAccessor:
 
         self.da = da
 
-        # make copy of ds that I can use to stash DataArrays to
-        # retrieve coords without changing original ds.
-        self.ds = self.da.attrs["grid"]._ds.copy(deep=True)
+        # # make copy of ds that I can use to stash DataArrays to
+        # # retrieve coords without changing original ds.
+        # self.ds = self.da.attrs["grid"]._ds.copy(deep=True)
 
     def to_grid(
         self,
+        grid,
         hcoord=None,
         scoord=None,
         hboundary="extend",
@@ -867,6 +885,8 @@ class xromsDataArrayAccessor:
 
         Inputs
         ------
+        grid:
+            xgcm grid
         hcoord: string, optional.
             Name of horizontal grid to interpolate output to.
             Options are 'rho', 'psi', 'u', 'v'.
@@ -917,12 +937,16 @@ class xromsDataArrayAccessor:
 
         Example usage
         -------------
-        >>> ds.salt.xroms.to_grid(hcoord='rho', scoord='w')
+        >>> ds.salt.xroms.to_grid(grid, hcoord='rho', scoord='w')
         """
+
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.to_grid(
             self.da,
-            self.da.attrs["grid"],
+            grid,
             hcoord=hcoord,
             scoord=scoord,
             hboundary=hboundary,
@@ -935,6 +959,7 @@ class xromsDataArrayAccessor:
 
     def ddz(
         self,
+        grid,
         hcoord=None,
         scoord=None,
         hboundary="extend",
@@ -945,6 +970,8 @@ class xromsDataArrayAccessor:
     ):
         """Calculate d/dz for a variable.
 
+        grid
+            xgcm grid
         hcoord: string, optional.
             Name of horizontal grid to interpolate output to.
             Options are 'rho', 'psi', 'u', 'v'.
@@ -1000,12 +1027,16 @@ class xromsDataArrayAccessor:
 
         Example usage
         -------------
-        >>> ds.salt.xroms.ddz()
+        >>> ds.salt.xroms.ddz(grid)
         """
+
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.ddz(
             self.da,
-            self.da.attrs["grid"],
+            grid,
             hcoord=hcoord,
             scoord=scoord,
             hboundary=hboundary,
@@ -1019,6 +1050,7 @@ class xromsDataArrayAccessor:
 
     def ddxi(
         self,
+        grid,
         hcoord=None,
         scoord=None,
         hboundary="extend",
@@ -1031,6 +1063,8 @@ class xromsDataArrayAccessor:
 
         Inputs
         ------
+        grid
+            xgcm grid
         hcoord: string, optional.
             Name of horizontal grid to interpolate output to.
             Options are 'rho', 'psi', 'u', 'v'.
@@ -1094,12 +1128,16 @@ class xromsDataArrayAccessor:
 
         Example usage
         -------------
-        >>> ds.salt.xroms.ddxi()
+        >>> ds.salt.xroms.ddxi(grid)
         """
+
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.ddxi(
             self.da,
-            self.da.attrs["grid"],
+            grid,
             attrs=attrs,
             hcoord=hcoord,
             scoord=scoord,
@@ -1113,6 +1151,7 @@ class xromsDataArrayAccessor:
 
     def ddeta(
         self,
+        grid,
         hcoord=None,
         scoord=None,
         hboundary="extend",
@@ -1125,6 +1164,8 @@ class xromsDataArrayAccessor:
 
         Inputs
         ------
+        grid
+            xgcm grid
         hcoord: string, optional.
             Name of horizontal grid to interpolate output to.
             Options are 'rho', 'psi', 'u', 'v'.
@@ -1188,12 +1229,16 @@ class xromsDataArrayAccessor:
 
         Example usage
         -------------
-        >>> ds.salt.xroms.ddeta()
+        >>> ds.salt.xroms.ddeta(grid)
         """
+
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.ddeta(
             self.da,
-            self.da.attrs["grid"],
+            grid,
             attrs=attrs,
             hcoord=hcoord,
             scoord=scoord,
@@ -1265,11 +1310,13 @@ class xromsDataArrayAccessor:
             self.da, self.da.cf["longitude"], self.da.cf["latitude"], lon0, lat0
         )
 
-    def gridmean(self, dim):
+    def gridmean(self, grid, dim):
         """Calculate mean accounting for variable spatial grid.
 
         Inputs
         ------
+        grid
+            xgcm grid
         dim: str, list, tuple
             Spatial dimension names to average over. In the `xgcm`
             convention, the allowable names are 'Z', 'Y', or 'X'.
@@ -1287,18 +1334,20 @@ class xromsDataArrayAccessor:
         Example usage
         -------------
         Note that the following two approaches are equivalent:
-        >>> app1 = ds.u.xroms.gridmean(('Y','X'))
+        >>> app1 = ds.u.xroms.gridmean(grid, ('Y','X'))
         >>> app2 = (ds.u*ds.dy_u*ds.dx_u).sum(('eta_rho','xi_u'))/(ds.dy_u*ds.dx_u).sum(('eta_rho','xi_u'))
         >>> np.allclose(app1, app2)
         """
 
-        return xroms.gridmean(self.da, self.da.attrs["grid"], dim)
+        return xroms.gridmean(self.da, grid, dim)
 
-    def gridsum(self, dim):
+    def gridsum(self, grid, dim):
         """Calculate sum accounting for variable spatial grid.
 
         Inputs
         ------
+        grid
+            xgcm grid
         dim: str, list, tuple
             Spatial dimension names to sum over. In the `xgcm`
             convention, the allowable names are 'Z', 'Y', or 'X'.
@@ -1316,12 +1365,12 @@ class xromsDataArrayAccessor:
         Example usage
         -------------
         Note that the following two approaches are equivalent:
-        >>> app1 = ds.u.xroms.gridsum(('Z','X'))
+        >>> app1 = ds.u.xroms.gridsum(grid, ('Z','X'))
         >>> app2 = (ds.u*ds.dz_u * ds.dx_u).sum(('s_rho','xi_u'))
         >>> np.allclose(app1, app2)
         """
 
-        return xroms.gridsum(self.da, self.da.attrs["grid"], dim)
+        return xroms.gridsum(self.da, grid, dim)
 
     def interpll(self, lons, lats, which="pairs"):
         """Interpolate var to lons/lats positions.
@@ -1365,7 +1414,7 @@ class xromsDataArrayAccessor:
 
         return xroms.interpll(self.da, lons, lats, which=which)
 
-    def isoslice(self, iso_values, iso_array=None, axis="Z"):
+    def isoslice(self, grid, iso_values, iso_array=None, axis="Z"):
         """Interpolate var to iso_values.
 
         This wraps `xgcm` `transform` function for slice interpolation,
@@ -1373,6 +1422,8 @@ class xromsDataArrayAccessor:
 
         Inputs
         ------
+        grid
+            xgcm grid
         iso_values: list, ndarray
             Values to interpolate to. If calculating var at fixed depths,
             iso_values are the fixed depths, which should be negative if
@@ -1402,25 +1453,25 @@ class xromsDataArrayAccessor:
         Example usage
         -------------
         To calculate temperature onto fixed depths:
-        >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50))
+        >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50), grid)
 
         To calculate temperature onto salinity:
-        >>> xroms.isoslice(ds.temp, np.arange(0, 36), iso_array=ds.salt, axis='Z')
+        >>> xroms.isoslice(ds.temp, np.arange(0, 36), grid, iso_array=ds.salt, axis='Z')
 
         Calculate lat-z slice of salinity along a constant longitude value (-91.5):
-        >>> xroms.isoslice(ds.salt, -91.5, iso_array=ds.lon_rho, axis='X')
+        >>> xroms.isoslice(ds.salt, -91.5, grid, iso_array=ds.lon_rho, axis='X')
 
         Calculate slice of salt at 28 deg latitude
-        >>> xroms.isoslice(ds.salt, 28, iso_array=ds.lat_rho, axis='Y')
+        >>> xroms.isoslice(ds.salt, 28, grid, iso_array=ds.lat_rho, axis='Y')
 
         Interpolate temp to salinity values between 0 and 36 in the X direction
-        >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='X')
+        >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), grid, iso_array=ds.salt, axis='X')
 
         Interpolate temp to salinity values between 0 and 36 in the Z direction
-        >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='Z')
+        >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), grid, iso_array=ds.salt, axis='Z')
 
         Calculate the depth of a specific isohaline (33):
-        >>> xroms.isoslice(ds.salt, 33, iso_array=ds.z_rho, axis='Z')
+        >>> xroms.isoslice(ds.salt, 33, grid, iso_array=ds.z_rho, axis='Z')
 
         Calculate dye 10 meters above seabed. Either do this on the vertical
         rho grid, or first change to the w grid and then use `isoslice`. You may prefer
@@ -1429,19 +1480,19 @@ class xromsDataArrayAccessor:
         * on rho grid directly:
         >>> height_from_seabed = ds.z_rho + ds.h
         >>> height_from_seabed.name = 'z_rho'
-        >>> xroms.isoslice(ds.dye_01, 10, iso_array=height_from_seabed, axis='Z')
+        >>> xroms.isoslice(ds.dye_01, 10, grid, iso_array=height_from_seabed, axis='Z')
         * on w grid:
-        >>> var_w = ds.dye_01.xroms.to_grid(scoord='w').chunk({'s_w': -1})
+        >>> var_w = ds.dye_01.xroms.to_grid(grid, scoord='w').chunk({'s_w': -1})
         >>> ds['dye_01_w'] = var_w  # currently this is the easiest way to reattached coords xgcm variables
         >>> height_from_seabed = ds.z_w + ds.h
         >>> height_from_seabed.name = 'z_w'
-        >>> xroms.isoslice(ds['dye_01_w'], 10, iso_array=height_from_seabed, axis='Z')
+        >>> xroms.isoslice(ds['dye_01_w'], 10, grid, iso_array=height_from_seabed, axis='Z')
         """
 
         return xroms.isoslice(
             self.da,
             iso_values,
-            grid=self.da.attrs["grid"],
+            grid=grid,
             iso_array=iso_array,
             axis=axis,
         )

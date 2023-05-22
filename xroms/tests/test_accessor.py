@@ -291,7 +291,7 @@ def test_rho():
     acc = ds.xroms.rho
     assert np.allclose(acc, xroms.density(ds.temp, ds.salt, ds.z_rho))
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
+    # assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = "s_rho"
     dims = dim_dict[hcoord][scoord]
@@ -308,7 +308,7 @@ def test_sig0():
     acc = ds.xroms.sig0
     assert np.allclose(acc, xroms.potential_density(ds.temp, ds.salt, 0))
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
+    # assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = "s_rho"
     dims = dim_dict[hcoord][scoord]
@@ -326,7 +326,7 @@ def test_buoyancy():
     xsig0 = xroms.potential_density(ds.temp, ds.salt)
     assert np.allclose(acc, xroms.buoyancy(xsig0))
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
+    # assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = "s_rho"
     dims = dim_dict[hcoord][scoord]
@@ -344,7 +344,7 @@ def test_N2():
     xrho = xroms.density(ds.temp, ds.salt, ds.z_rho)
     assert np.allclose(acc, xroms.N2(xrho, grid), equal_nan=True)
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
+    # assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = "s_w"
     dims = dim_dict[hcoord][scoord]
@@ -362,7 +362,6 @@ def test_M2():
     xrho = xroms.density(ds.temp, ds.salt, ds.z_rho)
     assert np.allclose(acc, xroms.M2(xrho, grid), equal_nan=True)
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = "s_w"
     dims = dim_dict[hcoord][scoord]
@@ -378,9 +377,8 @@ def test_M2():
 def test_mld():
     acc = ds.xroms.mld(thresh=0.03)
     sig0 = xroms.potential_density(ds.temp, ds.salt, 0)
-    assert np.allclose(acc, xroms.mld(sig0, ds.h, ds.mask_rho), equal_nan=True)
+    assert np.allclose(acc, xroms.mld(sig0, grid, ds.h, ds.mask_rho), equal_nan=True)
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = None
     dims = dim_dict[hcoord][scoord]
@@ -396,10 +394,9 @@ def test_mld():
 def test_ddxi():
     testvars = ["salt", "u", "v"]
     for testvar in testvars:
-        acc = ds[testvar].xroms.ddxi()
-        assert np.allclose(acc, xroms.ddxi(ds[testvar], grid))
-        assert acc.name == acc.attrs["name"]
-        assert isinstance(acc.attrs["grid"], xgrid.Grid)
+        with pytest.raises(KeyError):
+            acc = ds[testvar].xroms.ddxi(grid)
+
         if testvar == "salt":
             hcoord = "u"
             scoord = "s_w"
@@ -413,10 +410,6 @@ def test_ddxi():
         axes = axesTZYX
         coords = coord_dict[hcoord][scoord]
         coordnames = coordnamesTZYX
-        for ax, dim in zip(axes, dims):
-            assert acc.cf[ax].name == dim
-        for coordname, coord in zip(coordnames, coords):
-            assert acc.cf[coordname].name == coord
 
         acc = ds.xroms.ddxi(testvar)
         assert np.allclose(acc, xroms.ddxi(ds[testvar], grid))
@@ -431,10 +424,9 @@ def test_ddxi():
 def test_ddeta():
     testvars = ["salt", "u", "v"]
     for testvar in testvars:
-        acc = ds[testvar].xroms.ddeta()
-        assert np.allclose(acc, xroms.ddeta(ds[testvar], grid))
-        assert acc.name == acc.attrs["name"]
-        assert isinstance(acc.attrs["grid"], xgrid.Grid)
+        with pytest.raises(KeyError):
+            acc = ds[testvar].xroms.ddeta(grid)
+
         if testvar == "salt":
             hcoord = "v"
             scoord = "s_w"
@@ -448,10 +440,6 @@ def test_ddeta():
         axes = axesTZYX
         coords = coord_dict[hcoord][scoord]
         coordnames = coordnamesTZYX
-        for ax, dim in zip(axes, dims):
-            assert acc.cf[ax].name == dim
-        for coordname, coord in zip(coordnames, coords):
-            assert acc.cf[coordname].name == coord
 
         acc = ds.xroms.ddeta(testvar)
         assert np.allclose(acc, xroms.ddeta(ds[testvar], grid))
@@ -466,25 +454,21 @@ def test_ddeta():
 def test_ddz():
     testvars = ["salt", "u", "v"]
     for testvar in testvars:
-        acc = ds[testvar].xroms.ddz()
-        assert np.allclose(acc, xroms.ddz(ds[testvar], grid))
-        assert acc.name == acc.attrs["name"]
-        assert isinstance(acc.attrs["grid"], xgrid.Grid)
+        with pytest.raises(KeyError):
+            acc = ds[testvar].xroms.ddz(grid)
         dims = list(ds[testvar].dims)
         axes = axesTZYX
         coords = [ds[testvar].cf[coordname].name for coordname in coordnamesTZYX]
         coordnames = coordnamesTZYX
         # correct dim and coord in derivative direction
-        if grid.axes["Z"]._get_axis_coord(ds[testvar])[1] == "s_rho":
+        # import pdb; pdb.set_trace()
+        if grid._get_dims_from_axis(ds[testvar], "Z")[0] == "s_rho":
+            # if grid.axes["Z"]._get_axis_coord(ds[testvar])[1] == "s_rho":
             dims[1] = "s_w"
             coords[1] = coords[1].replace("rho", "w")
         else:
             dims[1] = "s_rho"
             coords[1] = coords[1].replace("w", "rho")
-        for ax, dim in zip(axes, dims):
-            assert acc.cf[ax].name == dim
-        for coordname, coord in zip(coordnames, coords):
-            assert acc.cf[coordname].name == coord
 
         acc = ds.xroms.ddz(testvar)
         assert np.allclose(acc, xroms.ddz(ds[testvar], grid))
@@ -502,12 +486,12 @@ def test_to_grid():
     for testvar in testvars:
         for scoord in ["s_w", "s_rho"]:
             for hcoord in ["rho", "u", "v", "psi"]:
-                acc = ds[testvar].xroms.to_grid(hcoord=hcoord, scoord=scoord)
+                acc = ds.xroms.to_grid(testvar, hcoord=hcoord, scoord=scoord)
+                # acc = ds[testvar].xroms.to_grid(grid, hcoord=hcoord, scoord=scoord)
                 assert np.allclose(
                     acc, xroms.to_grid(ds[testvar], grid, hcoord=hcoord, scoord=scoord)
                 )
                 assert acc.name == acc.attrs["name"]
-                assert isinstance(acc.attrs["grid"], xgrid.Grid)
                 dims = dim_dict[hcoord][scoord]
                 axes = axesTZYX
                 coords = coord_dict[hcoord][scoord]
@@ -543,7 +527,6 @@ def test_sel2d():
         )
         assert np.allclose(acc, out)
         assert acc.name == testvar
-        assert isinstance(acc.attrs["grid"], xgrid.Grid)
         dims = ds[testvar].dims
         axes = axesTZYX
         coords = [ds[testvar].cf[coordname].name for coordname in coordnamesTZYX]
@@ -569,7 +552,7 @@ def test_gridmean():
     testvars = ["salt", "u", "v"]
     for testvar in testvars:
         for axis in ["Z", "Y", "X"]:
-            var1 = ds[testvar].xroms.gridmean(axis)
+            var1 = ds[testvar].xroms.gridmean(grid, axis)
             var2 = xroms.gridmean(ds[testvar], grid, axis)
             assert np.allclose(var1, var2)
 
@@ -578,7 +561,7 @@ def test_gridsum():
     testvars = ["salt", "u", "v"]
     for testvar in testvars:
         for axis in ["Z", "Y", "X"]:
-            var1 = ds[testvar].xroms.gridsum(axis)
+            var1 = ds[testvar].xroms.gridsum(grid, axis)
             var2 = xroms.gridsum(ds[testvar], grid, axis)
             assert np.allclose(var1, var2)
 
@@ -610,7 +593,7 @@ def test_zslice():
         varin = ds[testvar]
         depths = np.asarray(ds[testvar].cf["vertical"][0, :, 0, 0].values)
         varout = xroms.isoslice(varin, depths, grid, axis="Z")
-        varcomp = ds[testvar].xroms.isoslice(depths, axis="Z")
+        varcomp = ds[testvar].xroms.isoslice(grid, depths, axis="Z")
         assert np.allclose(
             varout.cf.isel(T=0, Y=0, X=0), varcomp.cf.isel(T=0, Y=0, X=0)
         )

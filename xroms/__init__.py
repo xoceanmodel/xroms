@@ -1,6 +1,6 @@
 """Initialize xroms."""
 
-from pkg_resources import DistributionNotFound, get_distribution
+from importlib.metadata import PackageNotFoundError, version
 
 import xroms.accessor
 
@@ -41,15 +41,10 @@ from .xroms import open_mfnetcdf, open_netcdf, open_zarr, roms_dataset
 
 
 try:
-    __version__ = get_distribution("xroms").version
-except DistributionNotFound:
+    __version__ = version("xroms")
+except PackageNotFoundError:
     # package is not installed
-    __version__ = "unknown"
-
-# try:
-#     from ._version import __version__
-# except ImportError:
-#     __version__ = "unknown"
+    pass
 
 # to manage whether xesmf is installed or not
 try:
