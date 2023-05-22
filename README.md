@@ -53,7 +53,7 @@ You need to have `conda` installed for these installation instructions. You'll h
 
 ### Create environment if needed
 
-As a first step, you can create an environment for this package with conda if you want. If you do this, you'll need to git clone the package first as below. Note that `mamba` and `conda` can be used interchangably, but `mamba` is faster for installation.
+As a first step, you can create an environment for this package with conda if you want. If you do this, you'll need to git clone the package first as below. Note that `mamba` and `conda` can be used interchangeably, but `mamba` is faster for installation.
 
     mamba create --name XROMS --file requirements.txt
 

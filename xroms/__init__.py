@@ -40,7 +40,6 @@ from .utilities import (
 from .xroms import open_mfnetcdf, open_netcdf, open_zarr, roms_dataset
 
 
-
 try:
     __version__ = version("xroms")
 except PackageNotFoundError:

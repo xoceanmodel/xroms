@@ -31,9 +31,10 @@ xr.set_options(keep_attrs=True)
 
 g = 9.81  # m/s^2
 
+
 def grid_interp(grid, da, dim):
     """Interpolate da in dim
-    
+
     This function is necessary because of weirdness with chunking
     with xgcm.
     More info: https://github.com/xgcm/xgcm/issues/522
@@ -52,10 +53,12 @@ def grid_interp(grid, da, dim):
     DataArray
         interpolated down one dimension in dim
     """
-    
+
     # which dimension chunk to save?
     dim_name = da.cf[dim].name  # e.g. dim_name = xi_rho
-    i_chunk_dim = list(da.dims).index(dim_name)  # chunk_dim is e.g. 2, the index in dims for the chunks
+    i_chunk_dim = list(da.dims).index(
+        dim_name
+    )  # chunk_dim is e.g. 2, the index in dims for the chunks
 
     # need to unchunk then rechunk, so save chunk
     if da.chunks is not None:
@@ -63,7 +66,7 @@ def grid_interp(grid, da, dim):
         # take one off the last chunk in this dimension since interpolation
         # loses one in size
         chunk[-1] -= 1
-        
+
         # to interpolate, first remove chunking to 1 chunk
         new_coord = grid.interp(da.chunk({dim_name: -1}), dim)
 
@@ -75,9 +78,16 @@ def grid_interp(grid, da, dim):
         return new_coord
 
 
-def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None, include_Z0=False,
-                 include_3D_metrics = True, include_cell_volume = False, 
-                 include_cell_area = False):
+def roms_dataset(
+    ds,
+    Vtransform=None,
+    add_verts=False,
+    proj=None,
+    include_Z0=False,
+    include_3D_metrics=True,
+    include_cell_volume=False,
+    include_cell_area=False,
+):
     """Modify Dataset to be aware of ROMS coordinates, with matching xgcm grid object.
 
     Inputs
@@ -161,7 +171,7 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None, include_Z0=Fal
         ds["3d"] = True
     else:
         ds["3d"] = False
-    
+
     if not ds["3d"] and include_3D_metrics:
         warnings.warn("need 3D Dataset in order to calculate 3D metrics.", ValueError)
 
@@ -401,18 +411,14 @@ def roms_dataset(ds, Vtransform=None, add_verts=False, proj=None, include_Z0=Fal
     #     "field": "pn_v, scalar",
     # }
 
-    pm_psi = grid.interp(
-        grid.interp(ds.pm, "Y"), "X"
-    )  # at psi points (eta_v, xi_u)
+    pm_psi = grid.interp(grid.interp(ds.pm, "Y"), "X")  # at psi points (eta_v, xi_u)
     # ds["pm_psi"].attrs = {
     #     "long_name": "curvilinear coordinate metric in XI on PSI grid",
     #     "units": "meter-1",
     #     "field": "pm_psi, scalar",
     # }
 
-    pn_psi = grid.interp(
-        grid.interp(ds.pn, "X"), "Y"
-    )  # at psi points (eta_v, xi_u)
+    pn_psi = grid.interp(grid.interp(ds.pn, "X"), "Y")  # at psi points (eta_v, xi_u)
     # ds["pn_psi"].attrs = {
     #     "long_name": "curvilinear coordinate metric in ETA on PSI grid",
     #     "units": "meter-1",
@@ -815,10 +821,10 @@ def open_netcdf(
     -------------
     >>> ds = xroms.open_netcdf(file)
     """
-    
+
     msg = """
 Recommended usage going forward is to read in your model output with xarray directly, then subsequently run
-`ds, grid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get 
+`ds, grid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get
 the necessary grid object for use with `xgcm`. This function will be removed at some future
 """
     warnings.warn(msg, PendingDeprecationWarning)
@@ -882,10 +888,10 @@ def open_mfnetcdf(
     -------------
     >>> ds = xroms.open_mfnetcdf(files)
     """
-    
+
     msg = """
 Recommended usage going forward is to read in your model output with xarray directly, then subsequently run
-`ds, grid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get 
+`ds, grid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get
 the necessary grid object for use with `xgcm`. This function will be removed at some future
 """
     warnings.warn(msg, PendingDeprecationWarning)
@@ -963,10 +969,10 @@ def open_zarr(
     -------------
     >>> ds = xroms.open_zarr(files)
     """
-    
+
     msg = """
 Recommended usage going forward is to read in your model output with xarray directly, then subsequently run
-`ds, grid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get 
+`ds, grid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get
 the necessary grid object for use with `xgcm`. This function will be removed at some future
 """
     warnings.warn(msg, PendingDeprecationWarning)

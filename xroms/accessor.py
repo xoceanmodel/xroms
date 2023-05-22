@@ -29,13 +29,13 @@ class xromsDatasetAccessor:
         # extra for getting coordinates but changes variables
         self._ds = ds.copy(deep=True)
 
-            # self.ds, grid = xroms.roms_dataset(self.ds)
-    
+        # self.ds, grid = xroms.roms_dataset(self.ds)
+
     def set_grid(self, grid):
         """If you already have a grid object and don't want to rerun
-        
+
         Or, you want to have more options in the grid setup, input it to the xroms accessor this way.
-        
+
         Examples
         --------
         >>> ds.xroms.set_grid(grid)
@@ -435,7 +435,9 @@ class xromsDatasetAccessor:
         >>> ds.xroms.mld(thresh=0.03).isel(ocean_time=0).plot(vmin=-20, vmax=0)
         """
 
-        return xroms.mld(self.sig0, self.grid, self.ds.h, self.ds.mask_rho, thresh=thresh)
+        return xroms.mld(
+            self.sig0, self.grid, self.ds.h, self.ds.mask_rho, thresh=thresh
+        )
 
     def ddxi(
         self,
@@ -937,8 +939,10 @@ class xromsDataArrayAccessor:
         -------------
         >>> ds.salt.xroms.to_grid(grid, hcoord='rho', scoord='w')
         """
-        
-        raise KeyError("Other coordinates are not available on DataArray, so this transformation is only possible on Dataset.")
+
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.to_grid(
             self.da,
@@ -1025,8 +1029,10 @@ class xromsDataArrayAccessor:
         -------------
         >>> ds.salt.xroms.ddz(grid)
         """
-        
-        raise KeyError("Other coordinates are not available on DataArray, so this transformation is only possible on Dataset.")
+
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.ddz(
             self.da,
@@ -1125,7 +1131,9 @@ class xromsDataArrayAccessor:
         >>> ds.salt.xroms.ddxi(grid)
         """
 
-        raise KeyError("Other coordinates are not available on DataArray, so this transformation is only possible on Dataset.")
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.ddxi(
             self.da,
@@ -1224,7 +1232,9 @@ class xromsDataArrayAccessor:
         >>> ds.salt.xroms.ddeta(grid)
         """
 
-        raise KeyError("Other coordinates are not available on DataArray, so this transformation is only possible on Dataset.")
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.ddeta(
             self.da,

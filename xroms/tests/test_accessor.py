@@ -441,7 +441,6 @@ def test_ddeta():
         coords = coord_dict[hcoord][scoord]
         coordnames = coordnamesTZYX
 
-
         acc = ds.xroms.ddeta(testvar)
         assert np.allclose(acc, xroms.ddeta(ds[testvar], grid))
         assert acc.name == acc.attrs["name"]
@@ -464,7 +463,7 @@ def test_ddz():
         # correct dim and coord in derivative direction
         # import pdb; pdb.set_trace()
         if grid._get_dims_from_axis(ds[testvar], "Z")[0] == "s_rho":
-        # if grid.axes["Z"]._get_axis_coord(ds[testvar])[1] == "s_rho":
+            # if grid.axes["Z"]._get_axis_coord(ds[testvar])[1] == "s_rho":
             dims[1] = "s_w"
             coords[1] = coords[1].replace("rho", "w")
         else:
