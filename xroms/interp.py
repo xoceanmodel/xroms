@@ -129,7 +129,7 @@ def interpll(var, lons, lats, which="pairs"):
     return varint
 
 
-def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
+def isoslice(var, iso_values, grid, iso_array=None, axis="Z"):
     """Interpolate var to iso_values.
 
     This wraps `xgcm` `transform` function for slice interpolation,
@@ -144,8 +144,7 @@ def isoslice(var, iso_values, grid=None, iso_array=None, axis="Z"):
         iso_values are the fixed depths, which should be negative if
         below mean sea level. If input as array, should be 1D.
     grid: xgcm.grid, optional
-        Grid object associated with var. Optional because checks var
-        attributes for grid.
+        Grid object associated with var.
     iso_array: DataArray, optional
         Array that var is interpolated onto (e.g., z coordinates or
         density). If calculating var on fixed depth slices, iso_array

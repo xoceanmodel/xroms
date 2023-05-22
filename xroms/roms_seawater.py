@@ -377,13 +377,15 @@ def M2(
     return var
 
 
-def mld(sig0, h, mask, z=None, thresh=0.03):
+def mld(sig0, grid, h, mask, z=None, thresh=0.03):
     """Calculate the mixed layer depth [m].
 
     Inputs
     ------
     sig0: DataArray
         Potential density [kg/m^3]
+    grid
+        xgcm grid
     h: DataArray, ndarray
         Depths [m].
     mask: DataArray, ndarray
@@ -430,8 +432,8 @@ def mld(sig0, h, mask, z=None, thresh=0.03):
     # the mixed layer depth is the isosurface of depth where the potential density equals the surface - a threshold
     mld = xroms.isoslice(
         z,
-        0.0,
-        sig0.attrs["grid"],
+        np.array([0.0]),
+        grid,
         iso_array=sig0 - sig0.isel(s_rho=-1) - thresh,
         axis="Z",
     )
@@ -444,8 +446,6 @@ def mld(sig0, h, mask, z=None, thresh=0.03):
     mld.attrs["name"] = "mld"
     mld.attrs["long_name"] = "mixed layer depth"
     mld.attrs["units"] = "m"
-    if "grid" in sig0.attrs:
-        mld.attrs["grid"] = sig0.attrs["grid"]
     mld.name = mld.attrs["name"]
 
     return mld.squeeze()

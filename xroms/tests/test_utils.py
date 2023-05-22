@@ -12,7 +12,7 @@ grid1 = xr.open_dataset("xroms/tests/input/grid.nc")
 ds = xr.open_dataset("xroms/tests/input/ocean_his_0001.nc")
 # combine the two:
 ds = ds.merge(grid1, overwrite_vars=True, compat="override")
-ds, grid = xroms.roms_dataset(ds)
+ds, grid = xroms.roms_dataset(ds, include_3D_metrics=True)
 # # missing psi grid in variables
 # ds = ds.assign_coords({'lon_psi': ds.lon_psi, 'lat_psi': ds.lat_psi})
 

@@ -53,9 +53,9 @@ You need to have `conda` installed for these installation instructions. You'll h
 
 ### Create environment if needed
 
-As a first step, you can create an environment for this package with conda if you want. If you do this, you'll need to git clone the package first as below.
+As a first step, you can create an environment for this package with conda if you want. If you do this, you'll need to git clone the package first as below. Note that `mamba` and `conda` can be used interchangably, but `mamba` is faster for installation.
 
-    conda create --name XROMS python=3.8 --file requirements.txt
+    mamba create --name XROMS --file requirements.txt
 
 ### Install `xroms`
 
@@ -65,7 +65,7 @@ You can choose to install with conda the optional dependencies for full function
 
 and to install optional dependency `xcmocean`:
 
-    pip install git+git://github.com/kthyng/xcmocean
+    pip install git+git://github.com/xoceanmodel/xcmocean
 
 Then choose one of the following to install `xroms` from GitHub:
 
@@ -80,7 +80,7 @@ Then choose one of the following to install `xroms` from GitHub:
 1. Directly install `xroms` from github
 
     ```
-    pip install git+git://github.com/hetland/xroms
+    pip install git+git://github.com/xoceanmodel/xroms
     ```
 
 ### Optional additional installation for horizontal interpolation

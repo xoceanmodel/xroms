@@ -34,6 +34,8 @@ def hgrad(
     attrs=None,
 ):
     """Return gradients of property q accounting for s coordinates.
+    
+    Note that you need the 3D metrics for horizontal derivatives for ROMS, so ``include_3D_metrics=True`` in ``xroms.roms_dataset()``.
 
     Inputs
     ------
@@ -260,6 +262,8 @@ def ddxi(
     attrs=None,
 ):
     """Calculate d/dxi for a variable.
+    
+    Note that you need the 3D metrics for horizontal derivatives for ROMS, so ``include_3D_metrics=True`` in ``xroms.roms_dataset()``.
 
     Inputs
     ------
@@ -364,6 +368,8 @@ def ddeta(
     attrs=None,
 ):
     """Calculate d/deta for a variable.
+    
+    Note that you need the 3D metrics for horizontal derivatives for ROMS, so ``include_3D_metrics=True`` in ``xroms.roms_dataset()``.
 
     Inputs
     ------
