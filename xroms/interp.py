@@ -23,8 +23,8 @@ def interpll(var, lons, lats, which="pairs"):
 
     Wraps xESMF to perform proper horizontal interpolation on non-flat Earth.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray
         Variable to operate on.
     lons: list, ndarray
@@ -52,8 +52,8 @@ def interpll(var, lons, lats, which="pairs"):
 
     cf-xarray should still be usable after calling this function.
 
-    Example usage
-    -------------
+    Examples
+    --------
     To return 1D pairs of points, in this case 3 points:
     >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='pairs')
     To return 2D pairs of points, in this case a 3x3 array of points:
@@ -129,21 +129,21 @@ def interpll(var, lons, lats, which="pairs"):
     return varint
 
 
-def isoslice(var, iso_values, grid, iso_array=None, axis="Z"):
+def isoslice(var, iso_values, xgrid, iso_array=None, axis="Z"):
     """Interpolate var to iso_values.
 
     This wraps `xgcm` `transform` function for slice interpolation,
     though `transform` has additional functionality.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray
         Variable to operate on.
     iso_values: list, ndarray
         Values to interpolate to. If calculating var at fixed depths,
         iso_values are the fixed depths, which should be negative if
         below mean sea level. If input as array, should be 1D.
-    grid: xgcm.grid, optional
+    xgrid: xgcm.grid, optional
         Grid object associated with var.
     iso_array: DataArray, optional
         Array that var is interpolated onto (e.g., z coordinates or
@@ -167,8 +167,8 @@ def isoslice(var, iso_values, grid, iso_array=None, axis="Z"):
 
     cf-xarray should still be usable after calling this function.
 
-    Example usage
-    -------------
+    Examples
+    --------
     To calculate temperature onto fixed depths:
     >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50))
 
@@ -206,15 +206,10 @@ def isoslice(var, iso_values, grid, iso_array=None, axis="Z"):
     >>> xroms.isoslice(ds['dye_01_w'], 10, iso_array=height_from_seabed, axis='Z')
     """
 
-    words = "Either grid should be input or var should be DataArray with grid in attributes."
-    assert (grid is not None) or (
-        isinstance(var, xr.DataArray) and "grid" in var.attrs
-    ), words
+    words = "Grid should be input."
+    assert (xgrid is not None), words
 
-    if grid is None:
-        grid = var.attrs["grid"]
-
-    assert isinstance(grid, xgcm.Grid), "grid must be `xgcm` grid object."
+    assert isinstance(xgrid, xgcm.Grid), "xgrid must be `xgcm` grid object."
 
     attrs = var.attrs  # save to reinstitute at end
 
@@ -238,14 +233,13 @@ def isoslice(var, iso_values, grid, iso_array=None, axis="Z"):
             key = "z"
 
     # perform interpolation
-    transformed = grid.transform(var, axis, iso_values, target_data=iso_array)
+    transformed = xgrid.transform(var, axis, iso_values, target_data=iso_array)
 
     if key not in transformed.coords:
         transformed = transformed.assign_coords({key: iso_array})
 
     # bring along attributes for cf-xarray
     transformed[key].attrs["axis"] = axis
-    transformed.attrs["grid"] = grid
     # add original attributes back in
     transformed.attrs = {**attrs, **transformed.attrs}
 
@@ -265,7 +259,7 @@ def isoslice(var, iso_values, grid, iso_array=None, axis="Z"):
                 iso_array = iso_array.cf.isel(Z=0).drop_vars(
                     iso_array.cf["Z"].name, errors="ignore"
                 )
-            transformedlon = grid.transform(
+            transformedlon = xgrid.transform(
                 var[lonkey], axis, iso_values, target_data=iso_array
             )
             transformed = transformed.assign_coords({lonkey: transformedlon})
@@ -286,7 +280,7 @@ def isoslice(var, iso_values, grid, iso_array=None, axis="Z"):
                 iso_array = iso_array.cf.isel(Z=0).drop_vars(
                     iso_array.cf["Z"].name, errors="ignore"
                 )
-            transformedlat = grid.transform(
+            transformedlat = xgrid.transform(
                 var[latkey], axis, iso_values, target_data=iso_array
             )
             transformed = transformed.assign_coords({latkey: transformedlat})
@@ -297,7 +291,7 @@ def isoslice(var, iso_values, grid, iso_array=None, axis="Z"):
         zkey = var.cf["vertical"].name
 
         if zkey not in transformed.coords:
-            transformedZ = grid.transform(
+            transformedZ = xgrid.transform(
                 var[zkey], axis, iso_values, target_data=iso_array
             )
             transformed = transformed.assign_coords({zkey: transformedZ})

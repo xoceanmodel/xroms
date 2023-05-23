@@ -14,8 +14,8 @@ g = 9.81
 def density(temp, salt, z=None):
     """Calculate the density [kg/m^3] as calculated in ROMS.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     temp: DataArray, ndarray
         Temperature [Celsius]
     salt: DataArray, ndarray
@@ -33,8 +33,8 @@ def density(temp, salt, z=None):
     -----
     Equation of state based on ROMS Nonlinear/rho_eos.F
 
-    Example usage
-    -------------
+    Examples
+    --------
     >>> xroms.density(ds.temp, ds.salt)
     """
 
@@ -141,7 +141,7 @@ def density(temp, salt, z=None):
     if isinstance(var, xr.DataArray):
         var.attrs["name"] = "rho"
         var.attrs["long_name"] = "density"
-        var.attrs["units"] = "kg/m^3"  # inherits grid from temp
+        var.attrs["units"] = "kg/m^3"
         var.name = var.attrs["name"]
         if "lon_rho" in var:
             var.coords["lon_rho"].attrs["standard_name"] = "longitude"
@@ -153,8 +153,8 @@ def density(temp, salt, z=None):
 def potential_density(temp, salt, z=0):
     """Calculate potential density [kg/m^3] with constant depth reference.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     temp: DataArray, ndarray
         Temperature [Celsius]
     salt: DataArray, ndarray
@@ -171,8 +171,8 @@ def potential_density(temp, salt, z=0):
     -----
     Uses equation of state based on ROMS Nonlinear/rho_eos.F
 
-    Example usage
-    -------------
+    Examples
+    --------
     >>> xroms.potential_density(ds.temp, ds.salt)
     """
 
@@ -181,7 +181,7 @@ def potential_density(temp, salt, z=0):
     if isinstance(var, xr.DataArray):
         var.attrs["name"] = "sig0"
         var.attrs["long_name"] = "potential density"
-        var.attrs["units"] = "kg/m^3"  # inherits grid from temp
+        var.attrs["units"] = "kg/m^3"
         var.name = var.attrs["name"]
 
     return var
@@ -190,8 +190,8 @@ def potential_density(temp, salt, z=0):
 def buoyancy(sig0, rho0=1025.0):
     """Calculate buoyancy [m/s^2] based on potential density.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     sig0: DataArray, ndarray
         Potential density [kg/m^3]
     rho0: int, float, optional
@@ -210,8 +210,8 @@ def buoyancy(sig0, rho0=1025.0):
 
     g=9.81 [m/s^2]
 
-    Example usage
-    -------------
+    Examples
+    --------
     >>> xroms.potential_density(ds.temp, ds.salt)
     """
 
@@ -220,20 +220,20 @@ def buoyancy(sig0, rho0=1025.0):
     if isinstance(var, xr.DataArray):
         var.attrs["name"] = "buoyancy"
         var.attrs["long_name"] = "buoyancy"
-        var.attrs["units"] = "m/s^2"  # inherits grid
+        var.attrs["units"] = "m/s^2"
         var.name = var.attrs["name"]
 
     return var
 
 
-def N2(rho, grid, rho0=1025.0, sboundary="fill", sfill_value=np.nan):
+def N2(rho, xgrid, rho0=1025.0, sboundary="fill", sfill_value=np.nan):
     """Calculate buoyancy frequency squared (vertical buoyancy gradient).
 
-    Inputs
-    ------
+    Parameters
+    ----------
     rho: DataArray
         Density [kg/m^3]
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with rho
     rho0: int, float
         Reference density [kg/m^3].
@@ -263,19 +263,19 @@ def N2(rho, grid, rho0=1025.0, sboundary="fill", sfill_value=np.nan):
     -----
     N2 = -g d(rho)/dz / rho0
 
-    Example usage
-    -------------
-    >>> xroms.N2(rho, grid)
+    Examples
+    --------
+    >>> xroms.N2(rho, xgrid)
     """
 
     assert isinstance(rho, xr.DataArray), "rho must be DataArray"
 
-    drhodz = xroms.ddz(rho, grid, sboundary=sboundary, sfill_value=sfill_value)
+    drhodz = xroms.ddz(rho, xgrid, sboundary=sboundary, sfill_value=sfill_value)
     var = -g * drhodz / rho0
 
     var.attrs["name"] = "N2"
     var.attrs["long_name"] = "buoyancy frequency squared, or vertical buoyancy gradient"
-    var.attrs["units"] = "1/s^2"  # inherits grid
+    var.attrs["units"] = "1/s^2"
     var.name = var.attrs["name"]
 
     return var
@@ -283,7 +283,7 @@ def N2(rho, grid, rho0=1025.0, sboundary="fill", sfill_value=np.nan):
 
 def M2(
     rho,
-    grid,
+    xgrid,
     rho0=1025.0,
     hboundary="extend",
     hfill_value=None,
@@ -293,11 +293,11 @@ def M2(
 ):
     """Calculate the horizontal buoyancy gradient.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     rho: DataArray
         Density [kg/m^3]
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with rho
     rho0: int, float, optional
         Reference density [kg/m^3].
@@ -347,9 +347,9 @@ def M2(
 
     g=9.81 [m/s^2]
 
-    Example usage
-    -------------
-    >>> xroms.M2(rho, grid)
+    Examples
+    --------
+    >>> xroms.M2(rho, xgrid)
     """
 
     assert isinstance(rho, xr.DataArray), "rho must be DataArray"
@@ -357,7 +357,7 @@ def M2(
     # calculate spatial derivatives of density
     drhodxi, drhodeta = xroms.hgrad(
         rho,
-        grid,
+        xgrid,
         which="both",
         hcoord="rho",
         hboundary=hboundary,
@@ -371,20 +371,19 @@ def M2(
     var.attrs["name"] = "M2"
     var.attrs["long_name"] = "horizontal buoyancy gradient"
     var.attrs["units"] = "1/s^2"
-    var.attrs["grid"] = grid
     var.name = var.attrs["name"]
 
     return var
 
 
-def mld(sig0, grid, h, mask, z=None, thresh=0.03):
+def mld(sig0, xgrid, h, mask, z=None, thresh=0.03):
     """Calculate the mixed layer depth [m].
 
-    Inputs
-    ------
+    Parameters
+    ----------
     sig0: DataArray
         Potential density [kg/m^3]
-    grid
+    xgrid
         xgcm grid
     h: DataArray, ndarray
         Depths [m].
@@ -415,8 +414,8 @@ def mld(sig0, grid, h, mask, z=None, thresh=0.03):
     ncl mixed_layer_depth function at https://github.com/NCAR/ncl/blob/ed6016bf579f8c8e8f77341503daef3c532f1069/ni/src/lib/nfpfort/ocean.f
     de Boyer Montégut, C., Madec, G., Fischer, A. S., Lazar, A., & Iudicone, D. (2004). Mixed layer depth over the global ocean: An examination of profile data and a profile‐based climatology. Journal of  Geophysical Research: Oceans, 109(C12).
 
-    Example usage
-    -------------
+    Examples
+    --------
     >>> xroms.mld(sig0, h, mask)
     """
 
@@ -433,7 +432,7 @@ def mld(sig0, grid, h, mask, z=None, thresh=0.03):
     mld = xroms.isoslice(
         z,
         np.array([0.0]),
-        grid,
+        xgrid,
         iso_array=sig0 - sig0.isel(s_rho=-1) - thresh,
         axis="Z",
     )
