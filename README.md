@@ -1,14 +1,13 @@
 # `xroms`
-[![DOI](https://zenodo.org/badge/265067025.svg)](https://zenodo.org/badge/latestdoi/265067025)
 
-[![Build Status](https://img.shields.io/github/workflow/status/xoceanmodel/xroms/Tests?logo=github&style=for-the-badge)](https://github.com/xoceanmodel/xroms/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/xoceanmodel/xroms/test.yaml?branch=main&logo=github&style=for-the-badge)](https://github.com/xoceanmodel/xroms/actions)
 [![Code Coverage](https://img.shields.io/codecov/c/github/xoceanmodel/xroms.svg?style=for-the-badge)](https://codecov.io/gh/xoceanmodel/xroms)
 [![License:MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Documentation Status](https://img.shields.io/readthedocs/xroms/latest.svg?style=for-the-badge)](https://xroms.readthedocs.io/en/latest/?badge=latest)
-[![Code Style Status](https://img.shields.io/github/workflow/status/xoceanmodel/xroms/linting%20with%20pre-commit?label=Code%20Style&style=for-the-badge)](https://github.com/xoceanmodel/xroms/actions)
+[![Code Style Status](https://img.shields.io/github/actions/workflow/status/xoceanmodel/xroms/pre-commit.yml?branch-main&label=Code%20Style&style=for-the-badge)](https://github.com/xoceanmodel/xroms/actions)
 [![Conda Version](https://img.shields.io/conda/vn/conda-forge/xroms.svg?style=for-the-badge)](https://anaconda.org/conda-forge/xroms)
 [![Python Package Index](https://img.shields.io/pypi/v/xroms.svg?style=for-the-badge)](https://pypi.org/project/xroms)
-
+[![DOI](https://zenodo.org/badge/265067025.svg?style=for-the-badge)](https://zenodo.org/badge/latestdoi/265067025)
 
 `xroms` contains functions for commonly used scripts for working with ROMS output in xarray.
 
