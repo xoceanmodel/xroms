@@ -10,7 +10,8 @@ CLOVER = pooch.create(
     # Use the default cache folder for the operating system
     path=pooch.os_cache("xroms"),
     # The remote data is on Github
-    base_url="https://github.com/xoceanmodel/xroms/raw/{version_dev}/data/",
+    # base_url="https://github.com/xoceanmodel/xroms/raw/{version_dev}/data/",
+    base_url="https://github.com/xoceanmodel/xroms/raw/main/xroms/data/",
     # version=version,
     # If this is a development version, get the data from the "main" branch
     version_dev="main",
