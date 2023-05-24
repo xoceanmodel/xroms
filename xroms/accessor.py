@@ -1529,7 +1529,7 @@ class xromsDataArrayAccessor:
         return isoslice(
             self.da,
             iso_values,
-            grid=xgrid,
+            xgrid,
             iso_array=iso_array,
             axis=axis,
         )

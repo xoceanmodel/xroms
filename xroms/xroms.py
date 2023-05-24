@@ -155,24 +155,24 @@ def roms_dataset(
         for coord in tcoords:
             ds[coord].attrs["standard_name"] = "latitude"
 
-    Xdict = {"center": "xi_rho"}
-    # subsetted ROMS output might be missing some info so don't assume it is present
-    if "xi_u" in ds.coords:
-        Xdict.update({"inner": "xi_u"})
-    Ydict = {"center": "eta_rho"}
-    if "eta_v" in ds.coords:
-        Ydict.update({"inner": "eta_v"})
-    Zdict = {"center": "s_rho"}
-    if "s_w" in ds.coords:
-        Zdict.update({"outer": "s_w"})
+    # Xdict = {"center": "xi_rho"}
+    # # subsetted ROMS output might be missing some info so don't assume it is present
+    # if "xi_u" in ds.coords:
+    #     Xdict.update({"inner": "xi_u"})
+    # Ydict = {"center": "eta_rho"}
+    # if "eta_v" in ds.coords:
+    #     Ydict.update({"inner": "eta_v"})
+    # Zdict = {"center": "s_rho"}
+    # if "s_w" in ds.coords:
+    #     Zdict.update({"outer": "s_w"})
 
-    coords = {"X": Xdict, "Y": Ydict, "Z": Zdict}
+    # coords = {"X": Xdict, "Y": Ydict, "Z": Zdict}
 
-    # coords = {
-    #     "X": {"center": "xi_rho", "inner": "xi_u"},
-    #     "Y": {"center": "eta_rho", "inner": "eta_v"},
-    #     "Z": {"center": "s_rho", "outer": "s_w"},
-    # }
+    coords = {
+        "X": {"center": "xi_rho", "inner": "xi_u"},
+        "Y": {"center": "eta_rho", "inner": "eta_v"},
+        "Z": {"center": "s_rho", "outer": "s_w"},
+    }
 
     xgrid = xgcm.Grid(ds, coords=coords, periodic=[])
 

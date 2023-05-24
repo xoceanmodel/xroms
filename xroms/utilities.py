@@ -814,7 +814,7 @@ def to_psi(var, xgrid, hboundary="extend", hfill_value=None):
 
     if "xi_u" not in var.dims:
 
-        grid_interp(
+        var = grid_interp(
             xgrid, var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
         )
 
@@ -822,7 +822,7 @@ def to_psi(var, xgrid, hboundary="extend", hfill_value=None):
         #     var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
         # )
     if "eta_v" not in var.dims:
-        grid_interp(
+        var = grid_interp(
             xgrid, var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
         )
         # var = xgrid.interp(

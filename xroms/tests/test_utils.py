@@ -127,6 +127,7 @@ def test_to_grid():
             assert "xi_rho" in var.dims
 
             var = xroms.to_grid(ds[testvar], grid, hcoord="psi", scoord=scoord)
+            # import pdb; pdb.set_trace()
             assert scoord in var.dims
             assert "eta_v" in var.dims
             assert "xi_u" in var.dims
