@@ -6,16 +6,11 @@ import pooch
 import xarray as xr
 
 
-# from . import version  # The version string of your project
-
-
 CLOVER = pooch.create(
     # Use the default cache folder for the operating system
     path=pooch.os_cache("xroms"),
     # The remote data is on Github
-    # base_url="https://github.com/xoceanmodel/xroms/raw/{version_dev}/data/",
-    base_url="https://github.com/kthyng/xroms/raw/packaging/xroms/data/",
-    # base_url="/Users/kthyng/projects/xroms/xroms/data/",
+    base_url="https://github.com/xoceanmodel/xroms/raw/{version_dev}/data/",
     # version=version,
     # If this is a development version, get the data from the "main" branch
     version_dev="main",
