@@ -12,10 +12,11 @@ dependencies:
   - numpy
   - pooch
   - xarray
-  - xgcm >= 0.8.1
+  # - xgcm >= 0.8.1
   ##############
   - pytest
   - pip:
+    - xgcm >= 0.8.1
     - codecov
     - pytest-cov
     - coverage[toml]
