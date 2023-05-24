@@ -17,6 +17,7 @@ dependencies:
    - pooch
    - requests
    - xarray
+   - xcmocean
    - xgcm >= 0.8.1
    - xesmf  # don't install if on windows
    # These are needed for the docs themselves
