@@ -19,7 +19,7 @@ quiet = false
 color = true
 
 [tool.isort]
-known_third_party = ["cf-xarray", "dask", "netcdf4", "numba", "numpy", "xarray", "xgcm", "pytest", "setuptools"]
+known_third_party = ["cf-xarray", "dask", "netcdf4", "numba", "numpy", "pooch", "xarray", "xgcm", "pytest", "setuptools"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
