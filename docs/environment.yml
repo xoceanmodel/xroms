@@ -33,7 +33,7 @@ dependencies:
    - recommonmark
    - pip
    - pip:
-     - extract_model
+     - xroms
      - docrep<=0.2.7
      - nbsphinx>=0.8.7
      - jupyter_client
