@@ -3,6 +3,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
 import xroms.accessor
+import xroms.datasets
 
 from .derived import (
     EKE,
@@ -37,7 +38,7 @@ from .utilities import (
     to_v,
     xisoslice,
 )
-from .xroms import open_mfnetcdf, open_netcdf, open_zarr, roms_dataset
+from .xroms import grid_interp, open_mfnetcdf, open_netcdf, open_zarr, roms_dataset
 
 
 try:

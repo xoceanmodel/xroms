@@ -12,7 +12,8 @@ import numpy as np
 import xarray as xr
 import xgcm
 
-import xroms
+# import xroms
+from .utilities import grid_interp, order
 
 
 try:
@@ -32,52 +33,6 @@ xr.set_options(keep_attrs=True)
 g = 9.81  # m/s^2
 
 
-def grid_interp(grid, da, dim):
-    """Interpolate da in dim
-
-    This function is necessary because of weirdness with chunking
-    with xgcm.
-    More info: https://github.com/xgcm/xgcm/issues/522
-
-    Parameters
-    ----------
-    grid : xgcm grid object
-        _description_
-    da : DataArray
-        interpolating from this dataarray
-    dim : str
-        interpolating grids in this dimension
-
-    Returns
-    -------
-    DataArray
-        interpolated down one dimension in dim
-    """
-
-    # which dimension chunk to save?
-    dim_name = da.cf[dim].name  # e.g. dim_name = xi_rho
-    i_chunk_dim = list(da.dims).index(
-        dim_name
-    )  # chunk_dim is e.g. 2, the index in dims for the chunks
-
-    # need to unchunk then rechunk, so save chunk
-    if da.chunks is not None:
-        chunk = list(da.chunks[i_chunk_dim])
-        # take one off the last chunk in this dimension since interpolation
-        # loses one in size
-        chunk[-1] -= 1
-
-        # to interpolate, first remove chunking to 1 chunk
-        new_coord = grid.interp(da.chunk({dim_name: -1}), dim)
-
-        # reconstitute chunks after intepolation but minus one in downsized dim
-        return new_coord.chunk({new_coord.cf[dim].name: tuple(chunk)})
-
-    else:
-        new_coord = grid.interp(da, dim)
-        return new_coord
-
-
 def roms_dataset(
     ds,
     Vtransform=None,
@@ -90,8 +45,8 @@ def roms_dataset(
 ):
     """Modify Dataset to be aware of ROMS coordinates, with matching xgcm grid object.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     ds: Dataset
         xarray Dataset with model output
     Vtransform: int, optional
@@ -119,7 +74,7 @@ def roms_dataset(
     ds: Dataset
         Same dataset as input, but with dimensions renamed to be consistent with `xgcm` and
         with vertical coordinates and metrics added.
-    grid: xgcm grid object
+    xgrid: xgcm grid object
         Includes ROMS metrics so can be used for xgcm grid operations, which mostly have
         been wrapped into xroms.
 
@@ -132,9 +87,9 @@ def roms_dataset(
 
     This also uses `cf-xarray` to manage dimensions of variables.
 
-    Example usage
-    -------------
-    >>> ds, grid = xroms.roms_dataset(ds)
+    Examples
+    --------
+    >>> ds, xgrid = xroms.roms_dataset(ds)
     """
 
     if add_verts:
@@ -200,13 +155,26 @@ def roms_dataset(
         for coord in tcoords:
             ds[coord].attrs["standard_name"] = "latitude"
 
+    # Xdict = {"center": "xi_rho"}
+    # # subsetted ROMS output might be missing some info so don't assume it is present
+    # if "xi_u" in ds.coords:
+    #     Xdict.update({"inner": "xi_u"})
+    # Ydict = {"center": "eta_rho"}
+    # if "eta_v" in ds.coords:
+    #     Ydict.update({"inner": "eta_v"})
+    # Zdict = {"center": "s_rho"}
+    # if "s_w" in ds.coords:
+    #     Zdict.update({"outer": "s_w"})
+
+    # coords = {"X": Xdict, "Y": Ydict, "Z": Zdict}
+
     coords = {
         "X": {"center": "xi_rho", "inner": "xi_u"},
         "Y": {"center": "eta_rho", "inner": "eta_v"},
         "Z": {"center": "s_rho", "outer": "s_w"},
     }
 
-    grid = xgcm.Grid(ds, coords=coords, periodic=[])
+    xgrid = xgcm.Grid(ds, coords=coords, periodic=[])
 
     if "Vtransform" in ds.variables.keys():
         Vtransform = ds.Vtransform
@@ -260,25 +228,25 @@ def roms_dataset(
                 "units": "m",
             }
 
-        ds.coords["z_w"] = xroms.order(z_w)
-        ds.coords["z_w_u"] = grid_interp(grid, ds["z_w"], "X")
-        # ds.coords["z_w_u"] = grid.interp(ds.z_w, "X")
+        ds.coords["z_w"] = order(z_w)
+        ds.coords["z_w_u"] = grid_interp(xgrid, ds["z_w"], "X")
+        # ds.coords["z_w_u"] = xgrid.interp(ds.z_w, "X")
         ds.coords["z_w_u"].attrs = {
             "long_name": "depth of U-points on vertical W grid",
             "time": "ocean_time",
             "field": "z_w_u, scalar, series",
             "units": "m",
         }
-        ds.coords["z_w_v"] = grid_interp(grid, ds["z_w"], "Y")
-        # ds.coords["z_w_v"] = grid.interp(ds.z_w, "Y")
+        ds.coords["z_w_v"] = grid_interp(xgrid, ds["z_w"], "Y")
+        # ds.coords["z_w_v"] = xgrid.interp(ds.z_w, "Y")
         ds.coords["z_w_v"].attrs = {
             "long_name": "depth of V-points on vertical W grid",
             "time": "ocean_time",
             "field": "z_w_v, scalar, series",
             "units": "m",
         }
-        ds.coords["z_w_psi"] = grid_interp(grid, ds["z_w_u"], "Y")
-        # ds.coords["z_w_psi"] = grid.interp(ds.z_w_u, "Y")
+        ds.coords["z_w_psi"] = grid_interp(xgrid, ds["z_w_u"], "Y")
+        # ds.coords["z_w_psi"] = xgrid.interp(ds.z_w_u, "Y")
         ds.coords["z_w_psi"].attrs = {
             "long_name": "depth of PSI-points on vertical W grid",
             "time": "ocean_time",
@@ -286,9 +254,9 @@ def roms_dataset(
             "units": "m",
         }
 
-        ds.coords["z_rho"] = xroms.order(z_rho)
-        ds.coords["z_rho_u"] = grid_interp(grid, ds["z_rho"], "X")
-        # ds.coords["z_rho_u"] = grid.interp(ds.z_rho, "X")
+        ds.coords["z_rho"] = order(z_rho)
+        ds.coords["z_rho_u"] = grid_interp(xgrid, ds["z_rho"], "X")
+        # ds.coords["z_rho_u"] = xgrid.interp(ds.z_rho, "X")
         ds.coords["z_rho_u"].attrs = {
             "long_name": "depth of U-points on vertical RHO grid",
             "time": "ocean_time",
@@ -296,8 +264,8 @@ def roms_dataset(
             "units": "m",
         }
 
-        ds.coords["z_rho_v"] = grid_interp(grid, ds["z_rho"], "Y")
-        # ds.coords["z_rho_v"] = grid.interp(ds.z_rho, "Y")
+        ds.coords["z_rho_v"] = grid_interp(xgrid, ds["z_rho"], "Y")
+        # ds.coords["z_rho_v"] = xgrid.interp(ds.z_rho, "Y")
         ds.coords["z_rho_v"].attrs = {
             "long_name": "depth of V-points on vertical RHO grid",
             "time": "ocean_time",
@@ -305,8 +273,8 @@ def roms_dataset(
             "units": "m",
         }
 
-        ds.coords["z_rho_psi"] = grid_interp(grid, ds["z_rho_u"], "Y")
-        # ds.coords["z_rho_psi"] = grid.interp(ds.z_rho_u, "Y")
+        ds.coords["z_rho_psi"] = grid_interp(xgrid, ds["z_rho_u"], "Y")
+        # ds.coords["z_rho_psi"] = xgrid.interp(ds.z_rho_u, "Y")
         # also include z coordinates with mean sea level (constant over time)
         ds.coords["z_rho_psi"].attrs = {
             "long_name": "depth of PSI-points on vertical RHO grid",
@@ -316,44 +284,44 @@ def roms_dataset(
         }
 
         if include_Z0:
-            ds.coords["z_rho0"] = xroms.order(z_rho0)
-            ds.coords["z_rho_u0"] = grid.interp(ds.z_rho0, "X")
+            ds.coords["z_rho0"] = order(z_rho0)
+            ds.coords["z_rho_u0"] = xgrid.interp(ds.z_rho0, "X")
             ds.coords["z_rho_u0"].attrs = {
                 "long_name": "depth of U-points on vertical RHO grid",
                 "field": "z_rho_u0, scalar",
                 "units": "m",
             }
 
-            ds.coords["z_rho_v0"] = grid.interp(ds.z_rho0, "Y")
+            ds.coords["z_rho_v0"] = xgrid.interp(ds.z_rho0, "Y")
             ds.coords["z_rho_v0"].attrs = {
                 "long_name": "depth of V-points on vertical RHO grid",
                 "field": "z_rho_v0, scalar",
                 "units": "m",
             }
 
-            ds.coords["z_rho_psi0"] = grid.interp(ds.z_rho_u0, "Y")
+            ds.coords["z_rho_psi0"] = xgrid.interp(ds.z_rho_u0, "Y")
             ds.coords["z_rho_psi0"].attrs = {
                 "long_name": "depth of PSI-points on vertical RHO grid",
                 "field": "z_rho_psi0, scalar",
                 "units": "m",
             }
 
-            ds.coords["z_w0"] = xroms.order(z_w0)
-            ds.coords["z_w_u0"] = grid.interp(ds.z_w0, "X")
+            ds.coords["z_w0"] = order(z_w0)
+            ds.coords["z_w_u0"] = xgrid.interp(ds.z_w0, "X")
             ds.coords["z_w_u0"].attrs = {
                 "long_name": "depth of U-points on vertical W grid",
                 "field": "z_w_u0, scalar",
                 "units": "m",
             }
 
-            ds.coords["z_w_v0"] = grid.interp(ds.z_w0, "Y")
+            ds.coords["z_w_v0"] = xgrid.interp(ds.z_w0, "Y")
             ds.coords["z_w_v0"].attrs = {
                 "long_name": "depth of V-points on vertical W grid",
                 "field": "z_w_v0, scalar",
                 "units": "m",
             }
 
-            ds.coords["z_w_psi0"] = grid.interp(ds.z_w_u0, "Y")
+            ds.coords["z_w_psi0"] = xgrid.interp(ds.z_w_u0, "Y")
             ds.coords["z_w_psi0"].attrs = {
                 "long_name": "depth of PSI-points on vertical W grid",
                 "field": "z_w_psi0, scalar",
@@ -383,42 +351,42 @@ def roms_dataset(
 
     # just keep these local instead of saving to Dataset — doesn't look like they
     # are used in any functions outside of this function.
-    pm_v = grid.interp(ds.pm, "Y")
+    pm_v = xgrid.interp(ds.pm, "Y")
     # ds["pm_v"].attrs = {
     #     "long_name": "curvilinear coordinate metric in XI on V grid",
     #     "units": "meter-1",
     #     "field": "pm_v, scalar",
     # }
 
-    pn_u = grid.interp(ds.pn, "X")
+    pn_u = xgrid.interp(ds.pn, "X")
     # ds["pn_u"].attrs = {
     #     "long_name": "curvilinear coordinate metric in ETA on U grid",
     #     "units": "meter-1",
     #     "field": "pn_u, scalar",
     # }
 
-    pm_u = grid.interp(ds.pm, "X")
+    pm_u = xgrid.interp(ds.pm, "X")
     # ds["pm_u"].attrs = {
     #     "long_name": "curvilinear coordinate metric in XI on U grid",
     #     "units": "meter-1",
     #     "field": "pm_u, scalar",
     # }
 
-    pn_v = grid.interp(ds.pn, "Y")
+    pn_v = xgrid.interp(ds.pn, "Y")
     # ds["pn_v"].attrs = {
     #     "long_name": "curvilinear coordinate metric in ETA on V grid",
     #     "units": "meter-1",
     #     "field": "pn_v, scalar",
     # }
 
-    pm_psi = grid.interp(grid.interp(ds.pm, "Y"), "X")  # at psi points (eta_v, xi_u)
+    pm_psi = xgrid.interp(xgrid.interp(ds.pm, "Y"), "X")  # at psi points (eta_v, xi_u)
     # ds["pm_psi"].attrs = {
     #     "long_name": "curvilinear coordinate metric in XI on PSI grid",
     #     "units": "meter-1",
     #     "field": "pm_psi, scalar",
     # }
 
-    pn_psi = grid.interp(grid.interp(ds.pn, "X"), "Y")  # at psi points (eta_v, xi_u)
+    pn_psi = xgrid.interp(xgrid.interp(ds.pn, "X"), "Y")  # at psi points (eta_v, xi_u)
     # ds["pn_psi"].attrs = {
     #     "long_name": "curvilinear coordinate metric in ETA on PSI grid",
     #     "units": "meter-1",
@@ -482,7 +450,7 @@ def roms_dataset(
     }
 
     if ds["3d"] and include_3D_metrics:
-        ds["dz"] = grid.diff(ds.z_w.chunk({ds.z_w.cf["Z"].name: -1}), "Z")
+        ds["dz"] = xgrid.diff(ds.z_w.chunk({ds.z_w.cf["Z"].name: -1}), "Z")
         ds["dz"].attrs = {
             "long_name": "vertical layer thickness on vertical RHO grid",
             "time": "ocean_time",
@@ -490,7 +458,7 @@ def roms_dataset(
             "units": "m",
         }
 
-        ds["dz_w"] = grid.diff(ds.z_rho, "Z", boundary="fill")
+        ds["dz_w"] = xgrid.diff(ds.z_rho, "Z", boundary="fill")
         ds["dz_w"].attrs = {
             "long_name": "vertical layer thickness on vertical W grid",
             "time": "ocean_time",
@@ -498,8 +466,8 @@ def roms_dataset(
             "units": "m",
         }
 
-        ds["dz_u"] = grid_interp(grid, ds["dz"], "X")
-        # ds["dz_u"] = grid.interp(ds.dz, "X")
+        ds["dz_u"] = grid_interp(xgrid, ds["dz"], "X")
+        # ds["dz_u"] = xgrid.interp(ds.dz, "X")
         ds["dz_u"].attrs = {
             "long_name": "vertical layer thickness on vertical RHO grid on U grid",
             "time": "ocean_time",
@@ -507,8 +475,8 @@ def roms_dataset(
             "units": "m",
         }
 
-        ds["dz_w_u"] = grid_interp(grid, ds["dz_w"], "X")
-        # ds["dz_w_u"] = grid.interp(ds.dz_w, "X")
+        ds["dz_w_u"] = grid_interp(xgrid, ds["dz_w"], "X")
+        # ds["dz_w_u"] = xgrid.interp(ds.dz_w, "X")
         ds["dz_w_u"].attrs = {
             "long_name": "vertical layer thickness on vertical W grid on U grid",
             "time": "ocean_time",
@@ -516,8 +484,8 @@ def roms_dataset(
             "units": "m",
         }
 
-        ds["dz_v"] = grid_interp(grid, ds["dz"], "Y")
-        # ds["dz_v"] = grid.interp(ds.dz, "Y")
+        ds["dz_v"] = grid_interp(xgrid, ds["dz"], "Y")
+        # ds["dz_v"] = xgrid.interp(ds.dz, "Y")
         ds["dz_v"].attrs = {
             "long_name": "vertical layer thickness on vertical RHO grid on V grid",
             "time": "ocean_time",
@@ -525,8 +493,8 @@ def roms_dataset(
             "units": "m",
         }
 
-        ds["dz_w_v"] = grid_interp(grid, ds["dz_w"], "Y")
-        # ds["dz_w_v"] = grid.interp(ds.dz_w, "Y")
+        ds["dz_w_v"] = grid_interp(xgrid, ds["dz_w"], "Y")
+        # ds["dz_w_v"] = xgrid.interp(ds.dz_w, "Y")
         ds["dz_w_v"].attrs = {
             "long_name": "vertical layer thickness on vertical W grid on V grid",
             "time": "ocean_time",
@@ -534,8 +502,8 @@ def roms_dataset(
             "units": "m",
         }
 
-        ds["dz_psi"] = grid_interp(grid, ds["dz_v"], "X")
-        # ds["dz_psi"] = grid.interp(ds.dz_v, "X")
+        ds["dz_psi"] = grid_interp(xgrid, ds["dz_v"], "X")
+        # ds["dz_psi"] = xgrid.interp(ds.dz_v, "X")
         ds["dz_psi"].attrs = {
             "long_name": "vertical layer thickness on vertical RHO grid on PSI grid",
             "time": "ocean_time",
@@ -543,8 +511,8 @@ def roms_dataset(
             "units": "m",
         }
 
-        ds["dz_w_psi"] = grid_interp(grid, ds["dz_w_v"], "X")
-        # ds["dz_w_psi"] = grid.interp(ds.dz_w_v, "X")
+        ds["dz_w_psi"] = grid_interp(xgrid, ds["dz_w_v"], "X")
+        # ds["dz_w_psi"] = xgrid.interp(ds.dz_w_v, "X")
         ds["dz_w_psi"].attrs = {
             "long_name": "vertical layer thickness on vertical W grid on PSI grid",
             "time": "ocean_time",
@@ -555,56 +523,56 @@ def roms_dataset(
         if include_Z0:
 
             # also include z coordinates with mean sea level (constant over time)
-            ds["dz0"] = grid.diff(ds.z_w0, "Z")
+            ds["dz0"] = xgrid.diff(ds.z_w0, "Z")
             ds["dz0"].attrs = {
                 "long_name": "vertical layer thickness on vertical RHO grid",
                 "field": "dz0, scalar",
                 "units": "m",
             }
 
-            ds["dz_w0"] = grid.diff(ds.z_rho0, "Z", boundary="fill")
+            ds["dz_w0"] = xgrid.diff(ds.z_rho0, "Z", boundary="fill")
             ds["dz_w0"].attrs = {
                 "long_name": "vertical layer thickness on vertical W grid",
                 "field": "dz_w0, scalar",
                 "units": "m",
             }
 
-            ds["dz_u0"] = grid.interp(ds.dz0, "X")
+            ds["dz_u0"] = xgrid.interp(ds.dz0, "X")
             ds["dz_u0"].attrs = {
                 "long_name": "vertical layer thickness on vertical RHO grid on U grid",
                 "field": "dz_u0, scalar",
                 "units": "m",
             }
 
-            ds["dz_w_u0"] = grid.interp(ds.dz_w0, "X")
+            ds["dz_w_u0"] = xgrid.interp(ds.dz_w0, "X")
             ds["dz_w_u0"].attrs = {
                 "long_name": "vertical layer thickness on vertical W grid on U grid",
                 "field": "dz_w_u0, scalar",
                 "units": "m",
             }
 
-            ds["dz_v0"] = grid.interp(ds.dz0, "Y")
+            ds["dz_v0"] = xgrid.interp(ds.dz0, "Y")
             ds["dz_v0"].attrs = {
                 "long_name": "vertical layer thickness on vertical RHO grid on V grid",
                 "field": "dz_v0, scalar",
                 "units": "m",
             }
 
-            ds["dz_w_v0"] = grid.interp(ds.dz_w0, "Y")
+            ds["dz_w_v0"] = xgrid.interp(ds.dz_w0, "Y")
             ds["dz_w_v0"].attrs = {
                 "long_name": "vertical layer thickness on vertical W grid on V grid",
                 "field": "dz_w_v0, scalar",
                 "units": "m",
             }
 
-            ds["dz_psi0"] = grid.interp(ds.dz_v0, "X")
+            ds["dz_psi0"] = xgrid.interp(ds.dz_v0, "X")
             ds["dz_psi0"].attrs = {
                 "long_name": "vertical layer thickness on vertical RHO grid on PSI grid",
                 "field": "dz_psi0, scalar",
                 "units": "m",
             }
 
-            ds["dz_w_psi0"] = grid.interp(ds.dz_w_v0, "X")
+            ds["dz_w_psi0"] = xgrid.interp(ds.dz_w_v0, "X")
             ds["dz_w_psi0"].attrs = {
                 "long_name": "vertical layer thickness on vertical W grid on PSI grid",
                 "field": "dz_w_psi0, scalar",
@@ -735,6 +703,7 @@ def roms_dataset(
         ]
         for coord in tcoords:
             ds[coord].attrs["positive"] = "up"
+            ds[coord].attrs["standard_name"] = "depth"
         #         ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'Y'})
         #     ds['z_rho'].attrs['vertical'] = 'depth'
         #     ds['temp'].attrs['coordinates'] = 'lon_rho lat_rho z_rho ocean_time'
@@ -743,6 +712,8 @@ def roms_dataset(
     for var in ds.variables:
         if "coordinates" in ds[var].encoding:
             del ds[var].encoding["coordinates"]
+        if "coordinates" in ds[var].attrs:
+            del ds[var].attrs["coordinates"]
 
     if ds["3d"] and include_3D_metrics:
         metrics = {
@@ -767,7 +738,7 @@ def roms_dataset(
             ("X", "Y"): ["dA"],  # Areas
         }
 
-    grid = xgcm.Grid(ds, coords=coords, metrics=metrics, periodic=[])
+    xgrid = xgcm.Grid(ds, coords=coords, metrics=metrics, periodic=[])
 
     # #     ds.attrs['grid'] = grid  # causes recursion error
     # # also put grid into every variable with at least 2D
@@ -775,7 +746,7 @@ def roms_dataset(
     #     if ds[var].ndim > 1:
     #         ds[var].attrs["grid"] = grid
 
-    return ds, grid
+    return ds, xgrid
 
 
 def open_netcdf(
@@ -788,8 +759,8 @@ def open_netcdf(
 ):
     """Return Dataset based on a single thredds or physical location.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     file: str
         Where to find the model output. `file` could be:
         * a string of a single netCDF file name, or
@@ -817,14 +788,14 @@ def open_netcdf(
         argument is input, dask is used when reading in model output and
         output is read in lazily instead of eagerly.
 
-    Example usage
-    -------------
+    Examples
+    --------
     >>> ds = xroms.open_netcdf(file)
     """
 
     msg = """
 Recommended usage going forward is to read in your model output with xarray directly, then subsequently run
-`ds, grid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get
+`ds, xgrid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get
 the necessary grid object for use with `xgcm`. This function will be removed at some future
 """
     warnings.warn(msg, PendingDeprecationWarning)
@@ -838,7 +809,7 @@ the necessary grid object for use with `xgcm`. This function will be removed at 
     ds = xr.open_dataset(file, chunks=chunks, **xrargs)
 
     # modify Dataset with useful ROMS z coords and make xgcm grid operations usable.
-    ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
+    ds, xgrid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
 
     return ds
 
@@ -853,8 +824,8 @@ def open_mfnetcdf(
 ):
     """Return Dataset based on a list of netCDF files.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     files: list of strings
         Where to find the model output. `files` can be a list of netCDF file names.
     chunks: dict, optional
@@ -884,14 +855,14 @@ def open_mfnetcdf(
         argument is input, dask is used when reading in model output and
         output is read in lazily instead of eagerly.
 
-    Example usage
-    -------------
+    Examples
+    --------
     >>> ds = xroms.open_mfnetcdf(files)
     """
 
     msg = """
 Recommended usage going forward is to read in your model output with xarray directly, then subsequently run
-`ds, grid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get
+`ds, xgrid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get
 the necessary grid object for use with `xgcm`. This function will be removed at some future
 """
     warnings.warn(msg, PendingDeprecationWarning)
@@ -913,7 +884,7 @@ the necessary grid object for use with `xgcm`. This function will be removed at 
     ds = xr.open_mfdataset(files, chunks=chunks, **xrargsin)
 
     # modify Dataset with useful ROMS z coords and make xgcm grid operations usable.
-    ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
+    ds, xgrid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
 
     return ds
 
@@ -929,8 +900,8 @@ def open_zarr(
 ):
     """Return a Dataset based on a list of zarr files
 
-    Inputs
-    ------
+    Parameters
+    ----------
     files: list of strings
         A list of zarr file directories.
     chunks: dict, optional
@@ -965,14 +936,14 @@ def open_zarr(
         argument is input, dask is used when reading in model output and
         output is read in lazily instead of eagerly.
 
-    Example usage
-    -------------
+    Examples
+    --------
     >>> ds = xroms.open_zarr(files)
     """
 
     msg = """
 Recommended usage going forward is to read in your model output with xarray directly, then subsequently run
-`ds, grid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get
+`ds, xgrid = xroms.roms_dataset(ds)` to preprocess your Dataset for use with `cf-xarray` and `xgcm`, and get
 the necessary grid object for use with `xgcm`. This function will be removed at some future
 """
     warnings.warn(msg, PendingDeprecationWarning)
@@ -991,7 +962,7 @@ the necessary grid object for use with `xgcm`. This function will be removed at 
     ds = xr.concat([xr.open_zarr(file, **xrargsin) for file in files], **xrconcatargsin)
 
     # modify Dataset with useful ROMS z coords and make xgcm grid operations usable.
-    ds, grid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
+    ds, xgrid = roms_dataset(ds, Vtransform=Vtransform, add_verts=add_verts, proj=proj)
 
     return ds
 

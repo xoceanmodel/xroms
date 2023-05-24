@@ -5,7 +5,8 @@ import numpy as np
 import pytest
 import xarray as xr
 
-from xgcm import grid as xgrid
+# from xgcm import grid as xgrid
+import xgcm.grid
 
 import xroms
 
@@ -70,7 +71,7 @@ coord_dict = {
 
 
 def test_grid():
-    assert isinstance(ds.xroms.grid, xgrid.Grid)
+    assert isinstance(ds.xroms.xgrid, xgcm.grid.Grid)
 
 
 def test_speed():
@@ -81,7 +82,6 @@ def test_speed():
 
     # also check attributes
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
     # cf-xarray: make sure all Axes and Coordinates available in output
     hcoord = "rho"
     scoord = "s_rho"
@@ -104,7 +104,6 @@ def test_KE():
 
     # also check attributes
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
     # cf-xarray: make sure all Axes and Coordinates available in output
     hcoord = "rho"
     scoord = "s_rho"
@@ -123,9 +122,9 @@ def test_uv_geostrophic():
     acc = ds.xroms.ug
     assert np.allclose(acc, xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="xi"))
     # also check attributes
-    assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
-    # cf-xarray: make sure all Axes and Coordinates available in output
+    assert (
+        acc.name == acc.attrs["name"]
+    )  # cf-xarray: make sure all Axes and Coordinates available in output
     hcoord = "u"
     scoord = None
     dims = dim_dict[hcoord][scoord]
@@ -140,7 +139,6 @@ def test_uv_geostrophic():
     acc = ds.xroms.vg
     assert np.allclose(acc, xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="eta"))
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "v"
     scoord = None
     dims = dim_dict[hcoord][scoord]
@@ -159,7 +157,6 @@ def test_EKE():
     xug, xvg = xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="both")
     assert np.allclose(acc, xroms.EKE(xug, xvg, grid))
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = None
     dims = dim_dict[hcoord][scoord]
@@ -176,7 +173,6 @@ def test_dudz():
     acc = ds.xroms.dudz
     assert np.allclose(acc, xroms.dudz(ds.u, grid))
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "u"
     scoord = "s_w"
     dims = dim_dict[hcoord][scoord]
@@ -193,7 +189,6 @@ def test_dvdz():
     acc = ds.xroms.dvdz
     assert np.allclose(acc, xroms.dvdz(ds.v, grid))
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "v"
     scoord = "s_w"
     dims = dim_dict[hcoord][scoord]
@@ -212,7 +207,6 @@ def test_vertical_shear():
     acc = ds.xroms.vertical_shear
     assert np.allclose(acc, xroms.vertical_shear(xdudz, xdvdz, grid))
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = "s_w"
     dims = dim_dict[hcoord][scoord]
@@ -229,7 +223,6 @@ def test_relative_vorticity():
     acc = ds.xroms.vort
     assert np.allclose(acc, 0)
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "psi"
     scoord = "s_w"
     dims = dim_dict[hcoord][scoord]
@@ -248,7 +241,6 @@ def test_ertel():
     xbuoy = xroms.buoyancy(xsig0)
     assert np.allclose(acc, xroms.ertel(xbuoy, ds.u, ds.v, ds.f, grid))
     assert acc.name == acc.attrs["name"]
-    assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = "s_rho"
     dims = dim_dict[hcoord][scoord]
@@ -291,7 +283,6 @@ def test_rho():
     acc = ds.xroms.rho
     assert np.allclose(acc, xroms.density(ds.temp, ds.salt, ds.z_rho))
     assert acc.name == acc.attrs["name"]
-    # assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = "s_rho"
     dims = dim_dict[hcoord][scoord]
@@ -308,7 +299,6 @@ def test_sig0():
     acc = ds.xroms.sig0
     assert np.allclose(acc, xroms.potential_density(ds.temp, ds.salt, 0))
     assert acc.name == acc.attrs["name"]
-    # assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = "s_rho"
     dims = dim_dict[hcoord][scoord]
@@ -326,7 +316,6 @@ def test_buoyancy():
     xsig0 = xroms.potential_density(ds.temp, ds.salt)
     assert np.allclose(acc, xroms.buoyancy(xsig0))
     assert acc.name == acc.attrs["name"]
-    # assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = "s_rho"
     dims = dim_dict[hcoord][scoord]
@@ -344,7 +333,6 @@ def test_N2():
     xrho = xroms.density(ds.temp, ds.salt, ds.z_rho)
     assert np.allclose(acc, xroms.N2(xrho, grid), equal_nan=True)
     assert acc.name == acc.attrs["name"]
-    # assert isinstance(acc.attrs["grid"], xgrid.Grid)
     hcoord = "rho"
     scoord = "s_w"
     dims = dim_dict[hcoord][scoord]
@@ -414,7 +402,6 @@ def test_ddxi():
         acc = ds.xroms.ddxi(testvar)
         assert np.allclose(acc, xroms.ddxi(ds[testvar], grid))
         assert acc.name == acc.attrs["name"]
-        assert isinstance(acc.attrs["grid"], xgrid.Grid)
         for ax, dim in zip(axes, dims):
             assert acc.cf[ax].name == dim
         for coordname, coord in zip(coordnames, coords):
@@ -444,7 +431,6 @@ def test_ddeta():
         acc = ds.xroms.ddeta(testvar)
         assert np.allclose(acc, xroms.ddeta(ds[testvar], grid))
         assert acc.name == acc.attrs["name"]
-        assert isinstance(acc.attrs["grid"], xgrid.Grid)
         for ax, dim in zip(axes, dims):
             assert acc.cf[ax].name == dim
         for coordname, coord in zip(coordnames, coords):
@@ -473,7 +459,6 @@ def test_ddz():
         acc = ds.xroms.ddz(testvar)
         assert np.allclose(acc, xroms.ddz(ds[testvar], grid))
         assert acc.name == acc.attrs["name"]
-        assert isinstance(acc.attrs["grid"], xgrid.Grid)
         for ax, dim in zip(axes, dims):
             assert acc.cf[ax].name == dim
         for coordname, coord in zip(coordnames, coords):
@@ -506,7 +491,6 @@ def test_to_grid():
                     acc, xroms.to_grid(ds[testvar], grid, hcoord=hcoord, scoord=scoord)
                 )
                 assert acc.name == acc.attrs["name"]
-                assert isinstance(acc.attrs["grid"], xgrid.Grid)
                 for ax, dim in zip(axes, dims):
                     assert acc.cf[ax].name == dim
                 for coordname, coord in zip(coordnames, coords):

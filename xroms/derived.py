@@ -5,22 +5,23 @@ Variables derived from ROMS output are here.
 import numpy as np
 import xarray as xr
 
-import xroms
+# import xroms
+from .utilities import ddz, hgrad, to_grid, to_rho, to_u, to_v
 
 
 g = 9.81  # m/s^2
 
 
-def speed(u, v, grid, hboundary="extend", hfill_value=None):
+def speed(u, v, xgrid, hboundary="extend", hfill_value=None):
     """Calculate horizontal speed [m/s] from u and v components
 
-    Inputs
-    ------
+    Parameters
+    ----------
     u: DataArray
         xi component of velocity [m/s]
     v: DataArray
         eta component of velocity [m/s]
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with u, v
     hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection
@@ -50,20 +51,19 @@ def speed(u, v, grid, hboundary="extend", hfill_value=None):
 
     Example usage
     -------------
-    >>> xroms.speed(ds.u, ds.v, grid)
+    >>> xroms.speed(ds.u, ds.v, xgrid)
     """
 
     assert isinstance(u, xr.DataArray), "var must be DataArray"
     assert isinstance(v, xr.DataArray), "var must be DataArray"
 
-    u = xroms.to_rho(u, grid, hboundary=hboundary, hfill_value=hfill_value)
-    v = xroms.to_rho(v, grid, hboundary=hboundary, hfill_value=hfill_value)
+    u = to_rho(u, xgrid, hboundary=hboundary, hfill_value=hfill_value)
+    v = to_rho(v, xgrid, hboundary=hboundary, hfill_value=hfill_value)
     var = np.sqrt(u**2 + v**2)
 
     var.attrs["name"] = "speed"
     var.attrs["long_name"] = "horizontal speed"
     var.attrs["units"] = "m/s"
-    var.attrs["grid"] = grid
     var.name = var.attrs["name"]
 
     return var
@@ -72,8 +72,8 @@ def speed(u, v, grid, hboundary="extend", hfill_value=None):
 def KE(rho0, speed):
     """Calculate kinetic energy [kg/(m*s^2)]
 
-    Inputs
-    ------
+    Parameters
+    ----------
     rho0: float
         background density of the water [kg/m^3]
     speed: DataArray
@@ -88,9 +88,9 @@ def KE(rho0, speed):
     -----
     KE = 0.5*rho*(u^2 + v^2)
 
-    Example usage
-    -------------
-    >>> speed = xroms.speed(ds.u, ds.v, ds.attrs['grid'])
+    Examples
+    --------
+    >>> speed = xroms.speed(ds.u, ds.v, xgrid)
     >>> xroms.KE(ds.rho0, speed)
     """
 
@@ -101,23 +101,21 @@ def KE(rho0, speed):
     var.attrs["name"] = "KE"
     var.attrs["long_name"] = "kinetic energy"
     var.attrs["units"] = "kg/(m*s^2)"
-    if "grid" in speed.attrs:
-        var.attrs["grid"] = speed.attrs["grid"]
     var.name = var.attrs["name"]
 
     return var
 
 
-def uv_geostrophic(zeta, f, grid, hboundary="extend", hfill_value=None, which="both"):
+def uv_geostrophic(zeta, f, xgrid, hboundary="extend", hfill_value=None, which="both"):
     """Calculate geostrophic velocities from zeta [m/s]
 
-    Inputs
-    ------
+    Parameters
+    ----------
     zeta: DataArray
         sea surface height [m]
     f: DataArray or ndarray
         Coriolis parameter [1/s]
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with zeta
     hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection
@@ -153,9 +151,9 @@ def uv_geostrophic(zeta, f, grid, hboundary="extend", hfill_value=None, which="b
     ug = -g * zeta_xi / (d xi * f)  # on u grid
     Translation to Python of Matlab copy of surf_geostr_vel of IRD Roms_Tools.
 
-    Example usage
-    -------------
-    >>> xroms.uv_geostrophic(ds.zeta, ds.f, grid)
+    Examples
+    --------
+    >>> xroms.uv_geostrophic(ds.zeta, ds.f, xgrid)
     """
 
     assert isinstance(zeta, xr.DataArray), "zeta must be DataArray"
@@ -164,34 +162,30 @@ def uv_geostrophic(zeta, f, grid, hboundary="extend", hfill_value=None, which="b
     if which in ["both", "xi"]:
 
         # calculate derivatives of zeta
-        dzetadxi = xroms.hgrad(zeta, grid, which="xi")
+        dzetadxi = hgrad(zeta, xgrid, which="xi")
 
         # calculate geostrophic velocities
         ug = (
-            -g
-            * dzetadxi
-            / xroms.to_u(f, grid, hboundary=hboundary, hfill_value=hfill_value)
+            -g * dzetadxi / to_u(f, xgrid, hboundary=hboundary, hfill_value=hfill_value)
         )
 
         ug.attrs["name"] = "ug"
         ug.attrs["long_name"] = "geostrophic u velocity"
-        ug.attrs["units"] = "m/s"  # inherits grid from T
+        ug.attrs["units"] = "m/s"
         ug.name = ug.attrs["name"]
 
     if which in ["both", "eta"]:
         # calculate derivatives of zeta
-        dzetadeta = xroms.hgrad(zeta, grid, which="eta")
+        dzetadeta = hgrad(zeta, xgrid, which="eta")
 
         # calculate geostrophic velocities
         vg = (
-            g
-            * dzetadeta
-            / xroms.to_v(f, grid, hboundary=hboundary, hfill_value=hfill_value)
+            g * dzetadeta / to_v(f, xgrid, hboundary=hboundary, hfill_value=hfill_value)
         )
 
         vg.attrs["name"] = "vg"
         vg.attrs["long_name"] = "geostrophic v velocity"
-        vg.attrs["units"] = "m/s"  # inherits grid from T
+        vg.attrs["units"] = "m/s"
         vg.name = vg.attrs["name"]
 
     if which == "both":
@@ -204,16 +198,16 @@ def uv_geostrophic(zeta, f, grid, hboundary="extend", hfill_value=None, which="b
         print("nothing being returned from uv_geostrophic")
 
 
-def EKE(ug, vg, grid, hboundary="extend", hfill_value=None):
+def EKE(ug, vg, xgrid, hboundary="extend", hfill_value=None):
     """Calculate EKE [m^2/s^2]
 
-    Inputs
-    ------
+    Parameters
+    ----------
     ug: DataArray
         Geostrophic or other xi component velocity [m/s]
     vg: DataArray
         Geostrophic or other eta component velocity [m/s]
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with ug, vg
     hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection
@@ -241,38 +235,37 @@ def EKE(ug, vg, grid, hboundary="extend", hfill_value=None):
     -----
     EKE = 0.5*(ug^2 + vg^2)
 
-    Example usage
-    -------------
-    >>> ug, vg = xroms.uv_geostrophic(ds.zeta, ds.f, grid)
-    >>> xroms.EKE(ug, vg, grid)
+    Examples
+    --------
+    >>> ug, vg = xroms.uv_geostrophic(ds.zeta, ds.f, xgrid)
+    >>> xroms.EKE(ug, vg, xgrid)
     """
 
     assert isinstance(ug, xr.DataArray), "ug must be DataArray"
     assert isinstance(vg, xr.DataArray), "vg must be DataArray"
 
     # make sure velocities are on rho grid
-    ug = xroms.to_rho(ug, grid, hboundary=hboundary, hfill_value=hfill_value)
-    vg = xroms.to_rho(vg, grid, hboundary=hboundary, hfill_value=hfill_value)
+    ug = to_rho(ug, xgrid, hboundary=hboundary, hfill_value=hfill_value)
+    vg = to_rho(vg, xgrid, hboundary=hboundary, hfill_value=hfill_value)
 
     var = 0.5 * (ug**2 + vg**2)
 
     var.attrs["name"] = "EKE"
     var.attrs["long_name"] = "eddy kinetic energy"
     var.attrs["units"] = "m^2/s^2"
-    var.attrs["grid"] = grid
     var.name = var.attrs["name"]
 
     return var
 
 
-def dudz(u, grid, sboundary="extend", sfill_value=None):
+def dudz(u, xgrid, sboundary="extend", sfill_value=None):
     """Calculate the xi component of vertical shear [1/s]
 
-    Inputs
-    ------
+    Parameters
+    ----------
     u: DataArray
         xi component of velocity [m/s]
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with u
     sboundary: string, optional
         Passed to `grid` method calls; vertical boundary selection for
@@ -301,28 +294,27 @@ def dudz(u, grid, sboundary="extend", sfill_value=None):
     u_z = ddz(u)
     Wrapper of `ddz`
 
-    Example usage
-    -------------
-    >>> xroms.dudz(u, grid)
+    Examples
+    --------
+    >>> xroms.dudz(u, xgrid)
     """
 
     attrs = {
         "name": "dudz",
         "long_name": "u component of vertical shear",
         "units": "1/s",
-        "grid": grid,
     }
-    return xroms.ddz(u, grid, attrs=attrs, sboundary=sboundary, sfill_value=sfill_value)
+    return ddz(u, xgrid, attrs=attrs, sboundary=sboundary, sfill_value=sfill_value)
 
 
-def dvdz(v, grid, sboundary="extend", sfill_value=None):
+def dvdz(v, xgrid, sboundary="extend", sfill_value=None):
     """Calculate the eta component of vertical shear [1/s]
 
-    Inputs
-    ------
+    Parameters
+    ----------
     v: DataArray
         eta component of velocity [m/s]
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with v
     sboundary: string, optional
         Passed to `grid` method calls; vertical boundary selection for
@@ -351,30 +343,29 @@ def dvdz(v, grid, sboundary="extend", sfill_value=None):
     v_z = ddz(v)
     Wrapper of `ddz`
 
-    Example usage
-    -------------
-    >>> xroms.dvdz(v, grid)
+    Examples
+    --------
+    >>> xroms.dvdz(v, xgrid)
     """
 
     attrs = {
         "name": "dvdz",
         "long_name": "v component of vertical shear",
         "units": "1/s",
-        "grid": grid,
     }
-    return xroms.ddz(v, grid, attrs=attrs, sboundary=sboundary, sfill_value=sfill_value)
+    return ddz(v, xgrid, attrs=attrs, sboundary=sboundary, sfill_value=sfill_value)
 
 
-def vertical_shear(dudz, dvdz, grid, hboundary="extend", hfill_value=None):
+def vertical_shear(dudz, dvdz, xgrid, hboundary="extend", hfill_value=None):
     """Calculate the vertical shear [1/s]
 
-    Inputs
-    ------
+    Parameters
+    ----------
     dudz: DataArray
         xi component of vertical shear [1/s]
     dvdz: DataArray
         eta compoenent of vertical shear [1/s]
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with dudz, dvdz
     hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection
@@ -402,24 +393,23 @@ def vertical_shear(dudz, dvdz, grid, hboundary="extend", hfill_value=None):
     -----
     vertical_shear = np.sqrt(u_z^2 + v_z^2)
 
-    Example usage
-    -------------
-    >>> xroms.vertical_shear(dudz, dvdz, grid)
+    Examples
+    --------
+    >>> xroms.vertical_shear(dudz, dvdz, xgrid)
     """
 
     assert isinstance(dudz, xr.DataArray), "dudz must be DataArray"
     assert isinstance(dvdz, xr.DataArray), "dvdz must be DataArray"
 
     # make sure velocities are on rho grid
-    dudz = xroms.to_rho(dudz, grid, hboundary=hboundary, hfill_value=hfill_value)
-    dvdz = xroms.to_rho(dvdz, grid, hboundary=hboundary, hfill_value=hfill_value)
+    dudz = to_rho(dudz, xgrid, hboundary=hboundary, hfill_value=hfill_value)
+    dvdz = to_rho(dvdz, xgrid, hboundary=hboundary, hfill_value=hfill_value)
 
     var = np.sqrt(dudz**2 + dvdz**2)
 
     var.attrs["name"] = "shear"
     var.attrs["long_name"] = "vertical shear"
     var.attrs["units"] = "1/s"
-    var.attrs["grid"] = grid
     var.name = var.attrs["name"]
 
     return var
@@ -428,7 +418,7 @@ def vertical_shear(dudz, dvdz, grid, hboundary="extend", hfill_value=None):
 def relative_vorticity(
     u,
     v,
-    grid,
+    xgrid,
     hboundary="extend",
     hfill_value=None,
     sboundary="extend",
@@ -436,13 +426,13 @@ def relative_vorticity(
 ):
     """Calculate the vertical component of the relative vorticity [1/s]
 
-    Inputs
-    ------
+    Parameters
+    ----------
     u: DataArray
         xi component of velocity [m/s]
     v: DataArray
         eta component of velocity [m/s]
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with u, v
     hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection
@@ -486,26 +476,26 @@ def relative_vorticity(
     -----
     relative_vorticity = v_x - u_y
 
-    Example usage
-    -------------
-    >>> xroms.relative_vorticity(u, v, grid)
+    Examples
+    --------
+    >>> xroms.relative_vorticity(u, v, xgrid)
     """
 
     assert isinstance(u, xr.DataArray), "u must be DataArray"
     assert isinstance(v, xr.DataArray), "v must be DataArray"
 
-    dvdxi = xroms.hgrad(
+    dvdxi = hgrad(
         v,
-        grid,
+        xgrid,
         which="xi",
         hboundary=hboundary,
         hfill_value=hfill_value,
         sboundary=sboundary,
         sfill_value=sfill_value,
     )
-    dudeta = xroms.hgrad(
+    dudeta = hgrad(
         u,
-        grid,
+        xgrid,
         which="eta",
         hboundary=hboundary,
         hfill_value=hfill_value,
@@ -517,7 +507,7 @@ def relative_vorticity(
 
     var.attrs["name"] = "vort"
     var.attrs["long_name"] = "vertical component of vorticity"
-    var.attrs["units"] = "1/s"  # inherits grid from T
+    var.attrs["units"] = "1/s"
     var.name = var.attrs["name"]
 
     return var
@@ -528,7 +518,7 @@ def ertel(
     u,
     v,
     f,
-    grid,
+    xgrid,
     hcoord="rho",
     scoord="s_rho",
     hboundary="extend",
@@ -538,8 +528,8 @@ def ertel(
 ):
     """Calculate Ertel potential vorticity of phi.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     phi: DataArray
         Conservative tracer. Usually this would be the buoyancy but
         could be another approximately conservative tracer. The
@@ -552,7 +542,7 @@ def ertel(
         eta component of velocity [m/s]
     f: DataArray
         Coriolis parameter [1/s]
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with u, v
     hcoord: string, optional.
         Name of horizontal grid to interpolate output to.
@@ -609,7 +599,7 @@ def ertel(
     This is not set up to accept different boundary choices for different variables.
 
     Example usage:
-    >>> xroms.ertel(ds.dye_01, ds.u, ds.v, ds.f, ds.attrs['grid'], scoord='s_w');
+    >>> xroms.ertel(ds.dye_01, ds.u, ds.v, ds.f, xgrid, scoord='s_w');
     """
 
     assert isinstance(phi, xr.DataArray), "phi must be DataArray"
@@ -617,17 +607,17 @@ def ertel(
     assert isinstance(v, xr.DataArray), "v must be DataArray"
     assert isinstance(f, xr.DataArray), "f must be DataArray"
 
-    phi_xi, phi_eta = xroms.hgrad(
+    phi_xi, phi_eta = hgrad(
         phi,
-        grid,
+        xgrid,
         hboundary=hboundary,
         hfill_value=hfill_value,
         sboundary=sboundary,
         sfill_value=sfill_value,
     )
-    phi_xi = xroms.to_grid(
+    phi_xi = to_grid(
         phi_xi,
-        grid,
+        xgrid,
         hcoord=hcoord,
         scoord=scoord,
         hboundary=hboundary,
@@ -635,9 +625,9 @@ def ertel(
         sboundary=sboundary,
         sfill_value=sfill_value,
     )
-    phi_eta = xroms.to_grid(
+    phi_eta = to_grid(
         phi_eta,
-        grid,
+        xgrid,
         hcoord=hcoord,
         scoord=scoord,
         hboundary=hboundary,
@@ -645,9 +635,9 @@ def ertel(
         sboundary=sboundary,
         sfill_value=sfill_value,
     )
-    phi_z = xroms.ddz(
+    phi_z = ddz(
         phi,
-        grid,
+        xgrid,
         hcoord=hcoord,
         scoord=scoord,
         hboundary=hboundary,
@@ -657,9 +647,9 @@ def ertel(
     )
 
     # vertical shear (horizontal components of vorticity)
-    u_z = xroms.ddz(
+    u_z = ddz(
         u,
-        grid,
+        xgrid,
         hcoord=hcoord,
         scoord=scoord,
         hboundary=hboundary,
@@ -667,9 +657,9 @@ def ertel(
         sboundary=sboundary,
         sfill_value=sfill_value,
     )
-    v_z = xroms.ddz(
+    v_z = ddz(
         v,
-        grid,
+        xgrid,
         hcoord=hcoord,
         scoord=scoord,
         hboundary=hboundary,
@@ -682,15 +672,15 @@ def ertel(
     vort = relative_vorticity(
         u,
         v,
-        grid,
+        xgrid,
         hboundary=hboundary,
         hfill_value=hfill_value,
         sboundary=sboundary,
         sfill_value=sfill_value,
     )
-    vort = xroms.to_grid(
+    vort = to_grid(
         vort,
-        grid,
+        xgrid,
         hcoord=hcoord,
         scoord=scoord,
         hboundary=hboundary,
@@ -706,11 +696,10 @@ def ertel(
         "name": "ertel",
         "long_name": "ertel potential vorticity",
         "units": "tracer/(m*s)",
-        "grid": grid,
     }
-    epv = xroms.to_grid(
+    epv = to_grid(
         epv,
-        grid,
+        xgrid,
         hcoord=hcoord,
         scoord=scoord,
         attrs=attrs,
@@ -728,8 +717,8 @@ def w(u, v):
 
     TO BE INPUT BY VRX.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     u: DataArray
         xi component of velocity [m/s]
     v: DataArray
@@ -744,8 +733,8 @@ def w(u, v):
     -----
     [Give calculation]
 
-    Example usage
-    -------------
+    Examples
+    --------
     >>> xroms.w(u, v)
     """
 
@@ -755,8 +744,8 @@ def omega(u, v):
 
     TO BE INPUT BY VRX.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     u: DataArray
         xi component of velocity [m/s]
     v: DataArray
@@ -772,7 +761,7 @@ def omega(u, v):
     -----
     [Give calculation]
 
-    Example usage
-    -------------
+    Examples
+    --------
     >>> xroms.omega(u, v)
     """
