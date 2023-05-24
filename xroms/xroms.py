@@ -13,7 +13,7 @@ import xarray as xr
 import xgcm
 
 # import xroms
-from .utilities import order, grid_interp
+from .utilities import grid_interp, order
 
 
 try:
@@ -165,9 +165,9 @@ def roms_dataset(
     Zdict = {"center": "s_rho"}
     if "s_w" in ds.coords:
         Zdict.update({"outer": "s_w"})
-    
+
     coords = {"X": Xdict, "Y": Ydict, "Z": Zdict}
-        
+
     # coords = {
     #     "X": {"center": "xi_rho", "inner": "xi_u"},
     #     "Y": {"center": "eta_rho", "inner": "eta_v"},
@@ -703,6 +703,7 @@ def roms_dataset(
         ]
         for coord in tcoords:
             ds[coord].attrs["positive"] = "up"
+            ds[coord].attrs["standard_name"] = "depth"
         #         ds[dim] = (dim, np.arange(ds.sizes[dim]), {'axis': 'Y'})
         #     ds['z_rho'].attrs['vertical'] = 'depth'
         #     ds['temp'].attrs['coordinates'] = 'lon_rho lat_rho z_rho ocean_time'
@@ -711,6 +712,8 @@ def roms_dataset(
     for var in ds.variables:
         if "coordinates" in ds[var].encoding:
             del ds[var].encoding["coordinates"]
+        if "coordinates" in ds[var].attrs:
+            del ds[var].attrs["coordinates"]
 
     if ds["3d"] and include_3D_metrics:
         metrics = {

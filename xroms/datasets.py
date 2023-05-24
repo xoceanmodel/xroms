@@ -2,8 +2,9 @@
 Load sample data.
 """
 
-import xarray as xr
 import pooch
+import xarray as xr
+
 
 # from . import version  # The version string of your project
 
@@ -12,12 +13,14 @@ CLOVER = pooch.create(
     # Use the default cache folder for the operating system
     path=pooch.os_cache("xroms"),
     # The remote data is on Github
-    base_url=f"https://github.com/xoceanmodel/xroms/raw/{version_dev}/data/",
+    # base_url="https://github.com/xoceanmodel/xroms/raw/{version_dev}/data/",
+    base_url="https://github.com/kthyng/xroms/raw/packaging/xroms/data/",
+    # base_url="/Users/kthyng/projects/xroms/xroms/data/",
     # version=version,
     # If this is a development version, get the data from the "main" branch
     version_dev="main",
     registry={
-        "ROMS_example_full_grid.nc": "sha256:3376da101d0fddec10a9aa2aecd8cd8e57b2e0df2235c279292cfcf3cf75fbdc",
+        "ROMS_example_full_grid.nc": None,
     },
 )
 
@@ -32,5 +35,5 @@ def fetch_ROMS_example_full_grid():
     fname = CLOVER.fetch("ROMS_example_full_grid.nc")
     # The "fetch" method returns the full path to the downloaded data file.
     # All we need to do now is load it with our standard Python tools.
-    data = xr.open_dataset(fname)
+    data = xr.open_dataset(fname, engine="netcdf4", chunks={})
     return data

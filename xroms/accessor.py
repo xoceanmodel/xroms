@@ -8,14 +8,40 @@ this connects to functions in other files.
 import numpy as np
 import xarray as xr
 
-# from xgcm import grid
+from .derived import (
+    EKE,
+    KE,
+    dudz,
+    dvdz,
+    ertel,
+    omega,
+    relative_vorticity,
+    speed,
+    uv_geostrophic,
+    vertical_shear,
+    w,
+)
+from .interp import interpll, isoslice
+from .roms_seawater import M2, N2, buoyancy, density, mld, potential_density
+from .utilities import (
+    argsel2d,
+    ddeta,
+    ddxi,
+    ddz,
+    gridmean,
+    gridsum,
+    order,
+    sel2d,
+    subset,
+    to_grid,
+)
 
 # import xroms
 from .xroms import roms_dataset
-from .derived import speed, KE, uv_geostrophic, EKE, dudz, dvdz, vertical_shear, relative_vorticity, ertel, w, omega
-from .interp import isoslice, interpll
-from .roms_seawater import density, potential_density, buoyancy, N2, M2, mld
-from .utilities import order, gridsum, gridmean, sel2d, argsel2d, ddxi, ddeta, ddz, to_grid, subset
+
+
+# from xgcm import grid
+
 
 xr.set_options(keep_attrs=True)
 
@@ -228,9 +254,7 @@ class xromsDatasetAccessor:
         """
 
         if "shear" not in self.ds:
-            var = vertical_shear(
-                self.dudz, self.dvdz, self.xgrid, hboundary="extend"
-            )
+            var = vertical_shear(self.dudz, self.dvdz, self.xgrid, hboundary="extend")
             self.ds["shear"] = var
         return self.ds["shear"]
 
@@ -439,9 +463,7 @@ class xromsDatasetAccessor:
         >>> ds.xroms.mld(thresh=0.03).isel(ocean_time=0).plot(vmin=-20, vmax=0)
         """
 
-        return mld(
-            self.sig0, self.xgrid, self.ds.h, self.ds.mask_rho, thresh=thresh
-        )
+        return mld(self.sig0, self.xgrid, self.ds.h, self.ds.mask_rho, thresh=thresh)
 
     def ddxi(
         self,
@@ -1281,9 +1303,7 @@ class xromsDataArrayAccessor:
         >>> ds.temp.xroms.argsel2d(-96, 27)
         """
 
-        return argsel2d(
-            self.da.cf["longitude"], self.da.cf["latitude"], lon0, lat0
-        )
+        return argsel2d(self.da.cf["longitude"], self.da.cf["latitude"], lon0, lat0)
 
     def sel2d(self, lon0, lat0):
         """Find the value of the var at closest location to lon0,lat0.
@@ -1459,46 +1479,46 @@ class xromsDataArrayAccessor:
         Examples
         --------
         To calculate temperature onto fixed depths:
-        
+
         >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50), xgrid)
 
         To calculate temperature onto salinity:
-        
+
         >>> xroms.isoslice(ds.temp, np.arange(0, 36), xgrid, iso_array=ds.salt, axis='Z')
 
         Calculate lat-z slice of salinity along a constant longitude value (-91.5):
-        
+
         >>> xroms.isoslice(ds.salt, -91.5, xgrid, iso_array=ds.lon_rho, axis='X')
 
         Calculate slice of salt at 28 deg latitude
-        
+
         >>> xroms.isoslice(ds.salt, 28, xgrid, iso_array=ds.lat_rho, axis='Y')
 
         Interpolate temp to salinity values between 0 and 36 in the X direction
-        
+
         >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), xgrid, iso_array=ds.salt, axis='X')
 
         Interpolate temp to salinity values between 0 and 36 in the Z direction
-        
+
         >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), xgrid, iso_array=ds.salt, axis='Z')
 
         Calculate the depth of a specific isohaline (33):
-        
+
         >>> xroms.isoslice(ds.salt, 33, xgrid, iso_array=ds.z_rho, axis='Z')
 
         Calculate dye 10 meters above seabed. Either do this on the vertical
         rho grid, or first change to the w grid and then use `isoslice`. You may prefer
         to do the latter if there is a possibility that the distance above the seabed you are
         interpolating to (10 m) could be below the deepest rho grid depth.
-        
+
         * on rho grid directly:
-        
+
         >>> height_from_seabed = ds.z_rho + ds.h
         >>> height_from_seabed.name = 'z_rho'
         >>> xroms.isoslice(ds.dye_01, 10, xgrid, iso_array=height_from_seabed, axis='Z')
-        
+
         * on w grid:
-        
+
         >>> var_w = ds.dye_01.xroms.to_grid(xgrid, scoord='w').chunk({'s_w': -1})
         >>> ds['dye_01_w'] = var_w  # currently this is the easiest way to reattached coords xgcm variables
         >>> height_from_seabed = ds.z_w + ds.h

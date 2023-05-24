@@ -2,6 +2,22 @@
 
 from importlib.metadata import PackageNotFoundError, version
 
+import xroms.accessor
+import xroms.datasets
+
+from .derived import (
+    EKE,
+    KE,
+    dudz,
+    dvdz,
+    ertel,
+    relative_vorticity,
+    speed,
+    uv_geostrophic,
+    vertical_shear,
+)
+from .interp import interpll, isoslice
+from .roms_seawater import M2, N2, buoyancy, density, mld, potential_density
 from .utilities import (
     argsel2d,
     ddeta,
@@ -22,22 +38,7 @@ from .utilities import (
     to_v,
     xisoslice,
 )
-from .derived import (
-    EKE,
-    KE,
-    dudz,
-    dvdz,
-    ertel,
-    relative_vorticity,
-    speed,
-    uv_geostrophic,
-    vertical_shear,
-)
-from .interp import interpll, isoslice
-from .roms_seawater import M2, N2, buoyancy, density, mld, potential_density
-from .xroms import open_mfnetcdf, open_netcdf, open_zarr, roms_dataset, grid_interp
-
-import xroms.accessor
+from .xroms import grid_interp, open_mfnetcdf, open_netcdf, open_zarr, roms_dataset
 
 
 try:

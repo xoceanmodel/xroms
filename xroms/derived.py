@@ -6,7 +6,7 @@ import numpy as np
 import xarray as xr
 
 # import xroms
-from .utilities import to_rho, hgrad, to_u, to_v, ddz, to_grid
+from .utilities import ddz, hgrad, to_grid, to_rho, to_u, to_v
 
 
 g = 9.81  # m/s^2
@@ -166,9 +166,7 @@ def uv_geostrophic(zeta, f, xgrid, hboundary="extend", hfill_value=None, which="
 
         # calculate geostrophic velocities
         ug = (
-            -g
-            * dzetadxi
-            / to_u(f, xgrid, hboundary=hboundary, hfill_value=hfill_value)
+            -g * dzetadxi / to_u(f, xgrid, hboundary=hboundary, hfill_value=hfill_value)
         )
 
         ug.attrs["name"] = "ug"
@@ -182,9 +180,7 @@ def uv_geostrophic(zeta, f, xgrid, hboundary="extend", hfill_value=None, which="
 
         # calculate geostrophic velocities
         vg = (
-            g
-            * dzetadeta
-            / to_v(f, xgrid, hboundary=hboundary, hfill_value=hfill_value)
+            g * dzetadeta / to_v(f, xgrid, hboundary=hboundary, hfill_value=hfill_value)
         )
 
         vg.attrs["name"] = "vg"

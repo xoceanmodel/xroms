@@ -51,16 +51,29 @@ def grid_interp(xgrid, da, dim, which_xgcm_function="interp", **kwargs):
     # need to unchunk then rechunk, so save chunk
     if da.chunks is not None:
         chunk = list(da.chunks[i_chunk_dim])
-        # take one off the last chunk in this dimension since interpolation
-        # loses one in size
-        chunk[-1] -= 1
 
         # to interpolate, first remove chunking to 1 chunk
-        new_coord = getattr(xgrid, which_xgcm_function)(da.chunk({dim_name: -1}), dim, **kwargs)
+        new_coord = getattr(xgrid, which_xgcm_function)(
+            da.chunk({dim_name: -1}), dim, **kwargs
+        )
         # new_coord = xgrid.interp(da.chunk({dim_name: -1}), dim, **kwargs)
 
-        # reconstitute chunks after intepolation but minus one in downsized dim
-        return new_coord.chunk({new_coord.cf[dim].name: tuple(chunk)})
+        if (
+            which_xgcm_function == "interp"
+            and new_coord.shape[i_chunk_dim] + 1 == da.shape[i_chunk_dim]
+        ):
+
+            # take one off the last chunk in this dimension since interpolation
+            # loses one in size
+            chunk[-1] -= 1
+            # reconstitute chunks after intepolation but minus one in downsized dim
+            return new_coord.chunk({new_coord.cf[dim].name: tuple(chunk)})
+
+        elif which_xgcm_function == "integrate":
+            return new_coord
+
+        else:
+            raise ValueError("chunks probably are not being dealt with properly")
 
     else:
         new_coord = getattr(xgrid, which_xgcm_function)(da, dim, **kwargs)
@@ -82,7 +95,7 @@ def hgrad(
     attrs=None,
 ):
     """Return gradients of property q accounting for s coordinates.
-    
+
     Note that you need the 3D metrics for horizontal derivatives for ROMS, so ``include_3D_metrics=True`` in ``xroms.roms_dataset()``.
 
     Parameters
@@ -264,7 +277,9 @@ def hgrad(
             dqdeta = dqdy * dzdz - dqdz * dzdy
 
         else:  # 2D variables
-            dqdeta = xgrid.derivative(q, "Y", boundary=hboundary, fill_value=hfill_value)
+            dqdeta = xgrid.derivative(
+                q, "Y", boundary=hboundary, fill_value=hfill_value
+            )
 
         if attrs is None and isinstance(q, xr.DataArray):
             attrs = q.attrs.copy()
@@ -308,7 +323,7 @@ def ddxi(
     attrs=None,
 ):
     """Calculate d/dxi for a variable.
-    
+
     Note that you need the 3D metrics for horizontal derivatives for ROMS, so ``include_3D_metrics=True`` in ``xroms.roms_dataset()``.
 
     Parameters
@@ -414,7 +429,7 @@ def ddeta(
     attrs=None,
 ):
     """Calculate d/deta for a variable.
-    
+
     Note that you need the 3D metrics for horizontal derivatives for ROMS, so ``include_3D_metrics=True`` in ``xroms.roms_dataset()``.
 
     Parameters
@@ -798,16 +813,18 @@ def to_psi(var, xgrid, hboundary="extend", hfill_value=None):
     """
 
     if "xi_u" not in var.dims:
-        
-        
-        grid_interp(xgrid, var, "X", to="inner", boundary=hboundary, fill_value=hfill_value)
-        
-        
+
+        grid_interp(
+            xgrid, var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
+        )
+
         # var = xgrid.interp(
         #     var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
         # )
     if "eta_v" not in var.dims:
-        grid_interp(xgrid, var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value)
+        grid_interp(
+            xgrid, var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
+        )
         # var = xgrid.interp(
         #     var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
         # )
@@ -1204,10 +1221,11 @@ def gridsum(var, xgrid, dim):
     >>> app2 = (ds.u*ds.dz_u * ds.dx_u).sum(('s_rho','xi_u'))
     >>> np.allclose(app1, app2)
     """
-
-    assert isinstance(
-        dim, (str, list, tuple)
-    ), 'dim must be a string of or a list or tuple containing "X", "Y", and/or "Z"'
+    # for now with xgcm bug only allow for one dim at a time
+    assert isinstance(dim, str), 'dim must be a string containing "X", "Y", and/or "Z"'
+    # assert isinstance(
+    #     dim, (str, list, tuple)
+    # ), 'dim must be a string of or a list or tuple containing "X", "Y", and/or "Z"'
 
     if isinstance(var, xr.DataArray):
         attrs = var.attrs.copy()
@@ -1218,8 +1236,14 @@ def gridsum(var, xgrid, dim):
             attrs.setdefault("long_name", "var") + ", grid sum over dim " + dimstr
         )
 
-    var = grid_interp(xgrid, var, dim, which_xgcm_function="integrate")
+    # if isinstance(dim, str):
+    #     var = grid_interp(xgrid, var, dim, which_xgcm_function="integrate")
+    # else:
+    #     for d in dim:
+    #         var = grid_interp(xgrid, var, d, which_xgcm_function="integrate")
+    #         import pdb; pdb.set_trace()
     # var = xgrid.integrate(var, dim)
+    var = grid_interp(xgrid, var, dim, which_xgcm_function="integrate")
 
     return var
 
@@ -1287,13 +1311,13 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     rho grid, or first change to the w grid and then use `xisoslice`. You may prefer
     to do the latter if there is a possibility that the distance above the seabed you are
     interpolating to (10 m) could be below the deepest rho grid depth.
-    
+
     * on rho grid directly:
-    
+
       >>> sl = xroms.xisoslice(ds.z_rho + ds.h, 10., ds.salt, 's_rho')
-      
+
     * on w grid:
-    
+
       >>> var_w = xroms.to_s_w(ds.salt, ds.xroms.xgrid)
       >>> sl = xroms.xisoslice(ds.z_w + ds.h, 10., var_w, 's_w')
 
@@ -1410,11 +1434,19 @@ def subset(ds, X=None, Y=None):
 
     if X is not None:
         assert isinstance(X, slice), "X must be a slice, e.g., slice(50,100)"
-        ds = ds.isel(xi_rho=X, xi_u=slice(X.start, X.stop - 1), xi_v=X, xi_psi=slice(X.start, X.stop - 1))
+        ds = ds.isel(xi_rho=X, xi_u=slice(X.start, X.stop - 1))
+        if "xi_v" in ds.coords:
+            ds = ds.isel(xi_v=X)
+        if "xi_psi" in ds.coords:
+            ds = ds.isel(xi_psi=slice(X.start, X.stop - 1))
 
     if Y is not None:
         assert isinstance(Y, slice), "Y must be a slice, e.g., slice(50,100)"
-        ds = ds.isel(eta_rho=Y, eta_v=slice(Y.start, Y.stop - 1), eta_u=Y, eta_psi=slice(Y.start, Y.stop - 1))
+        ds = ds.isel(eta_rho=Y, eta_v=slice(Y.start, Y.stop - 1))
+        if "eta_u" in ds.coords:
+            ds = ds.isel(eta_u=Y)
+        if "eta_psi" in ds.coords:
+            ds = ds.isel(eta_psi=slice(Y.start, Y.stop - 1))
 
     return ds
 

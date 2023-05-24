@@ -63,6 +63,8 @@ def interpll(var, lons, lats, which="pairs"):
     # make sure that xesmf was read in for this function to run
     if not xroms.XESMF_AVAILABLE:
         raise ModuleNotFoundError("xESMF is not installed, so `interpll` will not run.")
+    else:
+        import xesmf as xe
     # try:
     #     xe
     # except NameError:
@@ -84,11 +86,15 @@ def interpll(var, lons, lats, which="pairs"):
     # whether inputs are
     if which == "pairs":
         locstream_out = True
+        # set up for output
+        varint = xr.Dataset(
+            {"lat": (["locations"], lats), "lon": (["locations"], lons)}
+        )
+
     elif which == "grid":
         locstream_out = False
-
-    # set up for output
-    varint = xr.Dataset({"lat": (["lat"], lats), "lon": (["lon"], lons)})
+        # set up for output
+        varint = xr.Dataset({"lat": (["lat"], lats), "lon": (["lon"], lons)})
 
     # Calculate weights.
     regridder = xe.Regridder(var, varint, "bilinear", locstream_out=locstream_out)
@@ -102,16 +108,14 @@ def interpll(var, lons, lats, which="pairs"):
     # zkey_varint = [
     #     coord for coord in varint.coords if "z_" in coord and "0" not in coord
     # ]
+    # get z coordinates to go with interpolated output if not available
+    zkey = [coord for coord in var.coords if "z_" in coord and "0" not in coord][
+        0
+    ]  # str
+    zint = regridder(var[zkey], keep_attrs=True)
 
-    # # get z coordinates to go with interpolated output if not available
-    # if zkey_varint == []:
-    #     zkey = [coord for coord in var.coords if "z_" in coord and "0" not in coord][
-    #         0
-    #     ]  # str
-    #     zint = regridder(var[zkey], keep_attrs=True)
-
-    #     # add coords
-    #     varint = varint.assign_coords({zkey: zint})
+    # add coords
+    varint = varint.assign_coords({zkey: zint})
 
     # add attributes for cf-xarray
     if which == "pairs":
@@ -123,8 +127,8 @@ def interpll(var, lons, lats, which="pairs"):
     elif which == "grid":
         varint["lon"].attrs["axis"] = "X"
         varint["lat"].attrs["axis"] = "Y"
-    varint["lon"].attrs["standard_name"] = "longitude"
-    varint["lat"].attrs["standard_name"] = "latitude"
+        varint["lon"].attrs["standard_name"] = "longitude"
+        varint["lat"].attrs["standard_name"] = "latitude"
 
     return varint
 
@@ -207,7 +211,7 @@ def isoslice(var, iso_values, xgrid, iso_array=None, axis="Z"):
     """
 
     words = "Grid should be input."
-    assert (xgrid is not None), words
+    assert xgrid is not None, words
 
     assert isinstance(xgrid, xgcm.Grid), "xgrid must be `xgcm` grid object."
 

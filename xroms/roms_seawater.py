@@ -143,7 +143,7 @@ def density(temp, salt, z=None):
         var.attrs["long_name"] = "density"
         var.attrs["units"] = "kg/m^3"
         var.name = var.attrs["name"]
-        if "lon_rho" in var:
+        if "lon_rho" in var.coords:
             var.coords["lon_rho"].attrs["standard_name"] = "longitude"
             var.coords["lat_rho"].attrs["standard_name"] = "latitude"
 
