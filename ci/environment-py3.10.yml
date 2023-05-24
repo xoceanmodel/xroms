@@ -12,7 +12,7 @@ dependencies:
   - numpy
   - pooch
   - xarray
-  - xgcm
+  - xgcm >= 0.8.1
   ##############
   - pytest
   - pip:
