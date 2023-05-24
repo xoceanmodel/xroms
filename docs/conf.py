@@ -87,7 +87,7 @@ nb_custom_formats = {
 
 # https://myst-nb.readthedocs.io/en/v0.9.0/use/execute.html
 # jupyter_execute_notebooks = "off"
-nb_execution_mode = "off"
+nb_execution_mode = "auto"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -131,7 +131,7 @@ nbsphinx_allow_errors = True
 
 
 # copied from cf-xarray
-autosummary_generate = True
+# autosummary_generate = True
 
 autodoc_typehints = "none"
 autodoc_default_options = {

@@ -31,7 +31,7 @@ Note you need version 0.11 of Datashader for rasterizing to work in the interact
 
 +++
 
-### Load in data
+## Load in data
 
 Load in example dataset. More information at in {doc}`input/output page <io>`
 
@@ -229,23 +229,23 @@ The tiles allow for different basemap options. The `rasterize` option is really 
 
 #### Vary over time (for surface)
 
-+++
+```
 
 tiles = gv.tile_sources.ESRI  # optional, for a basemap
 ds.salt.cf.isel(s_rho=-1).hvplot.quadmesh(x='lon_rho', y='lat_rho', width=650, height=500,
                         cmap="cmo.haline", rasterize=True, crs=pc) * tiles
 
-+++
+```
 
 #### Vary over sigma level and time
 
-+++
+```
 
 tiles = gv.tile_sources.ESRI  # optional, for a basemap
 ds.salt.hvplot.quadmesh(x='lon_rho', y='lat_rho', width=650, height=500,
                         cmap=cmo.haline, rasterize=True, crs=pc) * tiles
 
-+++
+```
 
 #### Vary over depth and time
 
@@ -253,23 +253,25 @@ Since the vertical dimension is in sigma coordinates instead of fixed depths, it
 
 In the following example, we use the accessor version of the isoslice interpolation to find slices of salinity at fixed depths. To save some time, we use the time-constant depths (`z_rho0`) associated with salinity instead of the time-varying version (`z_rho`).
 
-+++
+```
 
 zsalt = ds.salt.xroms.isoslice([-10, -20, -30], iso_array=ds.salt.z_rho0, axis='Z')
 
-+++
+```
 
+```
 tiles = gv.tile_sources.ESRI  # optional, for a basemap
 zsalt.hvplot.quadmesh(x='lon_rho', y='lat_rho', width=650, height=500,
                         cmap=cmo.haline, rasterize=True, crs=pc) * tiles
 
-+++
+```
 
 ### cross-section
 
 In this case, the plots are similar whether `rasterize=True` is used or not.
 
-+++
+```
 
 ds.temp.isel(xi_rho=300).hvplot.quadmesh(x='lat_rho', y='z_rho0', width=750, height=400,
                         cmap=cmo.thermal)
+```

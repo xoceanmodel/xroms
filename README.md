@@ -7,6 +7,7 @@
 [![Code Style Status](https://img.shields.io/github/actions/workflow/status/xoceanmodel/xroms/pre-commit.yml?branch-main&label=Code%20Style&style=for-the-badge)](https://github.com/xoceanmodel/xroms/actions)
 [![Conda Version](https://img.shields.io/conda/vn/conda-forge/xroms.svg?style=for-the-badge)](https://anaconda.org/conda-forge/xroms)
 [![Python Package Index](https://img.shields.io/pypi/v/xroms.svg?style=for-the-badge)](https://pypi.org/project/xroms)
+
 [![DOI](https://zenodo.org/badge/265067025.svg?style=for-the-badge)](https://zenodo.org/badge/latestdoi/265067025)
 
 `xroms` contains functions for commonly used scripts for working with ROMS output in xarray.

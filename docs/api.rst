@@ -8,7 +8,7 @@ API
    :toctree: generated/
    :recursive:
 
-   xroms
+   xroms.roms_dataset
    derived
    interp
    roms_seawater

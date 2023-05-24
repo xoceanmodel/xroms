@@ -1,6 +1,6 @@
 # What's New
 
-## Unreleased
+## v0.2.3 (May 24, 2023)
 
 * updating versioning approach
 * the xgcm grid is no longer attached to every variable in a Dataset. Because of this:
@@ -12,4 +12,4 @@
 * `xroms` works with newest version of `xgcm`
 * changed all references to the `xgcm` grid to `xgrid` since there is now a "grid" attribute in some Datasets.
 * updated example notebooks to be formal docs
-* added a ROMS example dataset.
+* added a ROMS example dataset, available with `xroms.datasets.fetch_ROMS_example_full_grid()`.

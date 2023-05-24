@@ -379,13 +379,7 @@ Since it is a common use case, there are specific methods to return the u and v 
 ds.xroms.dudz
 ```
 
-If we want to calculate something with both, we need them on the same grid. For this, we can input the desired resultant grid:
-
-```{code-cell} ipython3
-ds.xroms.to_grid("dudz", hcoord='rho', scoord='s_rho')**2 + ds.xroms.to_grid("dvdz", hcoord='rho', scoord='s_rho')**2
-```
-
-Or in this case, the magnitude of the vertical shear is also a built-in derived variable for the `xroms` accessor:
+The magnitude of the vertical shear is also a built-in derived variable for the `xroms` accessor:
 
 ```{code-cell} ipython3
 ds.xroms.vertical_shear

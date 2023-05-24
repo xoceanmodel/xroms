@@ -5,6 +5,7 @@ channels:
 dependencies:
    - python=3.10
    # If your docs code examples depend on other packages add them here
+   - cartopy
    - cf_xarray
    - cmocean
    - dask

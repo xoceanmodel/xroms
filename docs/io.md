@@ -49,12 +49,14 @@ There are optional flags for `xroms.roms_dataset()` for what all metrics to lazi
 
 ## Demo workflow using example dataset
 
-   import xarray as xr
-   import xroms
+```
+import xarray as xr
+import xroms
 
-   ds = xroms.datasets.fetch_ROMS_example_full_grid()
-   ds, xgrid = xroms.roms_dataset(ds, include_cell_volume=True)
-   ds.xroms.set_grid(xgrid)
+ds = xroms.datasets.fetch_ROMS_example_full_grid()
+ds, xgrid = xroms.roms_dataset(ds, include_cell_volume=True)
+ds.xroms.set_grid(xgrid)
+```
 
 ## Save output
 
