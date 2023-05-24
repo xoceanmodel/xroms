@@ -55,11 +55,15 @@ You need to have `conda` installed for these installation instructions. You'll h
 
 PyPI:
 
+  ```
   pip install xroms
+  ```
 
 conda-forge:
 
+  ```
   mamba install -c conda-forge xroms
+  ```
 
 ### Create environment if needed
 
