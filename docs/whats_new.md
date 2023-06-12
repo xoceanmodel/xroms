@@ -1,6 +1,6 @@
 # What's New
 
-## v0.2.4 (June 12, 2023)
+## v0.3.0 (June 12, 2023)
 
 * can rotate along-grid velocities to be eastward and northward
 * can also rotate to be along an arbitrary angle (to be along-channel for example)
