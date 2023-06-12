@@ -69,6 +69,17 @@ def grid_interp(xgrid, da, dim, which_xgcm_function="interp", **kwargs):
             # reconstitute chunks after intepolation but minus one in downsized dim
             return new_coord.chunk({new_coord.cf[dim].name: tuple(chunk)})
 
+        elif (
+            which_xgcm_function == "interp"
+            and new_coord.shape[i_chunk_dim] == da.shape[i_chunk_dim] + 1
+        ):
+
+            # add one on the last chunk in this dimension since interpolation
+            # loses one in size
+            chunk[-1] += 1
+            # reconstitute chunks after intepolation but minus one in downsized dim
+            return new_coord.chunk({new_coord.cf[dim].name: tuple(chunk)})
+
         elif which_xgcm_function == "integrate":
             return new_coord
 
@@ -760,13 +771,21 @@ def to_rho(var, xgrid, hboundary="extend", hfill_value=None):
     >>> xroms.to_rho('salt', xgrid)
     """
     if "xi_rho" not in var.dims:
-        var = xgrid.interp(
-            var, "X", to="center", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "X", to="center", boundary=hboundary, fill_value=hfill_value
         )
+
+    #      var = xgrid.interp(
+    #         var, "X", to="center", boundary=hboundary, fill_value=hfill_value
+    #     )
     if "eta_rho" not in var.dims:
-        var = xgrid.interp(
-            var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
         )
+
+        #  var = xgrid.interp(
+        #     var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
+        # )
     return var
 
 
@@ -873,13 +892,21 @@ def to_u(var, xgrid, hboundary="extend", hfill_value=None):
     >>> xroms.to_u('salt', xgrid)
     """
     if "xi_u" not in var.dims:
-        var = xgrid.interp(
-            var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
         )
+
+        #  var = xgrid.interp(
+        #     var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
+        # )
     if "eta_rho" not in var.dims:
-        var = xgrid.interp(
-            var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
         )
+
+        #  var = xgrid.interp(
+        #     var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
+        # )
     return var
 
 
@@ -925,13 +952,21 @@ def to_v(var, xgrid, hboundary="extend", hfill_value=None):
     >>> xroms.to_v('salt', xgrid)
     """
     if "xi_rho" not in var.dims:
-        var = xgrid.interp(
-            var, "X", to="center", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "X", to="center", boundary=hboundary, fill_value=hfill_value
         )
+
+        # var = xgrid.interp(
+        #     var, "X", to="center", boundary=hboundary, fill_value=hfill_value
+        # )
     if "eta_v" not in var.dims:
-        var = xgrid.interp(
-            var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
         )
+
+        #  var = xgrid.interp(
+        #     var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
+        # )
     return var
 
 

@@ -5,6 +5,8 @@ background where possible. No functions are available only here;
 this connects to functions in other files.
 """
 
+from typing import Optional, Tuple, Union
+
 import numpy as np
 import xarray as xr
 
@@ -35,6 +37,7 @@ from .utilities import (
     subset,
     to_grid,
 )
+from .vector import rotate_vectors
 
 # import xroms
 from .xroms import roms_dataset
@@ -174,6 +177,187 @@ class xromsDatasetAccessor:
             )
             self.ds["vg"] = vg
         return self.ds["vg"]
+
+    def _uv2eastnorth(self):
+        """Call the velocity rotation for accessor."""
+
+        east_attrs = {
+            "name": "east",
+            "standard_name": "eastward_sea_water_velocity",
+            "long_name": "u rotated to eastward axis",
+            "units": "m/s",
+        }
+        north_attrs = {
+            "name": "north",
+            "standard_name": "northward_sea_water_velocity",
+            "long_name": "v rotated to northward axis",
+            "units": "m/s",
+        }
+
+        east, north = rotate_vectors(
+            self.ds.u,
+            self.ds.v,
+            self.ds.angle,
+            isradians=True,
+            reference="xaxis",
+            xgrid=self.xgrid,
+            hcoord="rho",
+            attrs={"x": east_attrs, "y": north_attrs},
+        )
+        self.ds["east"] = east
+        self.ds["north"] = north
+
+    @property
+    def east(self):
+        """Rotate grid-aligned u velocity to be eastward.
+
+        Notes
+        -----
+        See `xroms.rotate_vectors` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.east
+        """
+
+        if "east" not in self.ds:
+            self._uv2eastnorth()
+        return self.ds["east"]
+
+    @property
+    def north(self):
+        """Rotate grid-aligned v velocity to be northward.
+
+        Notes
+        -----
+        See `xroms.rotate_vectors` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.north
+        """
+
+        if "north" not in self.ds:
+            self._uv2eastnorth()
+        return self.ds["north"]
+
+    def _eastnorth_rotated(self, angle, include_vars_adcp: bool = False, **kwargs):
+        """Call the velocity rotation for accessor.
+
+        include_vars_adcp : bool
+            If True, include all variables that might be compared with ADCP data and ways to convert between: east_rotated, north_rotated, angle, east, north, grid_angle.
+
+        """
+
+        eastrot_attrs = {
+            "name": "eastrot",
+            "standard_name": "sea_water_x_velocity",
+            "long_name": "eastward velocity rotated by angle",
+            "units": "m/s",
+        }
+        northrot_attrs = {
+            "name": "northrot",
+            "standard_name": "sea_water_y_velocity",
+            "long_name": "northward velocity rotated by angle",
+            "units": "m/s",
+        }
+
+        eastrot, northrot = rotate_vectors(
+            self.east,
+            self.north,
+            angle,
+            isradians=kwargs.get("isradians", None),
+            reference=kwargs.get("reference", None),
+            xgrid=self.xgrid,
+            hcoord="rho",
+            attrs={"x": eastrot_attrs, "y": northrot_attrs},
+        )
+
+        if "name" in kwargs:
+            self.east.name = kwargs["name"]["x"]
+            self.east.attrs["name"] = kwargs["name"]["x"]
+            self.north.name = kwargs["name"]["y"]
+            self.north.attrs["name"] = kwargs["name"]["y"]
+
+        # add angle to long_name if just a number
+        if isinstance(angle, (int, float)):
+            self.east.attrs["long_name"] += f" {angle}"
+            self.north.attrs["long_name"] += f" {angle}"
+
+        if include_vars_adcp:
+            ds_out = self.ds[["east", "north", "angle"]]
+            ds_out[eastrot.name] = eastrot
+            ds_out[northrot.name] = northrot
+            ds_out["rotation_angle"] = angle
+            return ds_out
+        else:
+            return eastrot, northrot
+
+    def east_rotated(
+        self, angle: Union[float, xr.DataArray], name: Optional[dict] = None, **kwargs
+    ):
+        """Rotate eastward velocity by angle.
+
+        Parameters
+        ----------
+        angle : float,xr.DataArray
+            Angle to rotate eastward, northward velocities by to get x component of rotated velocities.
+        name : str, optional
+            If input, will be used for output array name.
+        kwargs : optional
+            will be input to ``xroms.rotate_vectors()``.
+
+        Notes
+        -----
+        See `xroms.rotate_vectors()` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.east_rotated(angle, reference="compass", isradians=False, name="along_channel")
+        """
+
+        east_rotated, _ = self._eastnorth_rotated(angle, **kwargs)
+
+        if name is not None:
+            east_rotated.name = name
+            east_rotated.attrs["name"] = name
+
+        # add angle to long_name if just a number
+        if isinstance(angle, (int, float)):
+            east_rotated.attrs["long_name"] += f" {angle}"
+        return east_rotated
+
+    def north_rotated(
+        self, angle: Union[float, xr.DataArray], name: Optional[str] = None, **kwargs
+    ):
+        """Rotate northward velocity by angle.
+
+        Parameters
+        ----------
+        angle : float,xr.DataArray
+            Angle to rotate eastward, northward velocities by to get y component of rotated velocities.
+        name : str, optional
+            If input, will be used for output array name.
+        kwargs : optional
+            will be input to ``xroms.rotate_vectors()``.
+
+        Notes
+        -----
+        See `xroms.rotate_vectors()` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.north_rotated(angle, reference="compass", isradians=False, name="across_channel")
+        """
+
+        north_rotated, _ = self._eastnorth_rotated(angle, **kwargs)
+        if name is not None:
+            north_rotated.name = name
+            north_rotated.attrs["name"] = name
+        # add angle to long_name if just a number
+        if isinstance(angle, (int, float)):
+            north_rotated.attrs["long_name"] += f" {angle}"
+        return north_rotated
 
     @property
     def EKE(self):
