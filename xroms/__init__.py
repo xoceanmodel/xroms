@@ -38,6 +38,7 @@ from .utilities import (
     to_v,
     xisoslice,
 )
+from .vector import rotate_vectors
 from .xroms import grid_interp, open_mfnetcdf, open_netcdf, open_zarr, roms_dataset
 
 

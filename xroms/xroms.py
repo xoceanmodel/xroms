@@ -283,6 +283,33 @@ def roms_dataset(
             "units": "m",
         }
 
+        # replace s_rho with z_rho, etc, to make z_rho the vertical coord
+        name_dict = {"s_rho": "z_rho", "s_w": "z_w"}
+        name_dict.update(
+            {
+                "filler1": "z_rho_u",
+                "filler2": "z_rho_v",
+                "filler3": "z_rho_psi",
+                "filler4": "z_w_u",
+                "filler5": "z_w_v",
+                "filler6": "z_w_psi",
+            }
+        )
+        for sname, zname in name_dict.items():
+            for var in ds.data_vars:
+                if ds[var].ndim == 4:
+                    if "coordinates" in ds[var].encoding:
+                        coords_here = ds[var].encoding["coordinates"]
+                        if sname in coords_here:  # replace if present
+                            coords_here = coords_here.replace(sname, zname)
+                        else:  # still add z_rho or z_w
+                            if (
+                                zname in ds[var].coords
+                                and ds[zname].shape == ds[var].shape
+                            ):
+                                coords_here += f" {zname}"
+                        ds[var].encoding["coordinates"] = coords_here
+
         if include_Z0:
             ds.coords["z_rho0"] = order(z_rho0)
             ds.coords["z_rho_u0"] = xgrid.interp(ds.z_rho0, "X")
@@ -692,7 +719,7 @@ def roms_dataset(
     #     for coord in tcoords:
     #         ds[coord].attrs['cell_measures'] = 'area: cell_area'
     #     # add coordinates attributes for variables
-    if ds["3d"] and include_3D_metrics:
+    if ds["3d"]:  # and include_3D_metrics:
         if "positive" in ds.s_rho.attrs:
             ds.s_rho.attrs.pop("positive")
         if "positive" in ds.s_w.attrs:
@@ -709,11 +736,11 @@ def roms_dataset(
         #     ds['temp'].attrs['coordinates'] = 'lon_rho lat_rho z_rho ocean_time'
         #     [del ds[var].encoding['coordinates'] for var in ds.variables if 'coordinates' in ds[var].encoding]
 
-    for var in ds.variables:
-        if "coordinates" in ds[var].encoding:
-            del ds[var].encoding["coordinates"]
-        if "coordinates" in ds[var].attrs:
-            del ds[var].attrs["coordinates"]
+    # for var in ds.variables:
+    #     if "coordinates" in ds[var].encoding:
+    #         del ds[var].encoding["coordinates"]
+    #     if "coordinates" in ds[var].attrs:
+    #         del ds[var].attrs["coordinates"]
 
     if ds["3d"] and include_3D_metrics:
         metrics = {

@@ -481,6 +481,24 @@ This is not a property since the threshold is a parameter and needs to be input.
 ds.xroms.mld(thresh=0.03)
 ```
 
+## Other calculations
+
+### Rotations
+
+If your ROMS grid is curvilinear, you'll need to rotate your u and v velocities from along the grid axes to being eastward and northward. You can do this with
+
+
+    ds.xroms.east
+
+    ds.xroms.north
+
+Additionally, if you want to rotate your velocity to be a different orientation, for example to be along-channel, you can do that with
+
+    ds.xroms.east_rotated(angle)
+
+    ds.xroms.north_rotated(angle)
+
+
 ## Time-based calculations including climatologies
 
 +++
