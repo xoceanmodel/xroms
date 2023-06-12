@@ -485,7 +485,7 @@ ds.xroms.mld(thresh=0.03)
 
 ### Rotations
 
-If your ROMS grid is curvilinear, you'll need to rotate your u and v velocities from along the grid axes to being eastward and northward. You can do this with 
+If your ROMS grid is curvilinear, you'll need to rotate your u and v velocities from along the grid axes to being eastward and northward. You can do this with
 
 
     ds.xroms.east
