@@ -220,7 +220,7 @@ class xromsDatasetAccessor:
         >>> ds.xroms.east
         """
 
-        if "east" not in self.ds:
+        if "east" not in self.ds and "u_eastward" not in self.ds:
             self._uv2eastnorth()
         return self.ds["east"]
 
@@ -237,7 +237,7 @@ class xromsDatasetAccessor:
         >>> ds.xroms.north
         """
 
-        if "north" not in self.ds:
+        if "north" not in self.ds and "v_northward" not in self.ds:
             self._uv2eastnorth()
         return self.ds["north"]
 
