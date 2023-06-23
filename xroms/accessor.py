@@ -274,15 +274,15 @@ class xromsDatasetAccessor:
         )
 
         if "name" in kwargs:
-            self.east.name = kwargs["name"]["x"]
-            self.east.attrs["name"] = kwargs["name"]["x"]
-            self.north.name = kwargs["name"]["y"]
-            self.north.attrs["name"] = kwargs["name"]["y"]
+            self.eastrot.name = kwargs["name"]["x"]
+            self.eastrot.attrs["name"] = kwargs["name"]["x"]
+            self.northrot.name = kwargs["name"]["y"]
+            self.northrot.attrs["name"] = kwargs["name"]["y"]
 
         # add angle to long_name if just a number
         if isinstance(angle, (int, float)):
-            self.east.attrs["long_name"] += f" {angle}"
-            self.north.attrs["long_name"] += f" {angle}"
+            self.eastrot.attrs["long_name"] += f" {angle}"
+            self.northrot.attrs["long_name"] += f" {angle}"
 
         if include_vars_adcp:
             ds_out = self.ds[["east", "north", "angle"]]
