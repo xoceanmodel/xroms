@@ -128,7 +128,9 @@ def roms_dataset(
         ds["3d"] = False
 
     if not ds["3d"] and include_3D_metrics:
-        warnings.warn("need 3D Dataset in order to calculate 3D metrics.", ValueError)
+        warnings.warn(
+            "need 3D Dataset in order to calculate 3D metrics.", RuntimeWarning
+        )
 
     # modify attributes for using cf-xarray
     tdims = [dim for dim in ds.dims if dim[:3] == "xi_"]
@@ -171,8 +173,14 @@ def roms_dataset(
     coords = {
         "X": {"center": "xi_rho", "inner": "xi_u"},
         "Y": {"center": "eta_rho", "inner": "eta_v"},
-        "Z": {"center": "s_rho", "outer": "s_w"},
     }
+
+    if ds["3d"]:
+        coords.update(
+            {
+                "Z": {"center": "s_rho", "outer": "s_w"},
+            }
+        )
 
     xgrid = xgcm.Grid(ds, coords=coords, periodic=[])
 
