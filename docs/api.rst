@@ -13,4 +13,5 @@ API
    interp
    roms_seawater
    utilities
+   vector
    accessor
