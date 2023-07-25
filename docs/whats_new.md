@@ -1,5 +1,33 @@
 # What's New
 
+## v0.4.0 (July 25, 2023)
+
+* hopefully fixing issue reordering dimensions when extra coords present
+* divergence calculation was added to derived.py
+* accessor changes:
+  * xgrid is run automatically when accessor is used, which could be too slow for some uses
+  * div and div_norm properties added to accessor
+  * div_norm is the surface divergence normalized by f
+* added tests for new functions
+* hopefully fixed build issue on several OSes by pinning `h5py < 3.2`, see for reference https://github.com/h5py/h5py/issues/1880, https://github.com/conda-forge/h5py-feedstock/issues/92
+* updated docs
+
+
+## v0.3.3 (July 11, 2023)
+
+* do not use Z coords if 2d
+
+
+## v0.3.2 (June 23, 2023)
+
+* More fixes to the rotation accessor options
+
+
+## v0.3.1 (June 22, 2023)
+
+* made east/north variable names have two options
+
+
 ## v0.3.0 (June 12, 2023)
 
 * can rotate along-grid velocities to be eastward and northward
