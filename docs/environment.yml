@@ -21,6 +21,7 @@ dependencies:
    - xcmocean
    - xgcm >= 0.8.1
    - xesmf  # don't install if on windows
+   - xroms
    # These are needed for the docs themselves
    - furo
    - jupytext
@@ -37,7 +38,7 @@ dependencies:
    - recommonmark
    - pip
    - pip:
-     - xroms
+    #  - xroms
      - docrep<=0.2.7
      - nbsphinx>=0.8.7
      - jupyter_client
