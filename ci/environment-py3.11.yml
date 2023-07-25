@@ -7,6 +7,9 @@ dependencies:
   - cartopy
   - cf_xarray
   - dask
+  # https://github.com/h5py/h5py/issues/1880
+  # https://github.com/conda-forge/h5py-feedstock/issues/92
+  - h5py < 3.2
   - netcdf4
   - numba >= 0.49
   - numpy
