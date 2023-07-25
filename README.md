@@ -20,6 +20,8 @@ There are functions to...
   * eddy kinetic energy
   * vertical shear
   * vertical vorticity
+  * horizontal divergence
+  * normalized surface divergence
   * Ertel potential vorticity
   * density as calculated in ROMS
   * potential density

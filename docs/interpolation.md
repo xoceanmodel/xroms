@@ -224,8 +224,16 @@ Example usage for a DataArray `da`:
 or with `xroms` accessor:
 > da.xroms.zslice(depths, z=z0)
 
+One complication that is currently necessary is to change the metadata such that `z_rho_v0` is recognized as the vertical coordinate for `ds.v`.
+
 ```{code-cell} ipython3
 var0 = ds.v
+
+# changes to use z_rho_v0 as vertical coordinate
+var0.attrs["coordinates"] = var0.attrs["coordinates"].replace("z_rho_v","z_rho_v0")
+var0.z_rho_v0.attrs["positive"] = "up"
+var0.z_rho_v0.attrs["standard_name"] = "depth"
+
 varout0 = xroms.isoslice(var0, np.linspace(0, -600, 20), xgrid, iso_array=var0.z_rho_v0)
 ```
 

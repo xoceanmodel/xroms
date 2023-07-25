@@ -317,6 +317,18 @@ def roms_dataset(
                             ):
                                 coords_here += f" {zname}"
                         ds[var].encoding["coordinates"] = coords_here
+                    # same but coordinates not inside encoding
+                    elif "coordinates" in ds[var].attrs:
+                        coords_here = ds[var].attrs["coordinates"]
+                        if sname in coords_here:  # replace if present
+                            coords_here = coords_here.replace(sname, zname)
+                        else:  # still add z_rho or z_w
+                            if (
+                                zname in ds[var].coords
+                                and ds[zname].shape == ds[var].shape
+                            ):
+                                coords_here += f" {zname}"
+                        ds[var].attrs["coordinates"] = coords_here
 
         if include_Z0:
             ds.coords["z_rho0"] = order(z_rho0)

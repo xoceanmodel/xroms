@@ -1509,10 +1509,20 @@ def order(var):
     >>> xroms.order(var)
     """
 
+    # this looks at the dims on var directly which tends to be more accurate
+    # since the DataArray can have extra coordinates included (but dropping
+    # can drop too many variables).
     return var.cf.transpose(
         *[
             dim
             for dim in ["T", "Z", "Y", "X"]
-            if dim in var.reset_coords(drop=True).cf.axes
+            if dim in var.cf.axes and var.cf.axes[dim][0] in var.dims
         ]
     )
+    # return var.cf.transpose(
+    #     *[
+    #         dim
+    #         for dim in ["T", "Z", "Y", "X"]
+    #         if dim in var.reset_coords(drop=True).cf.axes
+    #     ]
+    # )

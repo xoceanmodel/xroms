@@ -235,6 +235,18 @@ def test_relative_vorticity():
         assert acc.cf[coordname].name == coord
 
 
+def test_div():
+    acc = ds.xroms.div
+    assert np.allclose(acc, xroms.divergence(ds["u"], ds["v"], grid))
+
+
+def test_div_norm():
+    acc = ds.xroms.div_norm
+    assert np.allclose(
+        acc, xroms.divergence(ds["u"], ds["v"], grid).cf.isel(Z=-1) / ds["f"]
+    )
+
+
 def test_ertel():
     acc = ds.xroms.ertel
     xsig0 = xroms.potential_density(ds.temp, ds.salt)

@@ -13,6 +13,7 @@ import xarray as xr
 from .derived import (
     EKE,
     KE,
+    divergence,
     dudz,
     dvdz,
     ertel,
@@ -61,6 +62,9 @@ class xromsDatasetAccessor:
 
         # extra for getting coordinates but changes variables
         self._ds = ds.copy(deep=True)
+
+        # this might be slow!
+        self.xgrid
 
         # self.ds, xgrid = xroms.roms_dataset(self.ds)
 
@@ -463,6 +467,53 @@ class xromsDatasetAccessor:
             )
             self.ds["vort"] = var
         return self.ds.vort
+
+    @property
+    def div(self):
+        """Calculate divergence, rho/rho grid.
+
+        Notes
+        -----
+        See `xroms.divergence` for full docstring.
+
+        `hboundary` and `sboundary` both set to 'extend'.
+
+        Examples
+        --------
+        >>> ds.xroms.div
+        """
+
+        if "div" not in self.ds:
+            var = divergence(
+                self.ds.u, self.ds.v, self.xgrid, hboundary="extend", sboundary="extend"
+            )
+            self.ds["div"] = var
+        return self.ds.div
+
+    @property
+    def div_norm(self):
+        """Calculate normalized surface divergence, rho/rho grid.
+
+        The surface currents are selected for this calculation, so return is `[T,Y,X]`.
+        The divergence is normalized by $f$.
+
+        Notes
+        -----
+        See `xroms.divergence` for full docstring.
+
+        `hboundary` and `sboundary` both set to 'extend'.
+
+        Examples
+        --------
+        >>> ds.xroms.div_norm
+        """
+
+        if "div_norm" not in self.ds:
+            var = divergence(
+                self.ds.u, self.ds.v, self.xgrid, hboundary="extend", sboundary="extend"
+            )
+            self.ds["div_norm"] = var.cf.isel(Z=-1) / self.ds.f
+        return self.ds.div_norm
 
     @property
     def ertel(self):

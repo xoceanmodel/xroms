@@ -513,6 +513,109 @@ def relative_vorticity(
     return var
 
 
+def divergence(
+    u: xr.DataArray,
+    v: xr.DataArray,
+    xgrid,
+    hboundary="extend",
+    hfill_value=None,
+    sboundary="extend",
+    sfill_value=None,
+) -> xr.DataArray:
+    """Calculate 2D divergence from u and v [1/s].
+
+    Parameters
+    ----------
+    u: DataArray
+        xi component of velocity [m/s]
+    v: DataArray
+        eta component of velocity [m/s]
+    xgrid: xgcm.grid
+        Grid object associated with u, v
+    hboundary: string, optional
+        Passed to `grid` method calls; horizontal boundary selection
+        for calculating horizontal derivatives of u and v.
+        From xgcm documentation:
+        A flag indicating how to handle boundaries:
+        * None:  Do not apply any boundary conditions. Raise an error if
+          boundary conditions are required for the operation.
+        * 'fill':  Set values outside the array boundary to fill_value
+          (i.e. a Neumann boundary condition.)
+        * 'extend': Set values outside the array to the nearest array
+          value. (i.e. a limited form of Dirichlet boundary condition.
+    hfill_value: float, optional
+        Passed to `grid` method calls; horizontal boundary selection
+        fill value.
+        From xgcm documentation:
+        The value to use in the boundary condition with `boundary='fill'`.
+    sboundary: string, optional
+        Passed to `grid` method calls; vertical boundary selection
+        for calculating horizontal derivatives of u and v.
+        From xgcm documentation:
+        A flag indicating how to handle boundaries:
+        * None:  Do not apply any boundary conditions. Raise an error if
+          boundary conditions are required for the operation.
+        * 'fill':  Set values outside the array boundary to fill_value
+          (i.e. a Neumann boundary condition.)
+        * 'extend': Set values outside the array to the nearest array
+          value. (i.e. a limited form of Dirichlet boundary condition.
+    sfill_value: float, optional
+        Passed to `grid` method calls; vertical boundary selection
+        fill value.
+        From xgcm documentation:
+        The value to use in the boundary condition with `boundary='fill'`.
+
+    Returns
+    -------
+    DataArray of 2D divergence of horizontal currents on rho/rho grids.
+    Output is `[T,Z,Y,X]`.
+
+
+    Notes
+    -----
+    2D divergence = u_x + v_y
+    Resource for more information: https://uw.pressbooks.pub/ocean285/chapter/the-divergence/
+
+    Examples
+    --------
+    >>> ds, xgrid = xroms.roms_dataset(ds)
+    >>> xroms.divergence(u, v, xgrid)
+    """
+
+    assert isinstance(u, xr.DataArray), "u must be DataArray"
+    assert isinstance(v, xr.DataArray), "v must be DataArray"
+
+    dudxi = hgrad(
+        u,
+        xgrid,
+        which="xi",
+        scoord="s_rho",
+        hboundary=hboundary,
+        hfill_value=hfill_value,
+        sboundary=sboundary,
+        sfill_value=sfill_value,
+    )
+    dvdeta = hgrad(
+        v,
+        xgrid,
+        which="eta",
+        scoord="s_rho",
+        hboundary=hboundary,
+        hfill_value=hfill_value,
+        sboundary=sboundary,
+        sfill_value=sfill_value,
+    )
+
+    var = dudxi + dvdeta
+
+    var.attrs["name"] = "div"
+    var.attrs["long_name"] = "horizontal divergence"
+    var.attrs["units"] = "1/s"
+    var.name = var.attrs["name"]
+
+    return var
+
+
 def ertel(
     phi,
     u,
