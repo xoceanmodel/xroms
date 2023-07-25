@@ -239,7 +239,6 @@ Example usage:
 
 where dimension names in the `xgcm` convention are 'Z', 'Y', or 'X'. `dim` can be a string, list, or tuple of combinations of these names for dimensions to average over.
 
-
 +++
 
 ##### sum
@@ -393,6 +392,28 @@ ds.xroms.vertical_shear
 
 ```{code-cell} ipython3
 ds.xroms.vort
+```
+
+### Horizontal divergence
+
+Horizontal component of the currents divergence.
+
+    ds.xroms.div
+
+    xroms.divergence(ds.u, ds.v, xgrid)
+
+```{code-cell} ipython3
+ds.xroms.div
+```
+
+### Normalized surface divergence
+
+Horizontal component of the currents divergence at the surface, normalized by $f$. This is only available through the accessor.
+
+    ds.xroms.div_norm
+
+```{code-cell} ipython3
+ds.xroms.div_norm
 ```
 
 ### Ertel potential vorticity
