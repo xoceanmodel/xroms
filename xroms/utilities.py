@@ -1513,7 +1513,11 @@ def order(var):
     # since the DataArray can have extra coordinates included (but dropping
     # can drop too many variables).
     return var.cf.transpose(
-        *[dim for dim in ["T", "Z", "Y", "X"] if var.cf.axes[dim][0] in var.dims]
+        *[
+            dim
+            for dim in ["T", "Z", "Y", "X"]
+            if dim in var.cf.axes and var.cf.axes[dim][0] in var.dims
+        ]
     )
     # return var.cf.transpose(
     #     *[
