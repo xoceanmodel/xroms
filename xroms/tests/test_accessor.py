@@ -237,7 +237,7 @@ def test_relative_vorticity():
 
 def test_div():
     acc = ds.xroms.div
-    assert np.allclose(acc, xroms.divergence(ds["u"], ds["v"], grid).cf.isel(Z=-1))
+    assert np.allclose(acc, xroms.divergence(ds["u"], ds["v"], grid))
 
 
 def test_div_norm():

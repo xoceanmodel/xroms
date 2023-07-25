@@ -470,9 +470,7 @@ class xromsDatasetAccessor:
 
     @property
     def div(self):
-        """Calculate surface divergence, rho/rho grid.
-
-        The surface currents are selected for this calculation, so return is `[T,Y,X]`.
+        """Calculate divergence, rho/rho grid.
 
         Notes
         -----
@@ -489,7 +487,7 @@ class xromsDatasetAccessor:
             var = divergence(
                 self.ds.u, self.ds.v, self.xgrid, hboundary="extend", sboundary="extend"
             )
-            self.ds["div"] = var.cf.isel(Z=-1)
+            self.ds["div"] = var
         return self.ds.div
 
     @property
