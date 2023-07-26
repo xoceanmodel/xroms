@@ -1633,7 +1633,7 @@ class xromsDataArrayAccessor:
 
         return gridsum(self.da, xgrid, dim)
 
-    def interpll(self, lons, lats, which="pairs"):
+    def interpll(self, lons, lats, which="pairs", **kwargs):
         """Interpolate var to lons/lats positions.
 
         Wraps xESMF to perform proper horizontal interpolation on non-flat Earth.
@@ -1650,6 +1650,8 @@ class xromsDataArrayAccessor:
               (in xESMF language, LocStream).
             * "grid": 2D array of points with 1 dimension the lons and
               the other dimension the lats.
+        **kwargs:
+            passed on to xESMF Regridder class
 
         Returns
         -------
@@ -1673,7 +1675,7 @@ class xromsDataArrayAccessor:
         >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='grid')
         """
 
-        return interpll(self.da, lons, lats, which=which)
+        return interpll(self.da, lons, lats, which=which, **kwargs)
 
     def isoslice(self, xgrid, iso_values, iso_array=None, axis="Z"):
         """Interpolate var to iso_values.
