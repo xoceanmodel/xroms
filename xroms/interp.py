@@ -18,7 +18,7 @@ import xroms
 #     warnings.warn("xESMF is not installed, so `interpll` will not run.")
 
 
-def interpll(var, lons, lats, which="pairs"):
+def interpll(var, lons, lats, which="pairs", **kwargs):
     """Interpolate var to lons/lats positions.
 
     Wraps xESMF to perform proper horizontal interpolation on non-flat Earth.
@@ -37,6 +37,8 @@ def interpll(var, lons, lats, which="pairs"):
           (in xESMF language, LocStream).
         * "grid": 2D array of points with 1 dimension the lons and
           the other dimension the lats.
+    **kwargs:
+        passed on to xESMF Regridder class
 
     Returns
     -------
@@ -97,7 +99,9 @@ def interpll(var, lons, lats, which="pairs"):
         varint = xr.Dataset({"lat": (["lat"], lats), "lon": (["lon"], lons)})
 
     # Calculate weights.
-    regridder = xe.Regridder(var, varint, "bilinear", locstream_out=locstream_out)
+    regridder = xe.Regridder(
+        var, varint, "bilinear", locstream_out=locstream_out, **kwargs
+    )
 
     # Perform interpolation
     varint = regridder(var, keep_attrs=True)
