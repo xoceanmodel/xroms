@@ -1,5 +1,8 @@
 # What's New
 
+## v0.4.3 (July 27, 2023)
+* zkey is checked for but not required in interpll now
+
 ## v0.4.2 (July 27, 2023)
 * changes to roms_dataset
     * If "coordinates" are found in attrs for a variable, they are moved to "encoding" now because everything works better then.
