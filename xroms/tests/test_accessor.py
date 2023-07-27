@@ -591,7 +591,14 @@ def test_zslice():
         varin = ds[testvar]
         depths = np.asarray(ds[testvar].cf["vertical"][0, :, 0, 0].values)
         varout = xroms.isoslice(varin, depths, grid, axis="Z")
-        varcomp = ds[testvar].xroms.isoslice(grid, depths, axis="Z")
+        varcomp = ds[testvar].xroms.zslice(grid, depths)
+        # varcomp = ds[testvar].xroms.isoslice(grid, depths, axis="Z")
         assert np.allclose(
             varout.cf.isel(T=0, Y=0, X=0), varcomp.cf.isel(T=0, Y=0, X=0)
+        )
+
+        varcompds = ds.xroms.zslice(testvar, depths)
+        # varcomp = ds[testvar].xroms.isoslice(grid, depths, axis="Z")
+        assert np.allclose(
+            varout.cf.isel(T=0, Y=0, X=0), varcompds.cf.isel(T=0, Y=0, X=0)
         )

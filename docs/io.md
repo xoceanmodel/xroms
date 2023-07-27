@@ -45,6 +45,11 @@ The function adds `z` coordinates and other useful metrics to the `Dataset`, inc
 
 There are optional flags for `xroms.roms_dataset()` for what all metrics to lazily calculate since it can be time-consuming despite being lazily loaded and calculated; see the {doc}`API docs <api>` for details.
 
+Alternatively, `roms_dataset()` will be run automatically the first time you use the Dataset accessor and `xgrid` will be stored in the object. Note that the default input flags to `roms_dataset()` are used in the case and if you want to have more control over that, you can use the following to override the xgrid stored
+
+    ds, xgrid = xroms.roms_dataset(ds, [other flags you want to use])
+    ds.xroms.set_grid(xgrid)
+
 +++
 
 ## Demo workflow using example dataset

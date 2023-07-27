@@ -189,10 +189,14 @@ Notes:
 Use the z coordinates associated with the DataArray in the interpolation.
 
 Example usage for a DataArray `da`:
-> xroms.zslice(da, depths, grid)
+> xroms.isoslice(da, depths, grid, z=z, axis="Z")
 
-or with `xroms` accessor:
-> da.xroms.zslice(depths)
+More is pre-selected if you used the `xroms` accessor, with a different name of "zslice". With DataArray, need to provide grid:
+> da.xroms.zslice(grid, depths)
+
+With Dataset accessor need to provide DataArray name:
+> ds.xroms.zslice(varname, depths)
+
 
 ```{code-cell} ipython3
 varin = ds.v
@@ -216,13 +220,16 @@ ax.scatter(X, Z, c=toplot, s=200, edgecolor='r', vmin=-vmax, vmax=vmax, cmap=cmo
 
 #### z constant in time
 
-Input separate z coordinates `z0` for the DataArray to be interpolated to.
+Input separate z coordinates `z0` that don't vary in time for the DataArray to be interpolated to.
 
 Example usage for a DataArray `da`:
-> xroms.zslice(da, depths, grid, z=z0)
+> xroms.isoslice(da, depths, grid, z=z0, axis="Z")
 
-or with `xroms` accessor:
-> da.xroms.zslice(depths, z=z0)
+More is pre-selected if you used the `xroms` accessor, with a different name of "zslice". With DataArray, need to provide grid:
+> da.xroms.zslice(grid, depths, z=z0)
+
+With Dataset accessor need to provide DataArray name:
+> ds.xroms.zslice(varname, depths, z=z0)
 
 One complication that is currently necessary is to change the metadata such that `z_rho_v0` is recognized as the vertical coordinate for `ds.v`.
 
