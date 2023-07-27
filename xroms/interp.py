@@ -113,13 +113,14 @@ def interpll(var, lons, lats, which="pairs", **kwargs):
     #     coord for coord in varint.coords if "z_" in coord and "0" not in coord
     # ]
     # get z coordinates to go with interpolated output if not available
-    zkey = [coord for coord in var.coords if "z_" in coord and "0" not in coord][
-        0
-    ]  # str
-    zint = regridder(var[zkey], keep_attrs=True)
+    zkeys = [coord for coord in var.coords if "z_" in coord and "0" not in coord]
+    if len(zkeys) > 0:
+        zkey = zkeys[0]  # str
 
-    # add coords
-    varint = varint.assign_coords({zkey: zint})
+        zint = regridder(var[zkey], keep_attrs=True)
+
+        # add coords
+        varint = varint.assign_coords({zkey: zint})
 
     # add attributes for cf-xarray
     if which == "pairs":
