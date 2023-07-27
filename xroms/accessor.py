@@ -527,7 +527,7 @@ class xromsDatasetAccessor:
         """
 
         if "div_norm" not in self.ds:
-            var = self.ds.div
+            var = self.div
             self.ds["div_norm"] = var.cf.isel(Z=-1) / self.ds.f
         return self.ds.div_norm
 
