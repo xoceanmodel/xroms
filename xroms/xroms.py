@@ -317,7 +317,8 @@ def roms_dataset(
                             ):
                                 coords_here += f" {zname}"
                         ds[var].encoding["coordinates"] = coords_here
-                    # same but coordinates not inside encoding
+                    # same but coordinates not inside encoding. Do same processing
+                    # but also move coordinates from attrs to encoding.
                     elif "coordinates" in ds[var].attrs:
                         coords_here = ds[var].attrs["coordinates"]
                         if sname in coords_here:  # replace if present
@@ -328,7 +329,9 @@ def roms_dataset(
                                 and ds[zname].shape == ds[var].shape
                             ):
                                 coords_here += f" {zname}"
-                        ds[var].attrs["coordinates"] = coords_here
+                        # move coords to encoding and delete from attrs
+                        ds[var].encoding["coordinates"] = coords_here
+                        del ds[var].attrs["coordinates"]
 
         if include_Z0:
             ds.coords["z_rho0"] = order(z_rho0)

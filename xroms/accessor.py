@@ -998,6 +998,61 @@ class xromsDatasetAccessor:
         self._ds[var.name] = var
         return self._ds[var.name]
 
+    def zslice(self, varname, depths, z=None):
+        """Interpolate var to depths.
+
+        This wraps `xgcm` `transform` function for slice interpolation,
+        though `transform` has additional functionality.
+        See ``xroms.isoslice`` for full docs.
+
+        Parameters
+        ----------
+        depths: list, ndarray
+            Values to interpolate to (called iso_values in other functions).
+            Should be negative if
+            below mean sea level. If input as array, should be 1D.
+        z: DataArray, optional
+            Array that var is interpolated onto (e.g., z coordinates or
+            density). The "vertical" coordinate is selected by default.
+            Use this option if you want to interpolate with z depths constant in
+            time and input the appropriate z coordinate (e.g. z_rho0).
+
+        Returns
+        -------
+        DataArray of var interpolated to depths. Dimensionality will be the
+        same as var except with dim dimension of size of depths.
+
+        Notes
+        -----
+        var cannot have chunks in the dimension dim.
+
+        cf-xarray should still be usable after calling this function.
+
+        Examples
+        --------
+        To calculate temperature onto fixed depths:
+
+        >>> ds.temp.xroms.zslice(depths)
+
+        To calculate temperature onto fixed depths without considering time for z coord:
+
+        >>> ds.temp.xroms.zslice(depths, z=ds.temp.z_rho0)
+
+        """
+
+        da = self.ds[varname]
+
+        if z is None:
+            z = da.cf["vertical"]
+
+        return isoslice(
+            da,
+            depths,
+            self.xgrid,
+            iso_array=z,
+            axis="Z",
+        )
+
     def to_grid(
         self,
         varname,
@@ -1677,35 +1732,31 @@ class xromsDataArrayAccessor:
 
         return interpll(self.da, lons, lats, which=which, **kwargs)
 
-    def isoslice(self, xgrid, iso_values, iso_array=None, axis="Z"):
-        """Interpolate var to iso_values.
+    def zslice(self, xgrid, depths, z=None):
+        """Interpolate var to depths.
 
         This wraps `xgcm` `transform` function for slice interpolation,
         though `transform` has additional functionality.
+        See ``xroms.isoslice`` for full docs.
 
         Parameters
         ----------
         xgrid
             xgcm grid
-        iso_values: list, ndarray
-            Values to interpolate to. If calculating var at fixed depths,
-            iso_values are the fixed depths, which should be negative if
+        depths: list, ndarray
+            Values to interpolate to (called iso_values in other functions).
+            Should be negative if
             below mean sea level. If input as array, should be 1D.
-        iso_array: DataArray, optional
+        z: DataArray, optional
             Array that var is interpolated onto (e.g., z coordinates or
-            density). If calculating var on fixed depth slices, iso_array
-            contains the depths [m] associated with var. In that case and
-            if None, will use z coordinate attached to var. Also use this
-            option if you want to interpolate with z depths constant in
-            time and input the appropriate z coordinate.
-        dim: str, optional
-            Dimension over which to calculate isoslice. If calculating var
-            onto fixed depths, `dim='Z'`. Options are 'Z', 'Y', and 'X'.
+            density). The "vertical" coordinate is selected by default.
+            Use this option if you want to interpolate with z depths constant in
+            time and input the appropriate z coordinate (e.g. z_rho0).
 
         Returns
         -------
-        DataArray of var interpolated to iso_values. Dimensionality will be the
-        same as var except with dim dimension of size of iso_values.
+        DataArray of var interpolated to depths. Dimensionality will be the
+        same as var except with dim dimension of size of depths.
 
         Notes
         -----
@@ -1717,59 +1768,118 @@ class xromsDataArrayAccessor:
         --------
         To calculate temperature onto fixed depths:
 
-        >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50), xgrid)
+        >>> ds.temp.xroms.zslice(depths)
 
-        To calculate temperature onto salinity:
+        To calculate temperature onto fixed depths without considering time for z coord:
 
-        >>> xroms.isoslice(ds.temp, np.arange(0, 36), xgrid, iso_array=ds.salt, axis='Z')
+        >>> ds.temp.xroms.zslice(depths, z=ds.temp.z_rho0)
 
-        Calculate lat-z slice of salinity along a constant longitude value (-91.5):
-
-        >>> xroms.isoslice(ds.salt, -91.5, xgrid, iso_array=ds.lon_rho, axis='X')
-
-        Calculate slice of salt at 28 deg latitude
-
-        >>> xroms.isoslice(ds.salt, 28, xgrid, iso_array=ds.lat_rho, axis='Y')
-
-        Interpolate temp to salinity values between 0 and 36 in the X direction
-
-        >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), xgrid, iso_array=ds.salt, axis='X')
-
-        Interpolate temp to salinity values between 0 and 36 in the Z direction
-
-        >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), xgrid, iso_array=ds.salt, axis='Z')
-
-        Calculate the depth of a specific isohaline (33):
-
-        >>> xroms.isoslice(ds.salt, 33, xgrid, iso_array=ds.z_rho, axis='Z')
-
-        Calculate dye 10 meters above seabed. Either do this on the vertical
-        rho grid, or first change to the w grid and then use `isoslice`. You may prefer
-        to do the latter if there is a possibility that the distance above the seabed you are
-        interpolating to (10 m) could be below the deepest rho grid depth.
-
-        * on rho grid directly:
-
-        >>> height_from_seabed = ds.z_rho + ds.h
-        >>> height_from_seabed.name = 'z_rho'
-        >>> xroms.isoslice(ds.dye_01, 10, xgrid, iso_array=height_from_seabed, axis='Z')
-
-        * on w grid:
-
-        >>> var_w = ds.dye_01.xroms.to_grid(xgrid, scoord='w').chunk({'s_w': -1})
-        >>> ds['dye_01_w'] = var_w  # currently this is the easiest way to reattached coords xgcm variables
-        >>> height_from_seabed = ds.z_w + ds.h
-        >>> height_from_seabed.name = 'z_w'
-        >>> xroms.isoslice(ds['dye_01_w'], 10, xgrid, iso_array=height_from_seabed, axis='Z')
         """
+
+        if z is None:
+            z = self.da.cf["vertical"]
 
         return isoslice(
             self.da,
-            iso_values,
+            depths,
             xgrid,
-            iso_array=iso_array,
-            axis=axis,
+            iso_array=z,
+            axis="Z",
         )
+
+    # def isoslice(self, xgrid, iso_values, iso_array=None, axis="Z"):
+    #     """Interpolate var to iso_values.
+
+    #     This wraps `xgcm` `transform` function for slice interpolation,
+    #     though `transform` has additional functionality.
+
+    #     Parameters
+    #     ----------
+    #     xgrid
+    #         xgcm grid
+    #     iso_values: list, ndarray
+    #         Values to interpolate to. If calculating var at fixed depths,
+    #         iso_values are the fixed depths, which should be negative if
+    #         below mean sea level. If input as array, should be 1D.
+    #     iso_array: DataArray, optional
+    #         Array that var is interpolated onto (e.g., z coordinates or
+    #         density). If calculating var on fixed depth slices, iso_array
+    #         contains the depths [m] associated with var. In that case and
+    #         if None, will use z coordinate attached to var. Also use this
+    #         option if you want to interpolate with z depths constant in
+    #         time and input the appropriate z coordinate.
+    #     dim: str, optional
+    #         Dimension over which to calculate isoslice. If calculating var
+    #         onto fixed depths, `dim='Z'`. Options are 'Z', 'Y', and 'X'.
+
+    #     Returns
+    #     -------
+    #     DataArray of var interpolated to iso_values. Dimensionality will be the
+    #     same as var except with dim dimension of size of iso_values.
+
+    #     Notes
+    #     -----
+    #     var cannot have chunks in the dimension dim.
+
+    #     cf-xarray should still be usable after calling this function.
+
+    #     Examples
+    #     --------
+    #     To calculate temperature onto fixed depths:
+
+    #     >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50), xgrid)
+
+    #     To calculate temperature onto salinity:
+
+    #     >>> xroms.isoslice(ds.temp, np.arange(0, 36), xgrid, iso_array=ds.salt, axis='Z')
+
+    #     Calculate lat-z slice of salinity along a constant longitude value (-91.5):
+
+    #     >>> xroms.isoslice(ds.salt, -91.5, xgrid, iso_array=ds.lon_rho, axis='X')
+
+    #     Calculate slice of salt at 28 deg latitude
+
+    #     >>> xroms.isoslice(ds.salt, 28, xgrid, iso_array=ds.lat_rho, axis='Y')
+
+    #     Interpolate temp to salinity values between 0 and 36 in the X direction
+
+    #     >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), xgrid, iso_array=ds.salt, axis='X')
+
+    #     Interpolate temp to salinity values between 0 and 36 in the Z direction
+
+    #     >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), xgrid, iso_array=ds.salt, axis='Z')
+
+    #     Calculate the depth of a specific isohaline (33):
+
+    #     >>> xroms.isoslice(ds.salt, 33, xgrid, iso_array=ds.z_rho, axis='Z')
+
+    #     Calculate dye 10 meters above seabed. Either do this on the vertical
+    #     rho grid, or first change to the w grid and then use `isoslice`. You may prefer
+    #     to do the latter if there is a possibility that the distance above the seabed you are
+    #     interpolating to (10 m) could be below the deepest rho grid depth.
+
+    #     * on rho grid directly:
+
+    #     >>> height_from_seabed = ds.z_rho + ds.h
+    #     >>> height_from_seabed.name = 'z_rho'
+    #     >>> xroms.isoslice(ds.dye_01, 10, xgrid, iso_array=height_from_seabed, axis='Z')
+
+    #     * on w grid:
+
+    #     >>> var_w = ds.dye_01.xroms.to_grid(xgrid, scoord='w').chunk({'s_w': -1})
+    #     >>> ds['dye_01_w'] = var_w  # currently this is the easiest way to reattached coords xgcm variables
+    #     >>> height_from_seabed = ds.z_w + ds.h
+    #     >>> height_from_seabed.name = 'z_w'
+    #     >>> xroms.isoslice(ds['dye_01_w'], 10, xgrid, iso_array=height_from_seabed, axis='Z')
+    #     """
+
+    #     return isoslice(
+    #         self.da,
+    #         iso_values,
+    #         xgrid,
+    #         iso_array=iso_array,
+    #         axis=axis,
+    #     )
 
     def order(self):
         """Reorder self to typical dimensional ordering.
