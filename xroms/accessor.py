@@ -468,6 +468,17 @@ class xromsDatasetAccessor:
             self.ds["vort"] = var
         return self.ds.vort
 
+    def find_horizontal_velocities(self):
+        vel_options = [("u", "v"), ("u_eastward", "v_northward"), ("east", "north")]
+        vel_use = None
+        for vel_option in vel_options:
+            if all([vel in self.ds for vel in vel_option]):
+                # if ([hasattr(self, vel) or vel in self.ds for vel in vel_option]).all():
+                vel_use = vel_option
+        if vel_use is None:
+            raise KeyError("cannot identify horizontal velocity variable names")
+        return vel_use
+
     @property
     def div(self):
         """Calculate divergence, rho/rho grid.
@@ -484,8 +495,15 @@ class xromsDatasetAccessor:
         """
 
         if "div" not in self.ds:
+            # find names of horizontal velocities, in case they are different
+            # just need to be ortogonal.
+            uname, vname = self.find_horizontal_velocities()
             var = divergence(
-                self.ds.u, self.ds.v, self.xgrid, hboundary="extend", sboundary="extend"
+                self.ds[uname],
+                self.ds[vname],
+                self.xgrid,
+                hboundary="extend",
+                sboundary="extend",
             )
             self.ds["div"] = var
         return self.ds.div
@@ -509,9 +527,7 @@ class xromsDatasetAccessor:
         """
 
         if "div_norm" not in self.ds:
-            var = divergence(
-                self.ds.u, self.ds.v, self.xgrid, hboundary="extend", sboundary="extend"
-            )
+            var = self.ds.div
             self.ds["div_norm"] = var.cf.isel(Z=-1) / self.ds.f
         return self.ds.div_norm
 

@@ -1,5 +1,8 @@
 # What's New
 
+## v0.4.4 (July 27, 2023)
+* added accessor function `find_horizontal_velocities()` which returns the names of the horizontal velocities since they sometimes have different names, but still there are only a few options.
+
 ## v0.4.3 (July 27, 2023)
 * zkey is checked for but not required in interpll now
 

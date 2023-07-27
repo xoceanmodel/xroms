@@ -602,3 +602,20 @@ def test_zslice():
         assert np.allclose(
             varout.cf.isel(T=0, Y=0, X=0), varcompds.cf.isel(T=0, Y=0, X=0)
         )
+
+
+def test_find_horizontal_velocities():
+    uname, vname = ds.xroms.find_horizontal_velocities()
+    assert uname == "u"
+    assert vname == "v"
+
+    # have to delete variables in the xroms accessor for this
+    # test to work
+    ds.xroms.ds["u_eastward"] = ds.xroms.ds["u"].copy()
+    del ds.xroms.ds["u"]
+    ds.xroms.ds["v_northward"] = ds.xroms.ds["v"].copy()
+    del ds.xroms.ds["v"]
+
+    uname, vname = ds.xroms.find_horizontal_velocities()
+    assert uname == "u_eastward"
+    assert vname == "v_northward"
