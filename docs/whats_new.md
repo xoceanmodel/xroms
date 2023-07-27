@@ -1,5 +1,14 @@
 # What's New
 
+## v0.4.2 (July 27, 2023)
+* changes to roms_dataset
+    * If "coordinates" are found in attrs for a variable, they are moved to "encoding" now because everything works better then.
+    * Recreated the zslice function in the accessor for both Dataset and DataArray (instead of just using the default isoslice).
+    * updated docs and tests accordingly.
+
+## v0.4.1 (July 27, 2023)
+* can now pass kwargs to xe.Regridder in interpll
+
 ## v0.4.0 (July 25, 2023)
 
 * hopefully fixing issue reordering dimensions when extra coords present
