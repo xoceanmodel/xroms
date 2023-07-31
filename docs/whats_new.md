@@ -1,5 +1,8 @@
 # What's New
 
+## v0.4.5 (July 31, 2023)
+* fixed `ds.xroms.div` and `ds.xroms.div_norm` in the case that `u` and `v` need to be calculated from other velocities like `east` and `north`.
+
 ## v0.4.4 (July 27, 2023)
 * added accessor function `find_horizontal_velocities()` which returns the names of the horizontal velocities since they sometimes have different names, but still there are only a few options.
 
