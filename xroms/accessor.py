@@ -224,7 +224,9 @@ class xromsDatasetAccessor:
         >>> ds.xroms.east
         """
 
-        if "east" not in self.ds and "u_eastward" not in self.ds:
+        if "u_eastward" in self.ds:
+            self.ds["east"] = self.ds["u_eastward"]
+        elif "east" not in self.ds and "u_eastward" not in self.ds:
             self._uv2eastnorth()
         return self.ds["east"]
 
@@ -241,9 +243,76 @@ class xromsDatasetAccessor:
         >>> ds.xroms.north
         """
 
-        if "north" not in self.ds and "v_northward" not in self.ds:
+        if "v_northward" in self.ds:
+            self.ds["north"] = self.ds["v_northward"]
+        elif "north" not in self.ds and "v_northward" not in self.ds:
             self._uv2eastnorth()
         return self.ds["north"]
+
+    def _eastnorth2uv(self):
+        """Call the velocity rotation for accessor."""
+
+        u_attrs = {
+            "name": "u",
+            "standard_name": "sea_water_x_velocity",
+            "long_name": "u-momentum component",
+            "units": "m/s",
+        }
+        v_attrs = {
+            "name": "v",
+            "standard_name": "sea_water_y_velocity",
+            "long_name": "v-momentum component",
+            "units": "m/s",
+        }
+
+        u, v = rotate_vectors(
+            self.east,
+            self.north,
+            -self.ds.angle,
+            isradians=True,
+            reference="xaxis",
+            xgrid=self.xgrid,
+            hcoord="rho",
+            attrs={"x": u_attrs, "y": v_attrs},
+        )
+        self.ds["u"] = u
+        self.ds["v"] = v
+        self.ds["u"] = self.ds.xroms.to_grid(varname="u", hcoord="u")
+        self.ds["v"] = self.ds.xroms.to_grid(varname="v", hcoord="v")
+
+    @property
+    def u(self):
+        """Rotate eastward velocity to be grid-aligned u velocity
+
+        Notes
+        -----
+        See `xroms.rotate_vectors` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.u
+        """
+
+        if "u" not in self.ds:
+            self._eastnorth2uv()
+        return self.ds["u"]
+
+    @property
+    def v(self):
+        """Rotate northward velocity to be grid-aligned v velocity
+
+        Notes
+        -----
+        See `xroms.rotate_vectors` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.v
+        """
+
+        if "v" not in self.ds:
+            self._eastnorth2uv()
+        return self.ds["v"]
 
     def _eastnorth_rotated(self, angle, include_vars_adcp: bool = False, **kwargs):
         """Call the velocity rotation for accessor.
@@ -495,12 +564,12 @@ class xromsDatasetAccessor:
         """
 
         if "div" not in self.ds:
-            # find names of horizontal velocities, in case they are different
-            # just need to be ortogonal.
-            uname, vname = self.find_horizontal_velocities()
+            # # find names of horizontal velocities, in case they are different
+            # # just need to be ortogonal.
+            # uname, vname = self.find_horizontal_velocities()
             var = divergence(
-                self.ds[uname],
-                self.ds[vname],
+                self.u,
+                self.v,
                 self.xgrid,
                 hboundary="extend",
                 sboundary="extend",
