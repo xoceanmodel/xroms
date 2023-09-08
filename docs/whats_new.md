@@ -1,5 +1,8 @@
 # What's New
 
+## v0.4.7 (September 8, 2023)
+* Fixed attributes for accessor method `div_norm`
+
 ## v0.4.6 (July 31, 2023)
 * fixed `ds.xroms.div` and `ds.xroms.div_norm` in the case that `u` and `v` need to be calculated from other velocities like `east` and `north`.
 
