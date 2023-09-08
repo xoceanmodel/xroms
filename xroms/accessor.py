@@ -582,7 +582,7 @@ class xromsDatasetAccessor:
         """Calculate normalized surface divergence, rho/rho grid.
 
         The surface currents are selected for this calculation, so return is `[T,Y,X]`.
-        The divergence is normalized by $f$.
+        The divergence is normalized by $f$. It is dimensionless.
 
         Notes
         -----
@@ -598,6 +598,14 @@ class xromsDatasetAccessor:
         if "div_norm" not in self.ds:
             var = self.div
             self.ds["div_norm"] = var.cf.isel(Z=-1) / self.ds.f
+            self.ds["div_norm"].name = "normalized surface horizontal divergence"
+            attrs = {
+                "name": "div_norm",
+                "long_name": "normalized surface horizontal divergence",
+                "units": "",
+            }
+            self.ds["div_norm"].attrs = attrs
+
         return self.ds.div_norm
 
     @property
