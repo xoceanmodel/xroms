@@ -79,5 +79,6 @@ def test_mld():
     xsig0 = xroms.density(ds.temp, ds.salt, 0)
     thresh = xsig0[0, -2, 0, 0] - xsig0[0, -1, 0, 0]
     assert np.allclose(
-        xroms.mld(xsig0, grid, ds.h, ds.mask_rho, thresh=thresh)[0, 0, 0], z_rho[-2]
+        xroms.mld(xsig0, grid, ds.h, ds.mask_rho, thresh=thresh)[0, 0, 0],
+        abs(z_rho[-2]),
     )
