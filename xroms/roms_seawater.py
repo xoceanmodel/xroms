@@ -377,7 +377,7 @@ def M2(
 
 
 def mld(sig0, xgrid, h, mask, z=None, thresh=0.03):
-    """Calculate the mixed layer depth [m].
+    """Calculate the mixed layer depth [m], return positive and as depth if no value calculated.
 
     Parameters
     ----------
@@ -414,6 +414,12 @@ def mld(sig0, xgrid, h, mask, z=None, thresh=0.03):
     ncl mixed_layer_depth function at https://github.com/NCAR/ncl/blob/ed6016bf579f8c8e8f77341503daef3c532f1069/ni/src/lib/nfpfort/ocean.f
     de Boyer Montégut, C., Madec, G., Fischer, A. S., Lazar, A., & Iudicone, D. (2004). Mixed layer depth over the global ocean: An examination of profile data and a profile‐based climatology. Journal of  Geophysical Research: Oceans, 109(C12).
 
+    Useful resources:
+
+    * Climate Data Toolbox documentation: https://www.chadagreene.com/CDT/mld_documentation.html
+    * MLD calculation from MDTF: https://github.com/NOAA-GFDL/MDTF-diagnostics/blob/437d30590c45e8b7dd0cd01a3dc67066a2137115/diagnostics/mixed_layer_depth/mixed_layer_depth.py#L147
+
+
     Examples
     --------
     >>> xroms.mld(sig0, h, mask)
@@ -441,6 +447,9 @@ def mld(sig0, xgrid, h, mask, z=None, thresh=0.03):
     # Replace nan's that are not masked with the depth of the water column.
     cond = (mld.isnull()) & (mask == 1)
     mld = mld.where(~cond, h)
+
+    # Take absolute value so as to return positive MLD values
+    mld = abs(mld)
 
     mld.attrs["name"] = "mld"
     mld.attrs["long_name"] = "mixed layer depth"
