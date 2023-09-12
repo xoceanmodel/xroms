@@ -1,5 +1,8 @@
 # What's New
 
+## v0.5.0 (September 12, 2023)
+* the mixed layer depth function now returns positive values
+
 ## v0.4.7 (September 8, 2023)
 * Fixed attributes for accessor method `div_norm`
 
