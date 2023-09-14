@@ -513,7 +513,7 @@ def relative_vorticity(
     return var
 
 
-def divergence(
+def convergence(
     u: xr.DataArray,
     v: xr.DataArray,
     xgrid,
@@ -522,7 +522,7 @@ def divergence(
     sboundary="extend",
     sfill_value=None,
 ) -> xr.DataArray:
-    """Calculate 2D divergence from u and v [1/s].
+    """Calculate 2D convergence from u and v [1/s].
 
     Parameters
     ----------
@@ -567,19 +567,19 @@ def divergence(
 
     Returns
     -------
-    DataArray of 2D divergence of horizontal currents on rho/rho grids.
+    DataArray of 2D convergence of horizontal currents on rho/rho grids.
     Output is `[T,Z,Y,X]`.
 
 
     Notes
     -----
-    2D divergence = u_x + v_y
+    2D convergence = u_x + v_y
     Resource for more information: https://uw.pressbooks.pub/ocean285/chapter/the-divergence/
 
     Examples
     --------
     >>> ds, xgrid = xroms.roms_dataset(ds)
-    >>> xroms.divergence(u, v, xgrid)
+    >>> xroms.convergence(u, v, xgrid)
     """
 
     assert isinstance(u, xr.DataArray), "u must be DataArray"
@@ -608,8 +608,8 @@ def divergence(
 
     var = dudxi + dvdeta
 
-    var.attrs["name"] = "div"
-    var.attrs["long_name"] = "horizontal divergence"
+    var.attrs["name"] = "convergence"
+    var.attrs["long_name"] = "horizontal convergence"
     var.attrs["units"] = "1/s"
     var.name = var.attrs["name"]
 

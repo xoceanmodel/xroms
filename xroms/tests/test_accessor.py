@@ -235,15 +235,15 @@ def test_relative_vorticity():
         assert acc.cf[coordname].name == coord
 
 
-def test_div():
-    acc = ds.xroms.div
-    assert np.allclose(acc, xroms.divergence(ds["u"], ds["v"], grid))
+def test_convergence():
+    acc = ds.xroms.convergence
+    assert np.allclose(acc, xroms.convergence(ds["u"], ds["v"], grid))
 
 
-def test_div_norm():
-    acc = ds.xroms.div_norm
+def test_convergence_norm():
+    acc = ds.xroms.convergence_norm
     assert np.allclose(
-        acc, xroms.divergence(ds["u"], ds["v"], grid).cf.isel(Z=-1) / ds["f"]
+        acc, xroms.convergence(ds["u"], ds["v"], grid).cf.isel(Z=-1) / ds["f"]
     )
 
 

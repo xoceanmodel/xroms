@@ -13,7 +13,7 @@ import xarray as xr
 from .derived import (
     EKE,
     KE,
-    divergence,
+    convergence,
     dudz,
     dvdz,
     ertel,
@@ -549,64 +549,64 @@ class xromsDatasetAccessor:
         return vel_use
 
     @property
-    def div(self):
-        """Calculate divergence, rho/rho grid.
+    def convergence(self):
+        """Calculate convergence, rho/rho grid.
 
         Notes
         -----
-        See `xroms.divergence` for full docstring.
+        See `xroms.convergence` for full docstring.
 
         `hboundary` and `sboundary` both set to 'extend'.
 
         Examples
         --------
-        >>> ds.xroms.div
+        >>> ds.xroms.convergence
         """
 
-        if "div" not in self.ds:
+        if "convergence" not in self.ds:
             # # find names of horizontal velocities, in case they are different
             # # just need to be ortogonal.
             # uname, vname = self.find_horizontal_velocities()
-            var = divergence(
+            var = convergence(
                 self.u,
                 self.v,
                 self.xgrid,
                 hboundary="extend",
                 sboundary="extend",
             )
-            self.ds["div"] = var
-        return self.ds.div
+            self.ds["convergence"] = var
+        return self.ds.convergence
 
     @property
-    def div_norm(self):
-        """Calculate normalized surface divergence, rho/rho grid.
+    def convergence_norm(self):
+        """Calculate normalized surface convergence, rho/rho grid.
 
         The surface currents are selected for this calculation, so return is `[T,Y,X]`.
-        The divergence is normalized by $f$. It is dimensionless.
+        The convergence is normalized by $f$. It is dimensionless.
 
         Notes
         -----
-        See `xroms.divergence` for full docstring.
+        See `xroms.convergence` for full docstring.
 
         `hboundary` and `sboundary` both set to 'extend'.
 
         Examples
         --------
-        >>> ds.xroms.div_norm
+        >>> ds.xroms.convergence_norm
         """
 
-        if "div_norm" not in self.ds:
-            var = self.div
-            self.ds["div_norm"] = var.cf.isel(Z=-1) / self.ds.f
-            self.ds["div_norm"].name = "normalized surface horizontal divergence"
+        if "convergence_norm" not in self.ds:
+            var = self.convergence
+            self.ds["convergence_norm"] = var.cf.isel(Z=-1) / self.ds.f
+            self.ds["convergence_norm"].name = "convergence_norm"
             attrs = {
-                "name": "div_norm",
-                "long_name": "normalized surface horizontal divergence",
+                "name": "convergence_norm",
+                "long_name": "normalized surface horizontal convergence",
                 "units": "",
             }
-            self.ds["div_norm"].attrs = attrs
+            self.ds["convergence_norm"].attrs = attrs
 
-        return self.ds.div_norm
+        return self.ds.convergence_norm
 
     @property
     def ertel(self):
