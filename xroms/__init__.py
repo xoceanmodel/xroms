@@ -8,7 +8,7 @@ import xroms.datasets
 from .derived import (
     EKE,
     KE,
-    divergence,
+    convergence,
     dudz,
     dvdz,
     ertel,

@@ -103,12 +103,12 @@ def test_relative_vorticity():
     assert np.allclose(xroms.relative_vorticity(ds.u, ds.v, grid), 0)
 
 
-def test_divergence():
+def test_convergence():
     dudxi = (ds.u[0, -1, 0, 2] - ds.u[0, -1, 0, 0]) / (ds.dx[0, 1] + ds.dx[0, 0])
     dvdeta = (ds.v[0, -1, 2, 0] - ds.v[0, -1, 0, 0]) / (ds.dy[1, 0] + ds.dy[0, 0])
     calc = dudxi + dvdeta
-    # choose middle divergence value in depth because of boundary effects?
-    assert np.allclose(xroms.divergence(ds.u, ds.v, grid)[0, 1, 1, 1], calc, atol=2e8)
+    # choose middle convergence value in depth because of boundary effects?
+    assert np.allclose(xroms.convergence(ds.u, ds.v, grid)[0, 1, 1, 1], calc, atol=2e8)
 
 
 def test_ertel():
