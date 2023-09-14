@@ -1,5 +1,8 @@
 # What's New
 
+## v0.5.1 (September 14, 2023)
+* renamed all references to "divergence" to "convergence" instead 
+
 ## v0.5.0 (September 12, 2023)
 * the mixed layer depth function now returns positive values
 
