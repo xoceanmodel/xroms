@@ -1,5 +1,8 @@
 # What's New
 
+## v0.5.2 (October 4, 2023)
+* small fix to `roms_dataset()` processing to enable running it twice
+
 ## v0.5.1 (September 14, 2023)
 * renamed all references to "divergence" to "convergence" instead
 
