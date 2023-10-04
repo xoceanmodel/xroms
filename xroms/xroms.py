@@ -104,6 +104,9 @@ def roms_dataset(
         rename["xi_psi"] = "xi_u"
     if "eta_psi" in ds.dims:
         rename["eta_psi"] = "eta_v"
+    # if this dataset has already been processed, xi_rho would be a coord and then the name
+    # conflicts when trying to rename
+    ds = ds.drop_vars(rename.values(), errors="ignore")
     ds = ds.rename(rename)
 
     # Use spherical flag to determine if has lat/lon or not
