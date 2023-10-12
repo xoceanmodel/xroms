@@ -125,7 +125,8 @@ def roms_dataset(
             ds = ds.assign_coords({"lat_psi": ds.lat_psi})
 
     # check if dataset has depths or is just 1 layer
-    if ("s_rho" in ds) and (ds.s_rho.size > 1):
+    # also needs to have user-defined selection of include_3D_metrics==True
+    if ("s_rho" in ds) and (ds.s_rho.size > 1) and include_3D_metrics:
         ds["3d"] = True
     else:
         ds["3d"] = False
