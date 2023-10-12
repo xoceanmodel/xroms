@@ -1,5 +1,8 @@
 # What's New
 
+## v0.5.3 (October 11, 2023)
+* change to `roms_dataset()` so that input flag `include_3D_metrics` also controls if `ds["3d"] = True`.
+
 ## v0.5.2 (October 4, 2023)
 * small fix to `roms_dataset()` processing to enable running it twice
 
