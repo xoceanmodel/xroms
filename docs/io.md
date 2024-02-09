@@ -34,14 +34,14 @@ and for concatenating the files together:
     {'dim': 'ocean_time', 'data_vars': 'minimal', 'coords': 'minimal'}
 
 
-## Suggested Workflow for `xroms:
+## Suggested Workflow for `xroms`:
 
 1. Read in model output using the appropriate `xarray` function.
 2. Supplement your Dataset and calculate an `xgcm` grid object with:
 
     ds, xgrid = xroms.roms_dataset(ds)
 
-The function adds `z` coordinates and other useful metrics to the `Dataset`, including the z coordinates on each horizontal grid (e.g., z_rho_u), and the z coordinates relative to mean sea level (e.g., z_rho0). It also sets up an xgcm grid object for the Dataset, which is stored necessary for many `xroms` functions, and can be stored and accessible in the accessor (`ds.xroms.xgrid`).
+The function adds `z` coordinates and other useful metrics to the `Dataset`, including the z coordinates on each horizontal grid (e.g., `z_rho_u`), and the z coordinates relative to mean sea level (e.g., `z_rho0`). It also sets up an xgcm grid object for the Dataset, which is stored necessary for many `xroms` functions, and can be stored and accessible in the accessor (`ds.xroms.xgrid`).
 
 There are optional flags for `xroms.roms_dataset()` for what all metrics to lazily calculate since it can be time-consuming despite being lazily loaded and calculated; see the {doc}`API docs <api>` for details.
 
