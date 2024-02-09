@@ -813,6 +813,8 @@ def open_netcdf(
 ):
     """Return Dataset based on a single thredds or physical location.
 
+    This function is deprecated; use `xroms.open_netcdf` or `xroms.open_zarr` directly instead.
+
     Parameters
     ----------
     file: str
@@ -877,6 +879,8 @@ def open_mfnetcdf(
     proj=None,
 ):
     """Return Dataset based on a list of netCDF files.
+
+    This function is deprecated; use `xroms.open_netcdf` or `xroms.open_zarr` directly instead.
 
     Parameters
     ----------

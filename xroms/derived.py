@@ -28,12 +28,14 @@ def speed(u, v, xgrid, hboundary="extend", hfill_value=None):
         for moving to rho grid.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary fill value
         selection for moving to rho grid.
@@ -122,12 +124,14 @@ def uv_geostrophic(zeta, f, xgrid, hboundary="extend", hfill_value=None, which="
         for moving f to rho grid.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         for moving f to rho grid.
@@ -135,6 +139,7 @@ def uv_geostrophic(zeta, f, xgrid, hboundary="extend", hfill_value=None, which="
         The value to use in the boundary condition with `boundary='fill'`.
     which: string, optional
         Which components of geostrophic velocity to return.
+
         * 'both': return both components of hgrad
         * 'xi': return only xi-direction.
         * 'eta': return only eta-direction.
@@ -147,9 +152,15 @@ def uv_geostrophic(zeta, f, xgrid, hboundary="extend", hfill_value=None, which="
 
     Notes
     -----
-    vg = g * zeta_eta / (d eta * f)  # on v grid
-    ug = -g * zeta_xi / (d xi * f)  # on u grid
+
+    ug = -g * zeta_eta / (d eta * f)  # on u grid
+
+    vg = g * zeta_xi / (d xi * f)  # on v grid
+
     Translation to Python of Matlab copy of surf_geostr_vel of IRD Roms_Tools.
+
+    Good resourcefor more information:
+    https://uw.pressbooks.pub/ocean285/chapter/geostrophic-balance/
 
     Examples
     --------
@@ -162,11 +173,13 @@ def uv_geostrophic(zeta, f, xgrid, hboundary="extend", hfill_value=None, which="
     if which in ["both", "xi"]:
 
         # calculate derivatives of zeta
-        dzetadxi = hgrad(zeta, xgrid, which="xi")
+        dzetadeta = hgrad(zeta, xgrid, which="eta", hcoord="u")
 
         # calculate geostrophic velocities
         ug = (
-            -g * dzetadxi / to_u(f, xgrid, hboundary=hboundary, hfill_value=hfill_value)
+            -g
+            * dzetadeta
+            / to_u(f, xgrid, hboundary=hboundary, hfill_value=hfill_value)
         )
 
         ug.attrs["name"] = "ug"
@@ -175,13 +188,12 @@ def uv_geostrophic(zeta, f, xgrid, hboundary="extend", hfill_value=None, which="
         ug.name = ug.attrs["name"]
 
     if which in ["both", "eta"]:
+
         # calculate derivatives of zeta
-        dzetadeta = hgrad(zeta, xgrid, which="eta")
+        dzetadxi = hgrad(zeta, xgrid, which="xi", hcoord="v")
 
         # calculate geostrophic velocities
-        vg = (
-            g * dzetadeta / to_v(f, xgrid, hboundary=hboundary, hfill_value=hfill_value)
-        )
+        vg = g * dzetadxi / to_v(f, xgrid, hboundary=hboundary, hfill_value=hfill_value)
 
         vg.attrs["name"] = "vg"
         vg.attrs["long_name"] = "geostrophic v velocity"
@@ -214,12 +226,14 @@ def EKE(ug, vg, xgrid, hboundary="extend", hfill_value=None):
         for moving to rho grid.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         for moving to rho grid.
@@ -272,12 +286,14 @@ def dudz(u, xgrid, sboundary="extend", sfill_value=None):
         calculating z derivative.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary fill value
         associated with sboundary input.
@@ -321,12 +337,14 @@ def dvdz(v, xgrid, sboundary="extend", sfill_value=None):
         calculating z derivative.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary fill value
         associated with sboundary input.
@@ -372,12 +390,14 @@ def vertical_shear(dudz, dvdz, xgrid, hboundary="extend", hfill_value=None):
         for moving dudz and dvdz to rho grid.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         for moving to rho grid.
@@ -439,12 +459,14 @@ def relative_vorticity(
         for calculating horizontal derivatives of u and v.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -455,12 +477,14 @@ def relative_vorticity(
         for calculating horizontal derivatives of u and v.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -537,12 +561,14 @@ def convergence(
         for calculating horizontal derivatives of u and v.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -553,12 +579,14 @@ def convergence(
         for calculating horizontal derivatives of u and v.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -660,12 +688,14 @@ def ertel(
         horizontal grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -678,12 +708,14 @@ def ertel(
         all vertical grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.

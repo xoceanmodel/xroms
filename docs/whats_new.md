@@ -1,5 +1,9 @@
 # What's New
 
+## v0.6.0 (February 9, 2023)
+* fixed error in `derived.py`'s `uv_geostrophic` function after being pointed out by @ak11283
+* updated docs so mostly well-formatted and working
+
 ## v0.5.3 (October 11, 2023)
 * change to `roms_dataset()` so that input flag `include_3D_metrics` also controls if `ds["3d"] = True`.
 

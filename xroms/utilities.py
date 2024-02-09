@@ -118,9 +118,11 @@ def hgrad(
         Grid object associated with q.
     which: string, optional
         Which components of gradient to return.
+
         * 'both': return both components of hgrad.
         * 'xi': return only xi-direction.
         * 'eta': return only eta-direction.
+
     z: DataArray, ndarray, optional
         Depth [m]. If None, use z coordinate attached to q.
     hcoord: string, optional
@@ -135,12 +137,14 @@ def hgrad(
         will be used for all horizontal grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -152,12 +156,14 @@ def hgrad(
         be used for all vertical grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -357,12 +363,14 @@ def ddxi(
         will be used for all horizontal grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -374,12 +382,14 @@ def ddxi(
         be used for all vertical grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -463,12 +473,14 @@ def ddeta(
         will be used for grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -480,12 +492,14 @@ def ddeta(
         be used for vertical grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -564,12 +578,14 @@ def ddz(
         will be used for grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -581,12 +597,14 @@ def ddz(
         will be used for grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary fill value
         associated with sboundary input.
@@ -743,12 +761,14 @@ def to_rho(var, xgrid, hboundary="extend", hfill_value=None):
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -803,12 +823,14 @@ def to_psi(var, xgrid, hboundary="extend", hfill_value=None):
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -864,12 +886,14 @@ def to_u(var, xgrid, hboundary="extend", hfill_value=None):
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -924,12 +948,14 @@ def to_v(var, xgrid, hboundary="extend", hfill_value=None):
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -984,12 +1010,14 @@ def to_s_rho(var, xgrid, sboundary="extend", sfill_value=None):
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -1034,12 +1062,14 @@ def to_s_w(var, xgrid, sboundary="extend", sfill_value=None):
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -1099,6 +1129,7 @@ def to_grid(
         Passed to `grid` method calls; horizontal boundary selection
         for grid changes.
         From xgcm documentation:
+
         A flag indicating how to handle boundaries:
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
@@ -1106,6 +1137,7 @@ def to_grid(
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -1116,12 +1148,14 @@ def to_grid(
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -1202,7 +1236,9 @@ def gridmean(var, xgrid, dim):
 
     Examples
     --------
+
     Note that the following two approaches are equivalent:
+
     >>> app1 = xroms.gridmean(ds.u, xgrid, ('Y','X'))
     >>> app2 = (ds.u*ds.dy_u*ds.dx_u).sum(('eta_rho','xi_u'))/(ds.dy_u*ds.dx_u).sum(('eta_rho','xi_u'))
     >>> np.allclose(app1, app2)
@@ -1251,7 +1287,9 @@ def gridsum(var, xgrid, dim):
 
     Examples
     --------
+
     Note that the following two approaches are equivalent:
+
     >>> app1 = xroms.gridsum(ds.u, xgrid, ('Z','X'))
     >>> app2 = (ds.u*ds.dz_u * ds.dx_u).sum(('s_rho','xi_u'))
     >>> np.allclose(app1, app2)
@@ -1289,6 +1327,7 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     This function has been possibly superseded by isoslice
     that wraps `xgcm.grid.transform` for the following reasons,
     but more testing is needed:
+
     * The implementation of `xgcm.grid.transform` is more robust
       than `xisoslice` which has extra code for in case iso_value
       is exactly in iso_array.
@@ -1330,16 +1369,20 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     --------
 
     Calculate lat-z slice of salinity along a constant longitude value (-91.5):
+
     >>> sl = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.salt, 'xi_rho')
 
     Calculate a lon-lat slice at a constant z value (-10):
+
     >>> sl = xroms.utilities.xisoslice(ds.z_rho, -10, ds.temp, 's_rho')
 
     Calculate a lon-lat slice at a constant z value (-10) but without zeta changing in time:
+
     (use ds.z_rho0 which is relative to mean sea level and does not vary in time)
     >>> sl = xroms.utilities.xisoslice(ds.z_rho0, -10, ds.temp, 's_rho')
 
     Calculate the depth of a specific isohaline (33):
+
     >>> sl = xroms.utilities.xisoslice(ds.salt, 33, ds.z_rho, 's_rho')
 
     Calculate the salt 10 meters above the seabed. Either do this on the vertical
@@ -1360,19 +1403,24 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     related coordinates for plotting. For example, to accompany the lat-z slice,
     you may want the following:
 
-        # calculate z values (s_rho)
+    calculate z values (s_rho)
+
     >>> slz = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.z_rho, 'xi_rho')
 
-        # calculate latitude values (eta_rho)
+    calculate latitude values (eta_rho)
+
     >>> sllat = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.lat_rho, 'xi_rho')
 
-        # assign these as coords to be used in plot
+    assign these as coords to be used in plot
+
     >>> sl = sl.assign_coords(z=slz, lat=sllat)
 
-        # points that should be masked
+    points that should be masked
+
     >>> slmask = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.mask_rho, 'xi_rho')
 
-        # drop masked values
+    drop masked values
+
     >>> sl = sl.where(slmask==1, drop=True)
     """
 
@@ -1442,11 +1490,15 @@ def subset(ds, X=None, Y=None):
         have been updated.
     X: slice, optional
         Slice in X dimension using form `X=slice(start, stop, step)`. For example,
+
         >>> X=slice(20,40,2)
+
         Indices are used for rho grid, and psi grid is reduced accordingly.
     Y: slice, optional
         Slice in Y dimension using form `Y=slice(start, stop, step)`. For example,
+
         >>> Y=slice(20,40,2)
+
         Indices are used for rho grid, and psi grid is reduced accordingly.
 
     Returns
@@ -1461,9 +1513,13 @@ def subset(ds, X=None, Y=None):
 
     Examples
     --------
+
     Subset only in Y direction:
+
     >>> xroms.subset(ds, Y=slice(50,100))
+
     Subset in X and Y:
+
     >>> xroms.subset(ds, X=slice(20,40), Y=slice(50,100))
     """
 
@@ -1506,6 +1562,7 @@ def order(var):
 
     Examples
     --------
+
     >>> xroms.order(var)
     """
 

@@ -33,10 +33,12 @@ def interpll(var, lons, lats, which="pairs", **kwargs):
         Latitudes to interpolate to. Will be flattened upon input.
     which: str, optional
         Which type of interpolation to do:
+
         * "pairs": lons/lats as unstructured coordinate pairs
           (in xESMF language, LocStream).
         * "grid": 2D array of points with 1 dimension the lons and
           the other dimension the lats.
+
     **kwargs:
         passed on to xESMF Regridder class
 
@@ -56,9 +58,13 @@ def interpll(var, lons, lats, which="pairs", **kwargs):
 
     Examples
     --------
+
     To return 1D pairs of points, in this case 3 points:
+
     >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='pairs')
+
     To return 2D pairs of points, in this case a 3x3 array of points:
+
     >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='grid')
     """
 
@@ -178,41 +184,54 @@ def isoslice(var, iso_values, xgrid, iso_array=None, axis="Z"):
 
     Examples
     --------
+
     To calculate temperature onto fixed depths:
+
     >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50))
 
     To calculate temperature onto salinity:
+
     >>> xroms.isoslice(ds.temp, np.arange(0, 36), iso_array=ds.salt, axis='Z')
 
     Calculate lat-z slice of salinity along a constant longitude value (-91.5):
+
     >>> xroms.isoslice(ds.salt, -91.5, iso_array=ds.lon_rho, axis='X')
 
     Calculate slice of salt at 28 deg latitude
+
     >>> xroms.isoslice(ds.salt, 28, iso_array=ds.lat_rho, axis='Y')
 
     Interpolate temp to salinity values between 0 and 36 in the X direction
+
     >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='X')
 
     Interpolate temp to salinity values between 0 and 36 in the Z direction
+
     >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='Z')
 
     Calculate the depth of a specific isohaline (33):
+
     >>> xroms.isoslice(ds.salt, 33, iso_array=ds.z_rho, axis='Z')
 
     Calculate dye 10 meters above seabed. Either do this on the vertical
     rho grid, or first change to the w grid and then use `isoslice`. You may prefer
     to do the latter if there is a possibility that the distance above the seabed you are
     interpolating to (10 m) could be below the deepest rho grid depth.
+
     * on rho grid directly:
+
     >>> height_from_seabed = ds.z_rho + ds.h
     >>> height_from_seabed.name = 'z_rho'
     >>> xroms.isoslice(ds.dye_01, 10, iso_array=height_from_seabed, axis='Z')
+
     * on w grid:
+
     >>> var_w = ds.dye_01.xroms.to_grid(scoord='w').chunk({'s_w': -1})
     >>> ds['dye_01_w'] = var_w  # currently this is the easiest way to reattached coords xgcm variables
     >>> height_from_seabed = ds.z_w + ds.h
     >>> height_from_seabed.name = 'z_w'
     >>> xroms.isoslice(ds['dye_01_w'], 10, iso_array=height_from_seabed, axis='Z')
+
     """
 
     words = "Grid should be input."

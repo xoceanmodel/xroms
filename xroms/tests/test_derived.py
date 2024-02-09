@@ -58,26 +58,28 @@ def test_KE():
 
 
 def test_uv_geostrophic():
-    vg = 0  # zeta only varies in xi direction
+    ug = 0  # zeta only varies in xi direction
     # test one corner of domain
-    f = ds.f[0, 0].values
+    f = ds.f[1, 1].values
     # correct dx value (eta=0)
     dzetadxi = (zeta[2] - zeta[0]) / (2 * dx)
-    ug = -g * dzetadxi / f
+    vg = g * dzetadxi / f
 
     assert np.allclose(
         xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="xi")[0, 0, 0], ug
     )
-    assert np.allclose(xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="eta"), vg)
+    assert np.allclose(
+        xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="eta")[0, 0, 0], vg
+    )
 
 
 def test_EKE():
-    vg = 0  # zeta only varies in xi direction
+    ug = 0  # zeta only varies in xi direction
     # test one corner of domain
-    f = ds.f[0, 0].values
+    f = ds.f[1, 1].values
     # correct dx value (eta=0)
     dzetadxi = (zeta[2] - zeta[0]) / (2 * dx)
-    ug = -g * dzetadxi / f
+    vg = g * dzetadxi / f
     EKE = 0.5 * (ug**2 + vg**2)
 
     xug, xvg = xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="both")
