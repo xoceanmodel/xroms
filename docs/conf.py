@@ -21,6 +21,15 @@ import sys
 from importlib.metadata import version as imversion
 
 
+# to fix issue with xESMF
+# https://github.com/conda-forge/esmf-feedstock/issues/91#issuecomment-1387279692
+if "ESMFMKFILE" not in os.environ:
+    # RTD doesn't activate the env, and esmpy depends on a env var set there
+    # We assume the `os` package is in {ENV}/lib/pythonX.X/os.py
+    # See conda-forge/esmf-feedstock#91 and readthedocs/readthedocs.org#4067
+    os.environ["ESMFMKFILE"] = str(pathlib.Path(os.__file__).parent.parent / "esmf.mk")
+
+
 print("python exec:", sys.executable)
 print("sys.path:", sys.path)
 root = pathlib.Path(__file__).parent.parent.absolute()
@@ -32,7 +41,7 @@ import xroms  # isort:skip
 # -- Project information -----------------------------------------------------
 
 project = "xroms"
-copyright = "2020-2023"
+copyright = "2020-2024"
 author = "Rob Hetland, Kristen Thyng, Veronica Ruiz Xomchuk"
 
 release = imversion("xroms")

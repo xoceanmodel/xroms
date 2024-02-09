@@ -75,6 +75,7 @@ class xromsDatasetAccessor:
 
         Examples
         --------
+
         >>> ds.xroms.set_grid(xgrid)
         """
         self._xgrid = xgrid
@@ -100,6 +101,7 @@ class xromsDatasetAccessor:
 
         Examples
         --------
+
         >>> ds.xroms.speed
         """
 
@@ -120,6 +122,7 @@ class xromsDatasetAccessor:
 
         Examples
         --------
+
         >>> ds.xroms.KE
         """
 
@@ -140,6 +143,7 @@ class xromsDatasetAccessor:
 
         Examples
         --------
+
         >>> ds.xroms.ug
         """
 

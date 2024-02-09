@@ -394,26 +394,26 @@ ds.xroms.vertical_shear
 ds.xroms.vort
 ```
 
-### Horizontal divergence
+### Horizontal convergence
 
-Horizontal component of the currents divergence.
+Horizontal component of the currents convergence.
 
-    ds.xroms.div
+    ds.xroms.convergence
 
-    xroms.divergence(ds.u, ds.v, xgrid)
+    xroms.convergence(ds.u, ds.v, xgrid)
 
 ```{code-cell} ipython3
-ds.xroms.div
+ds.xroms.convergence
 ```
 
-### Normalized surface divergence
+### Normalized surface convergence
 
-Horizontal component of the currents divergence at the surface, normalized by $f$. This is only available through the accessor.
+Horizontal component of the currents convergence at the surface, normalized by $f$. This is only available through the accessor.
 
-    ds.xroms.div_norm
+    ds.xroms.convergence_norm
 
 ```{code-cell} ipython3
-ds.xroms.div_norm
+ds.xroms.convergence_norm
 ```
 
 ### Ertel potential vorticity

@@ -242,12 +242,14 @@ def N2(rho, xgrid, rho0=1025.0, sboundary="fill", sfill_value=np.nan):
         calculating z derivative.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary fill value
         associated with sboundary input.
@@ -306,12 +308,14 @@ def M2(
         for calculating horizontal derivatives of rho.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -322,12 +326,14 @@ def M2(
         calculating horizontal derivatives of rho.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary fill value
         associated with sboundary input.
