@@ -97,4 +97,3 @@ Then choose one of the following to install `xroms` from GitHub:
     ```
     pip install git+https://github.com/xoceanmodel/xroms
     ```
-
