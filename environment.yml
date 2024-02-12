@@ -1,0 +1,27 @@
+name: xroms
+channels:
+  - conda-forge
+dependencies:
+  # Required for full project functionality (dont remove)
+  - pytest
+  - pytest-benchmark
+  # Examples (remove and add as needed)
+  - cf_xarray
+  - cmocean
+  - dask
+  # # https://github.com/h5py/h5py/issues/1880
+  # # https://github.com/conda-forge/h5py-feedstock/issues/92
+  # - h5py < 3.2
+  - matplotlib-base
+  - netcdf4
+  - numpy <1.24  # https://github.com/numba/numba/issues/8615#issuecomment-1360792615
+  - numba >= 0.49 # required by xgcm
+  - pip
+  - pooch
+  - requests
+  - xarray
+  - xcmocean
+  - xgcm >= 0.8.1
+  - xesmf  # don't install if on windows
+  # - pip:  # install from github to get recent PRs I contributed
+  #   - git@github.com:xarray-contrib/cf-xarray.git

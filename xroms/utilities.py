@@ -8,8 +8,6 @@ import warnings
 import numpy as np
 import xarray as xr
 
-import xroms
-
 
 try:
     import cartopy.geodesic
@@ -20,9 +18,83 @@ except ImportError:
     )
 
 
+def grid_interp(xgrid, da, dim, which_xgcm_function="interp", **kwargs):
+    """Interpolate da in dim
+
+    This function is necessary because of weirdness with chunking
+    with xgcm.
+    More info: https://github.com/xgcm/xgcm/issues/522
+
+    Parameters
+    ----------
+    xgrid : xgcm grid object
+        _description_
+    da : DataArray
+        interpolating from this dataarray
+    dim : str
+        interpolating grids in this dimension
+    which_xgcm_function : "interp"
+        But could instead be "integrate"
+
+    Returns
+    -------
+    DataArray
+        interpolated down one dimension in dim
+    """
+
+    # which dimension chunk to save?
+    dim_name = da.cf[dim].name  # e.g. dim_name = xi_rho
+    i_chunk_dim = list(da.dims).index(
+        dim_name
+    )  # chunk_dim is e.g. 2, the index in dims for the chunks
+
+    # need to unchunk then rechunk, so save chunk
+    if da.chunks is not None:
+        chunk = list(da.chunks[i_chunk_dim])
+
+        # to interpolate, first remove chunking to 1 chunk
+        new_coord = getattr(xgrid, which_xgcm_function)(
+            da.chunk({dim_name: -1}), dim, **kwargs
+        )
+        # new_coord = xgrid.interp(da.chunk({dim_name: -1}), dim, **kwargs)
+
+        if (
+            which_xgcm_function == "interp"
+            and new_coord.shape[i_chunk_dim] + 1 == da.shape[i_chunk_dim]
+        ):
+
+            # take one off the last chunk in this dimension since interpolation
+            # loses one in size
+            chunk[-1] -= 1
+            # reconstitute chunks after intepolation but minus one in downsized dim
+            return new_coord.chunk({new_coord.cf[dim].name: tuple(chunk)})
+
+        elif (
+            which_xgcm_function == "interp"
+            and new_coord.shape[i_chunk_dim] == da.shape[i_chunk_dim] + 1
+        ):
+
+            # add one on the last chunk in this dimension since interpolation
+            # loses one in size
+            chunk[-1] += 1
+            # reconstitute chunks after intepolation but minus one in downsized dim
+            return new_coord.chunk({new_coord.cf[dim].name: tuple(chunk)})
+
+        elif which_xgcm_function == "integrate":
+            return new_coord
+
+        else:
+            raise ValueError("chunks probably are not being dealt with properly")
+
+    else:
+        new_coord = getattr(xgrid, which_xgcm_function)(da, dim, **kwargs)
+        # new_coord = xgrid.interp(da, dim, **kwargs)
+        return new_coord
+
+
 def hgrad(
     q,
-    grid,
+    xgrid,
     which="both",
     z=None,
     hcoord=None,
@@ -35,18 +107,22 @@ def hgrad(
 ):
     """Return gradients of property q accounting for s coordinates.
 
-    Inputs
-    ------
+    Note that you need the 3D metrics for horizontal derivatives for ROMS, so ``include_3D_metrics=True`` in ``xroms.roms_dataset()``.
+
+    Parameters
+    ----------
 
     q: DataArray
         Property to take gradients of.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with q.
     which: string, optional
         Which components of gradient to return.
+
         * 'both': return both components of hgrad.
         * 'xi': return only xi-direction.
         * 'eta': return only eta-direction.
+
     z: DataArray, ndarray, optional
         Depth [m]. If None, use z coordinate attached to q.
     hcoord: string, optional
@@ -61,12 +137,14 @@ def hgrad(
         will be used for all horizontal grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -78,12 +156,14 @@ def hgrad(
         be used for all vertical grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -112,9 +192,9 @@ def hgrad(
     The xi derivative will alter the number of points in the xi and s dimensions.
     The eta derivative will alter the number of points in the eta and s dimensions.
 
-    Example usage
-    -------------
-    >>> dtempdxi, dtempdeta = xroms.hgrad(ds.temp, grid)
+    Examples
+    --------
+    >>> dtempdxi, dtempdeta = xroms.hgrad(ds.temp, xgrid)
     """
 
     assert isinstance(q, xr.DataArray), "var must be DataArray"
@@ -134,26 +214,26 @@ def hgrad(
     if which in ["both", "xi"]:
 
         if is3D:
-            dqdx = grid.interp(
-                grid.derivative(q, "X", boundary=hboundary, fill_value=hfill_value),
+            dqdx = xgrid.interp(
+                xgrid.derivative(q, "X", boundary=hboundary, fill_value=hfill_value),
                 "Z",
                 boundary=sboundary,
                 fill_value=sfill_value,
             )
-            dqdz = grid.interp(
-                grid.derivative(q, "Z", boundary=sboundary, fill_value=sfill_value),
+            dqdz = xgrid.interp(
+                xgrid.derivative(q, "Z", boundary=sboundary, fill_value=sfill_value),
                 "X",
                 boundary=hboundary,
                 fill_value=hfill_value,
             )
-            dzdx = grid.interp(
-                grid.derivative(z, "X", boundary=hboundary, fill_value=hfill_value),
+            dzdx = xgrid.interp(
+                xgrid.derivative(z, "X", boundary=hboundary, fill_value=hfill_value),
                 "Z",
                 boundary=sboundary,
                 fill_value=sfill_value,
             )
-            dzdz = grid.interp(
-                grid.derivative(z, "Z", boundary=sboundary, fill_value=sfill_value),
+            dzdz = xgrid.interp(
+                xgrid.derivative(z, "Z", boundary=sboundary, fill_value=sfill_value),
                 "X",
                 boundary=hboundary,
                 fill_value=hfill_value,
@@ -162,7 +242,7 @@ def hgrad(
             dqdxi = dqdx * dzdz - dqdz * dzdx
 
         else:  # 2D variables
-            dqdxi = grid.derivative(q, "X", boundary=hboundary, fill_value=hfill_value)
+            dqdxi = xgrid.derivative(q, "X", boundary=hboundary, fill_value=hfill_value)
 
         if attrs is None and isinstance(q, xr.DataArray):
             attrs = q.attrs.copy()
@@ -171,10 +251,9 @@ def hgrad(
             attrs["long_name"] = "horizontal xi derivative of " + attrs.setdefault(
                 "long_name", "var"
             )
-            attrs["grid"] = grid
-        dqdxi = xroms.to_grid(
+        dqdxi = to_grid(
             dqdxi,
-            grid,
+            xgrid,
             hcoord=hcoord,
             scoord=scoord,
             attrs=attrs,
@@ -187,26 +266,26 @@ def hgrad(
     if which in ["both", "eta"]:
 
         if is3D:
-            dqdy = grid.interp(
-                grid.derivative(q, "Y", boundary=hboundary, fill_value=hfill_value),
+            dqdy = xgrid.interp(
+                xgrid.derivative(q, "Y", boundary=hboundary, fill_value=hfill_value),
                 "Z",
                 boundary=sboundary,
                 fill_value=sfill_value,
             )
-            dqdz = grid.interp(
-                grid.derivative(q, "Z", boundary=sboundary, fill_value=sfill_value),
+            dqdz = xgrid.interp(
+                xgrid.derivative(q, "Z", boundary=sboundary, fill_value=sfill_value),
                 "Y",
                 boundary=hboundary,
                 fill_value=hfill_value,
             )
-            dzdy = grid.interp(
-                grid.derivative(z, "Y", boundary=hboundary, fill_value=hfill_value),
+            dzdy = xgrid.interp(
+                xgrid.derivative(z, "Y", boundary=hboundary, fill_value=hfill_value),
                 "Z",
                 boundary=sboundary,
                 fill_value=sfill_value,
             )
-            dzdz = grid.interp(
-                grid.derivative(z, "Z", boundary=sboundary, fill_value=sfill_value),
+            dzdz = xgrid.interp(
+                xgrid.derivative(z, "Z", boundary=sboundary, fill_value=sfill_value),
                 "Y",
                 boundary=hboundary,
                 fill_value=hfill_value,
@@ -215,7 +294,9 @@ def hgrad(
             dqdeta = dqdy * dzdz - dqdz * dzdy
 
         else:  # 2D variables
-            dqdeta = grid.derivative(q, "Y", boundary=hboundary, fill_value=hfill_value)
+            dqdeta = xgrid.derivative(
+                q, "Y", boundary=hboundary, fill_value=hfill_value
+            )
 
         if attrs is None and isinstance(q, xr.DataArray):
             attrs = q.attrs.copy()
@@ -224,10 +305,9 @@ def hgrad(
             attrs["long_name"] = "horizontal eta derivative of " + attrs.setdefault(
                 "long_name", "var"
             )
-            attrs["grid"] = grid
-        dqdeta = xroms.to_grid(
+        dqdeta = to_grid(
             dqdeta,
-            grid,
+            xgrid,
             hcoord=hcoord,
             scoord=scoord,
             attrs=attrs,
@@ -249,7 +329,7 @@ def hgrad(
 
 def ddxi(
     var,
-    grid,
+    xgrid,
     z=None,
     hcoord=None,
     scoord=None,
@@ -261,11 +341,13 @@ def ddxi(
 ):
     """Calculate d/dxi for a variable.
 
-    Inputs
-    ------
+    Note that you need the 3D metrics for horizontal derivatives for ROMS, so ``include_3D_metrics=True`` in ``xroms.roms_dataset()``.
+
+    Parameters
+    ----------
     var: DataArray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var.
     z: DataArray, ndarray, optional
         Depth [m]. If None, use z coordinate attached to var.
@@ -281,12 +363,14 @@ def ddxi(
         will be used for all horizontal grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -298,12 +382,14 @@ def ddxi(
         be used for all vertical grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -330,14 +416,14 @@ def ddxi(
 
     This will alter the number of points in the xi and s dimensions.
 
-    Example usage
-    -------------
-    >>> xroms.ddxi(ds.salt, grid)
+    Examples
+    --------
+    >>> xroms.ddxi(ds.salt, xgrid)
     """
 
-    var = xroms.hgrad(
+    var = hgrad(
         var,
-        grid,
+        xgrid,
         which="xi",
         z=z,
         hcoord=hcoord,
@@ -353,7 +439,7 @@ def ddxi(
 
 def ddeta(
     var,
-    grid,
+    xgrid,
     z=None,
     hcoord=None,
     scoord=None,
@@ -365,11 +451,13 @@ def ddeta(
 ):
     """Calculate d/deta for a variable.
 
-    Inputs
-    ------
+    Note that you need the 3D metrics for horizontal derivatives for ROMS, so ``include_3D_metrics=True`` in ``xroms.roms_dataset()``.
+
+    Parameters
+    ----------
     var: DataArray, ndarray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var.
     z: DataArray, ndarray, optional
         Depth [m]. If None, use z coordinate attached to var.
@@ -385,12 +473,14 @@ def ddeta(
         will be used for grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -402,12 +492,14 @@ def ddeta(
         be used for vertical grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -434,14 +526,14 @@ def ddeta(
 
     This will alter the number of points in the eta and s dimensions.
 
-    Example usage
-    -------------
-    >>> xroms.ddeta(ds.salt, grid)
+    Examples
+    --------
+    >>> xroms.ddeta(ds.salt, xgrid)
     """
 
-    var = xroms.hgrad(
+    var = hgrad(
         var,
-        grid,
+        xgrid,
         which="eta",
         z=z,
         hcoord=hcoord,
@@ -457,7 +549,7 @@ def ddeta(
 
 def ddz(
     var,
-    grid,
+    xgrid,
     hcoord=None,
     scoord=None,
     hboundary="extend",
@@ -468,11 +560,11 @@ def ddz(
 ):
     """Calculate d/dz for a variable.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var
     hcoord: string, optional.
         Name of horizontal grid to interpolate output to.
@@ -486,12 +578,14 @@ def ddz(
         will be used for grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -503,12 +597,14 @@ def ddz(
         will be used for grid changes too.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary fill value
         associated with sboundary input.
@@ -528,9 +624,9 @@ def ddz(
     -----
     This will alter the number of points in the s dimension.
 
-    Example usage
-    -------------
-    >>> xroms.ddz(ds.salt, grid)
+    Examples
+    --------
+    >>> xroms.ddz(ds.salt, xgrid)
     """
 
     assert isinstance(var, xr.DataArray), "var must be DataArray"
@@ -542,12 +638,11 @@ def ddz(
         attrs["long_name"] = "vertical derivative of " + attrs.setdefault(
             "long_name", "var"
         )
-        attrs["grid"] = grid
 
-    var = grid.derivative(var, "Z", boundary=sboundary, fill_value=sfill_value)
+    var = xgrid.derivative(var, "Z", boundary=sboundary, fill_value=sfill_value)
     var = to_grid(
         var,
-        grid,
+        xgrid,
         hcoord=hcoord,
         scoord=scoord,
         attrs=attrs,
@@ -562,8 +657,8 @@ def ddz(
 def argsel2d(lons, lats, lon0, lat0):
     """Find the indices of coordinate pair closest to another point.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     lons: DataArray, ndarray, list
         Longitudes of points to search through for closest point.
     lats: DataArray, ndarray, list
@@ -589,8 +684,8 @@ def argsel2d(lons, lats, lon0, lat0):
     use the correct horizontal grid (rho, u, v, or psi). This is accounted for
     if this function is used through the accessor.
 
-    Example usage
-    -------------
+    Examples
+    --------
     >>> xroms.argsel2d(ds.lon_rho, ds.lat_rho, -96, 27)
     """
 
@@ -610,8 +705,8 @@ def argsel2d(lons, lats, lon0, lat0):
 def sel2d(var, lons, lats, lon0, lat0):
     """Find the value of the var at closest location to lon0,lat0.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray, ndarray
         Variable to operate on.
     lons: DataArray, ndarray, list
@@ -642,8 +737,8 @@ def sel2d(var, lons, lats, lon0, lat0):
     This is meant to be used by the accessor to conveniently wrap
     `argsel2d`.
 
-    Example usage
-    -------------
+    Examples
+    --------
     >>> xroms.sel2d(ds.temp, ds.lon_rho, ds.lat_rho, -96, 27)
     """
 
@@ -652,26 +747,28 @@ def sel2d(var, lons, lats, lon0, lat0):
     return var.cf.isel(Y=inds[0], X=inds[1])
 
 
-def to_rho(var, grid, hboundary="extend", hfill_value=None):
+def to_rho(var, xgrid, hboundary="extend", hfill_value=None):
     """Change var to rho horizontal grid.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray or ndarray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var
     hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -689,41 +786,51 @@ def to_rho(var, grid, hboundary="extend", hfill_value=None):
     `to_grid` function wraps all of the `to_*` functions so one function
     can be used for all grid changes.
 
-    Example usage
-    -------------
-    >>> xroms.to_rho('salt', grid)
+    Examples
+    --------
+    >>> xroms.to_rho('salt', xgrid)
     """
     if "xi_rho" not in var.dims:
-        var = grid.interp(
-            var, "X", to="center", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "X", to="center", boundary=hboundary, fill_value=hfill_value
         )
+
+    #      var = xgrid.interp(
+    #         var, "X", to="center", boundary=hboundary, fill_value=hfill_value
+    #     )
     if "eta_rho" not in var.dims:
-        var = grid.interp(
-            var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
         )
+
+        #  var = xgrid.interp(
+        #     var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
+        # )
     return var
 
 
-def to_psi(var, grid, hboundary="extend", hfill_value=None):
+def to_psi(var, xgrid, hboundary="extend", hfill_value=None):
     """Change var to psi horizontal grid.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray or ndarray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var
     hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -741,42 +848,52 @@ def to_psi(var, grid, hboundary="extend", hfill_value=None):
     `to_grid` function wraps all of the `to_*` functions so one function
     can be used for all grid changes.
 
-    Example usage
-    -------------
-    >>> xroms.to_psi('salt', grid)
+    Examples
+    --------
+    >>> xroms.to_psi('salt', xgrid)
     """
 
     if "xi_u" not in var.dims:
-        var = grid.interp(
-            var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
+
+        var = grid_interp(
+            xgrid, var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
         )
+
+        # var = xgrid.interp(
+        #     var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
+        # )
     if "eta_v" not in var.dims:
-        var = grid.interp(
-            var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
         )
+        # var = xgrid.interp(
+        #     var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
+        # )
     return var
 
 
-def to_u(var, grid, hboundary="extend", hfill_value=None):
+def to_u(var, xgrid, hboundary="extend", hfill_value=None):
     """Change var to u horizontal grid.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray or ndarray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var
     hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -794,41 +911,51 @@ def to_u(var, grid, hboundary="extend", hfill_value=None):
     `to_grid` function wraps all of the `to_*` functions so one function
     can be used for all grid changes.
 
-    Example usage
-    -------------
-    >>> xroms.to_u('salt', grid)
+    Examples
+    --------
+    >>> xroms.to_u('salt', xgrid)
     """
     if "xi_u" not in var.dims:
-        var = grid.interp(
-            var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
         )
+
+        #  var = xgrid.interp(
+        #     var, "X", to="inner", boundary=hboundary, fill_value=hfill_value
+        # )
     if "eta_rho" not in var.dims:
-        var = grid.interp(
-            var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
         )
+
+        #  var = xgrid.interp(
+        #     var, "Y", to="center", boundary=hboundary, fill_value=hfill_value
+        # )
     return var
 
 
-def to_v(var, grid, hboundary="extend", hfill_value=None):
+def to_v(var, xgrid, hboundary="extend", hfill_value=None):
     """Change var to v horizontal grid.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray or ndarray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var
     hboundary: string, optional
         Passed to `grid` method calls; horizontal boundary selection
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -846,41 +973,51 @@ def to_v(var, grid, hboundary="extend", hfill_value=None):
     `to_grid` function wraps all of the `to_*` functions so one function
     can be used for all grid changes.
 
-    Example usage
-    -------------
-    >>> xroms.to_v('salt', grid)
+    Examples
+    --------
+    >>> xroms.to_v('salt', xgrid)
     """
     if "xi_rho" not in var.dims:
-        var = grid.interp(
-            var, "X", to="center", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "X", to="center", boundary=hboundary, fill_value=hfill_value
         )
+
+        # var = xgrid.interp(
+        #     var, "X", to="center", boundary=hboundary, fill_value=hfill_value
+        # )
     if "eta_v" not in var.dims:
-        var = grid.interp(
-            var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
+        var = grid_interp(
+            xgrid, var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
         )
+
+        #  var = xgrid.interp(
+        #     var, "Y", to="inner", boundary=hboundary, fill_value=hfill_value
+        # )
     return var
 
 
-def to_s_rho(var, grid, sboundary="extend", sfill_value=None):
+def to_s_rho(var, xgrid, sboundary="extend", sfill_value=None):
     """Change var to rho vertical grid.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray or ndarray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var
     sboundary: string, optional
         Passed to `grid` method calls; vertical boundary selection
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -898,39 +1035,41 @@ def to_s_rho(var, grid, sboundary="extend", sfill_value=None):
     `to_grid` function wraps all of the `to_*` functions so one function
     can be used for all grid changes.
 
-    Example usage
-    -------------
-    >>> xroms.to_s_rho('salt', grid)
+    Examples
+    --------
+    >>> xroms.to_s_rho('salt', xgrid)
     """
 
     # only change if not already on s_rho
     if "s_rho" not in var.dims:
-        var = grid.interp(
+        var = xgrid.interp(
             var, "Z", to="center", boundary=sboundary, fill_value=sfill_value
         )
     return var
 
 
-def to_s_w(var, grid, sboundary="extend", sfill_value=None):
+def to_s_w(var, xgrid, sboundary="extend", sfill_value=None):
     """Change var to w vertical grid.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray or ndarray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var
     sboundary: string, optional
         Passed to `grid` method calls; vertical boundary selection
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -948,14 +1087,14 @@ def to_s_w(var, grid, sboundary="extend", sfill_value=None):
     `to_grid` function wraps all of the `to_*` functions so one function
     can be used for all grid changes.
 
-    Example usage
-    -------------
-    >>> xroms.to_s_w('salt', grid)
+    Examples
+    --------
+    >>> xroms.to_s_w('salt', xgrid)
     """
 
     # only change if not already on s_w
     if "s_w" not in var.dims:
-        var = grid.interp(
+        var = xgrid.interp(
             var, "Z", to="outer", boundary=sboundary, fill_value=sfill_value
         )
     return var
@@ -963,7 +1102,7 @@ def to_s_w(var, grid, sboundary="extend", sfill_value=None):
 
 def to_grid(
     var,
-    grid,
+    xgrid,
     hcoord=None,
     scoord=None,
     hboundary="extend",
@@ -974,11 +1113,11 @@ def to_grid(
 ):
     """Implement grid changes.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray or ndarray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var
     hcoord: string, optional.
         Name of horizontal grid to interpolate output to.
@@ -990,6 +1129,7 @@ def to_grid(
         Passed to `grid` method calls; horizontal boundary selection
         for grid changes.
         From xgcm documentation:
+
         A flag indicating how to handle boundaries:
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
@@ -997,6 +1137,7 @@ def to_grid(
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     hfill_value: float, optional
         Passed to `grid` method calls; horizontal boundary selection
         fill value.
@@ -1007,12 +1148,14 @@ def to_grid(
         for grid changes.
         From xgcm documentation:
         A flag indicating how to handle boundaries:
+
         * None:  Do not apply any boundary conditions. Raise an error if
           boundary conditions are required for the operation.
         * 'fill':  Set values outside the array boundary to fill_value
           (i.e. a Neumann boundary condition.)
         * 'extend': Set values outside the array to the nearest array
           value. (i.e. a limited form of Dirichlet boundary condition.
+
     sfill_value: float, optional
         Passed to `grid` method calls; vertical boundary selection
         fill value.
@@ -1028,9 +1171,9 @@ def to_grid(
     -----
     If var is already on selected grid, nothing happens.
 
-    Example usage
-    -------------
-    >>> xroms.to_grid(ds.salt, grid, hcoord='rho', scoord='w')
+    Examples
+    --------
+    >>> xroms.to_grid(ds.salt, xgrid, hcoord='rho', scoord='w')
     """
 
     if attrs is None and isinstance(var, xr.DataArray):
@@ -1038,29 +1181,28 @@ def to_grid(
         attrs["name"] = var.name
         attrs["units"] = attrs.setdefault("units", "units")
         attrs["long_name"] = attrs.setdefault("long_name", "var")
-        attrs["grid"] = grid
 
     if hcoord is not None:
         assert hcoord in ["rho", "psi", "u", "v"], (
             'hcoord should be "rho" or "psi" or "u" or "v" but is "%s"' % hcoord
         )
         if hcoord == "rho":
-            var = to_rho(var, grid, hboundary=hboundary, hfill_value=hfill_value)
+            var = to_rho(var, xgrid, hboundary=hboundary, hfill_value=hfill_value)
         elif hcoord == "psi":
-            var = to_psi(var, grid, hboundary=hboundary, hfill_value=hfill_value)
+            var = to_psi(var, xgrid, hboundary=hboundary, hfill_value=hfill_value)
         elif hcoord == "u":
-            var = to_u(var, grid, hboundary=hboundary, hfill_value=hfill_value)
+            var = to_u(var, xgrid, hboundary=hboundary, hfill_value=hfill_value)
         elif hcoord == "v":
-            var = to_v(var, grid, hboundary=hboundary, hfill_value=hfill_value)
+            var = to_v(var, xgrid, hboundary=hboundary, hfill_value=hfill_value)
 
     if scoord is not None:
         assert scoord in ["s_rho", "rho", "s_w", "w"], (
             'scoord should be "s_rho", "rho", "s_w", or "w" but is "%s"' % scoord
         )
         if scoord in ["s_rho", "rho"]:
-            var = to_s_rho(var, grid, sboundary=sboundary, sfill_value=sfill_value)
+            var = to_s_rho(var, xgrid, sboundary=sboundary, sfill_value=sfill_value)
         elif scoord in ["s_w", "w"]:
-            var = to_s_w(var, grid, sboundary=sboundary, sfill_value=sfill_value)
+            var = to_s_w(var, xgrid, sboundary=sboundary, sfill_value=sfill_value)
 
     if isinstance(var, xr.DataArray):
         var.attrs = attrs
@@ -1069,14 +1211,14 @@ def to_grid(
     return var
 
 
-def gridmean(var, grid, dim):
+def gridmean(var, xgrid, dim):
     """Calculate mean accounting for variable spatial grid.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray or ndarray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var
     dim: str, list, tuple
         Spatial dimension names to average over. In the `xgcm`
@@ -1092,10 +1234,12 @@ def gridmean(var, grid, dim):
     If result is DataArray, long name attribute is modified to describe
     calculation.
 
-    Example usage
-    -------------
+    Examples
+    --------
+
     Note that the following two approaches are equivalent:
-    >>> app1 = xroms.gridmean(ds.u, ds.attrs['grid'], ('Y','X'))
+
+    >>> app1 = xroms.gridmean(ds.u, xgrid, ('Y','X'))
     >>> app2 = (ds.u*ds.dy_u*ds.dx_u).sum(('eta_rho','xi_u'))/(ds.dy_u*ds.dx_u).sum(('eta_rho','xi_u'))
     >>> np.allclose(app1, app2)
     """
@@ -1112,21 +1256,20 @@ def gridmean(var, grid, dim):
         attrs["long_name"] = (
             attrs.setdefault("long_name", "var") + ", grid mean over dim " + dimstr
         )
-        attrs["grid"] = grid
 
-    var = grid.average(var, dim)
+    var = xgrid.average(var, dim)
 
     return var
 
 
-def gridsum(var, grid, dim):
+def gridsum(var, xgrid, dim):
     """Calculate sum accounting for variable spatial grid.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray or ndarray
         Variable to operate on.
-    grid: xgcm.grid
+    xgrid: xgcm.grid
         Grid object associated with var
     dim: str, list, tuple
         Spatial dimension names to sum over. In the `xgcm`
@@ -1142,17 +1285,20 @@ def gridsum(var, grid, dim):
     If result is DataArray, long name attribute is modified to describe
     calculation.
 
-    Example usage
-    -------------
+    Examples
+    --------
+
     Note that the following two approaches are equivalent:
-    >>> app1 = xroms.gridsum(ds.u, ds.attrs['grid'], ('Z','X'))
+
+    >>> app1 = xroms.gridsum(ds.u, xgrid, ('Z','X'))
     >>> app2 = (ds.u*ds.dz_u * ds.dx_u).sum(('s_rho','xi_u'))
     >>> np.allclose(app1, app2)
     """
-
-    assert isinstance(
-        dim, (str, list, tuple)
-    ), 'dim must be a string of or a list or tuple containing "X", "Y", and/or "Z"'
+    # for now with xgcm bug only allow for one dim at a time
+    assert isinstance(dim, str), 'dim must be a string containing "X", "Y", and/or "Z"'
+    # assert isinstance(
+    #     dim, (str, list, tuple)
+    # ), 'dim must be a string of or a list or tuple containing "X", "Y", and/or "Z"'
 
     if isinstance(var, xr.DataArray):
         attrs = var.attrs.copy()
@@ -1162,9 +1308,15 @@ def gridsum(var, grid, dim):
         attrs["long_name"] = (
             attrs.setdefault("long_name", "var") + ", grid sum over dim " + dimstr
         )
-        attrs["grid"] = grid
 
-    var = grid.integrate(var, dim)
+    # if isinstance(dim, str):
+    #     var = grid_interp(xgrid, var, dim, which_xgcm_function="integrate")
+    # else:
+    #     for d in dim:
+    #         var = grid_interp(xgrid, var, d, which_xgcm_function="integrate")
+    #         import pdb; pdb.set_trace()
+    # var = xgrid.integrate(var, dim)
+    var = grid_interp(xgrid, var, dim, which_xgcm_function="integrate")
 
     return var
 
@@ -1175,6 +1327,7 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     This function has been possibly superseded by isoslice
     that wraps `xgcm.grid.transform` for the following reasons,
     but more testing is needed:
+
     * The implementation of `xgcm.grid.transform` is more robust
       than `xisoslice` which has extra code for in case iso_value
       is exactly in iso_array.
@@ -1186,8 +1339,8 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     This function calculates the value of projected_array on
     an isosurface in the array iso_array defined by iso_value.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     iso_array: DataArray, ndarray
         Array in which the isosurface is defined
     iso_value: float
@@ -1212,49 +1365,62 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     a message will be printed. iso_value is changed a tiny amount in this case to
     account for it being in iso_array exactly. The latter case is not deal with.
 
-    Example usage
-    -------------
+    Examples
+    --------
 
     Calculate lat-z slice of salinity along a constant longitude value (-91.5):
+
     >>> sl = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.salt, 'xi_rho')
 
     Calculate a lon-lat slice at a constant z value (-10):
+
     >>> sl = xroms.utilities.xisoslice(ds.z_rho, -10, ds.temp, 's_rho')
 
     Calculate a lon-lat slice at a constant z value (-10) but without zeta changing in time:
+
     (use ds.z_rho0 which is relative to mean sea level and does not vary in time)
     >>> sl = xroms.utilities.xisoslice(ds.z_rho0, -10, ds.temp, 's_rho')
 
     Calculate the depth of a specific isohaline (33):
+
     >>> sl = xroms.utilities.xisoslice(ds.salt, 33, ds.z_rho, 's_rho')
 
     Calculate the salt 10 meters above the seabed. Either do this on the vertical
     rho grid, or first change to the w grid and then use `xisoslice`. You may prefer
     to do the latter if there is a possibility that the distance above the seabed you are
     interpolating to (10 m) could be below the deepest rho grid depth.
+
     * on rho grid directly:
+
       >>> sl = xroms.xisoslice(ds.z_rho + ds.h, 10., ds.salt, 's_rho')
+
     * on w grid:
-      >>> var_w = xroms.to_s_w(ds.salt, ds.xroms.grid)
+
+      >>> var_w = xroms.to_s_w(ds.salt, ds.xroms.xgrid)
       >>> sl = xroms.xisoslice(ds.z_w + ds.h, 10., var_w, 's_w')
 
     In addition to calculating the slices themselves, you may need to calculate
     related coordinates for plotting. For example, to accompany the lat-z slice,
     you may want the following:
 
-        # calculate z values (s_rho)
+    calculate z values (s_rho)
+
     >>> slz = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.z_rho, 'xi_rho')
 
-        # calculate latitude values (eta_rho)
+    calculate latitude values (eta_rho)
+
     >>> sllat = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.lat_rho, 'xi_rho')
 
-        # assign these as coords to be used in plot
+    assign these as coords to be used in plot
+
     >>> sl = sl.assign_coords(z=slz, lat=sllat)
 
-        # points that should be masked
+    points that should be masked
+
     >>> slmask = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.mask_rho, 'xi_rho')
 
-        # drop masked values
+    drop masked values
+
     >>> sl = sl.where(slmask==1, drop=True)
     """
 
@@ -1316,19 +1482,23 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
 def subset(ds, X=None, Y=None):
     """Subset model output horizontally using isel, properly accounting for horizontal grids.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     ds: xarray Dataset
         Dataset of ROMS model output. Assumes that full regular grid setup is
         available and has been read in using xroms so that dimension names
         have been updated.
     X: slice, optional
         Slice in X dimension using form `X=slice(start, stop, step)`. For example,
+
         >>> X=slice(20,40,2)
+
         Indices are used for rho grid, and psi grid is reduced accordingly.
     Y: slice, optional
         Slice in Y dimension using form `Y=slice(start, stop, step)`. For example,
+
         >>> Y=slice(20,40,2)
+
         Indices are used for rho grid, and psi grid is reduced accordingly.
 
     Returns
@@ -1341,21 +1511,33 @@ def subset(ds, X=None, Y=None):
     -----
     X and Y must be slices, not single numbers.
 
-    Example usage
-    -------------
+    Examples
+    --------
+
     Subset only in Y direction:
+
     >>> xroms.subset(ds, Y=slice(50,100))
+
     Subset in X and Y:
+
     >>> xroms.subset(ds, X=slice(20,40), Y=slice(50,100))
     """
 
     if X is not None:
         assert isinstance(X, slice), "X must be a slice, e.g., slice(50,100)"
         ds = ds.isel(xi_rho=X, xi_u=slice(X.start, X.stop - 1))
+        if "xi_v" in ds.coords:
+            ds = ds.isel(xi_v=X)
+        if "xi_psi" in ds.coords:
+            ds = ds.isel(xi_psi=slice(X.start, X.stop - 1))
 
     if Y is not None:
         assert isinstance(Y, slice), "Y must be a slice, e.g., slice(50,100)"
         ds = ds.isel(eta_rho=Y, eta_v=slice(Y.start, Y.stop - 1))
+        if "eta_u" in ds.coords:
+            ds = ds.isel(eta_u=Y)
+        if "eta_psi" in ds.coords:
+            ds = ds.isel(eta_psi=slice(Y.start, Y.stop - 1))
 
     return ds
 
@@ -1363,8 +1545,8 @@ def subset(ds, X=None, Y=None):
 def order(var):
     """Reorder var to typical dimensional ordering.
 
-    Inputs
-    ------
+    Parameters
+    ----------
     var: DataArray
         Variable to operate on.
 
@@ -1378,15 +1560,26 @@ def order(var):
     Do not consider previously-selected dimensions that are kept on as coordinates but
     cannot be transposed anymore. This is accomplished with `.reset_coords(drop=True)`.
 
-    Example usage
-    -------------
+    Examples
+    --------
+
     >>> xroms.order(var)
     """
 
+    # this looks at the dims on var directly which tends to be more accurate
+    # since the DataArray can have extra coordinates included (but dropping
+    # can drop too many variables).
     return var.cf.transpose(
         *[
             dim
             for dim in ["T", "Z", "Y", "X"]
-            if dim in var.reset_coords(drop=True).cf.axes
+            if dim in var.cf.axes and var.cf.axes[dim][0] in var.dims
         ]
     )
+    # return var.cf.transpose(
+    #     *[
+    #         dim
+    #         for dim in ["T", "Z", "Y", "X"]
+    #         if dim in var.reset_coords(drop=True).cf.axes
+    #     ]
+    # )

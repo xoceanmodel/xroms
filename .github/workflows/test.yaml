@@ -17,20 +17,22 @@ jobs:
       fail-fast: false
       matrix:
         os: ["macos-latest", "ubuntu-latest", "windows-latest"]
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.9", "3.10", "3.11"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Cache conda
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         env:
           # Increase this value to reset cache if ci/environment.yml has not changed
           CACHE_NUMBER: 0
         with:
           path: ~/conda_pkgs_dir
           key: ${{ runner.os }}-conda-${{ env.CACHE_NUMBER }}-${{ hashFiles('ci/environment-py${{ matrix.python-version }}.yml') }}
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
-          mamba-version: "*" # activate this to build with mamba.
+          # mamba-version: "*" # activate this to build with mamba.
+          python-version: ${{ matrix.python-version }}
+          miniforge-variant: Mambaforge
           channels: conda-forge, defaults # These need to be specified to use mamba
           channel-priority: true
           environment-file: ci/environment-py${{ matrix.python-version }}.yml
@@ -46,7 +48,7 @@ jobs:
         run: |
           pytest --cov=./ --cov-report=xml
       - name: Upload code coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml
           flags: unittests

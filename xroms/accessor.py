@@ -5,12 +5,46 @@ background where possible. No functions are available only here;
 this connects to functions in other files.
 """
 
+from typing import Optional, Tuple, Union
+
 import numpy as np
 import xarray as xr
 
-from xgcm import grid as xgrid
+from .derived import (
+    EKE,
+    KE,
+    convergence,
+    dudz,
+    dvdz,
+    ertel,
+    omega,
+    relative_vorticity,
+    speed,
+    uv_geostrophic,
+    vertical_shear,
+    w,
+)
+from .interp import interpll, isoslice
+from .roms_seawater import M2, N2, buoyancy, density, mld, potential_density
+from .utilities import (
+    argsel2d,
+    ddeta,
+    ddxi,
+    ddz,
+    gridmean,
+    gridsum,
+    order,
+    sel2d,
+    subset,
+    to_grid,
+)
+from .vector import rotate_vectors
 
-import xroms
+# import xroms
+from .xroms import roms_dataset
+
+
+# from xgcm import grid
 
 
 xr.set_options(keep_attrs=True)
@@ -29,10 +63,29 @@ class xromsDatasetAccessor:
         # extra for getting coordinates but changes variables
         self._ds = ds.copy(deep=True)
 
-        # if ds wasn't read in with an xroms load function, it probably doesn't have a grid object
-        if "grid" not in ds.attrs:
-            self.ds, grid = xroms.roms_dataset(self.ds)
-            self.grid = grid
+        # this might be slow!
+        self.xgrid
+
+        # self.ds, xgrid = xroms.roms_dataset(self.ds)
+
+    def set_grid(self, xgrid):
+        """If you already have a xgrid object and don't want to rerun
+
+        Or, you want to have more options in the xgrid setup, input it to the xroms accessor this way.
+
+        Examples
+        --------
+
+        >>> ds.xroms.set_grid(xgrid)
+        """
+        self._xgrid = xgrid
+
+    @property
+    def xgrid(self):
+        if not hasattr(self, "_xgrid"):
+            self.ds, xgrid = roms_dataset(self.ds)
+            self._xgrid = xgrid
+        return self._xgrid
 
     @property
     def speed(self):
@@ -46,13 +99,14 @@ class xromsDatasetAccessor:
 
         See `xroms.speed` for full docstring.
 
-        Example usage
-        -------------
+        Examples
+        --------
+
         >>> ds.xroms.speed
         """
 
         if "speed" not in self.ds:
-            var = xroms.speed(self.ds.u, self.ds.v, self.grid, hboundary="extend")
+            var = speed(self.ds.u, self.ds.v, self.xgrid, hboundary="extend")
             self.ds["speed"] = var
         return self.ds.speed
 
@@ -66,13 +120,14 @@ class xromsDatasetAccessor:
 
         See `xroms.KE` for full docstring.
 
-        Example usage
-        -------------
+        Examples
+        --------
+
         >>> ds.xroms.KE
         """
 
         if "KE" not in self.ds:
-            var = xroms.KE(self.ds.rho0, self.speed)
+            var = KE(self.ds.rho0, self.speed)
             self.ds["KE"] = var
         return self.ds.KE
 
@@ -86,16 +141,17 @@ class xromsDatasetAccessor:
 
         See `xroms.uv_geostrophic` for full docstring.
 
-        Example usage
-        -------------
+        Examples
+        --------
+
         >>> ds.xroms.ug
         """
 
         if "ug" not in self.ds:
-            ug = xroms.uv_geostrophic(
+            ug = uv_geostrophic(
                 self.ds.zeta,
                 self.ds.f,
-                self.grid,
+                self.xgrid,
                 hboundary="extend",
                 hfill_value=None,
                 which="xi",
@@ -113,22 +169,272 @@ class xromsDatasetAccessor:
 
         See `xroms.uv_geostrophic` for full docstring.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.vg
         """
 
         if "vg" not in self.ds:
-            vg = xroms.uv_geostrophic(
+            vg = uv_geostrophic(
                 self.ds.zeta,
                 self.ds.f,
-                self.grid,
+                self.xgrid,
                 hboundary="extend",
                 hfill_value=None,
                 which="eta",
             )
             self.ds["vg"] = vg
         return self.ds["vg"]
+
+    def _uv2eastnorth(self):
+        """Call the velocity rotation for accessor."""
+
+        east_attrs = {
+            "name": "east",
+            "standard_name": "eastward_sea_water_velocity",
+            "long_name": "u rotated to eastward axis",
+            "units": "m/s",
+        }
+        north_attrs = {
+            "name": "north",
+            "standard_name": "northward_sea_water_velocity",
+            "long_name": "v rotated to northward axis",
+            "units": "m/s",
+        }
+
+        east, north = rotate_vectors(
+            self.ds.u,
+            self.ds.v,
+            self.ds.angle,
+            isradians=True,
+            reference="xaxis",
+            xgrid=self.xgrid,
+            hcoord="rho",
+            attrs={"x": east_attrs, "y": north_attrs},
+        )
+        self.ds["east"] = east
+        self.ds["north"] = north
+
+    @property
+    def east(self):
+        """Rotate grid-aligned u velocity to be eastward.
+
+        Notes
+        -----
+        See `xroms.rotate_vectors` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.east
+        """
+
+        if "u_eastward" in self.ds:
+            self.ds["east"] = self.ds["u_eastward"]
+        elif "east" not in self.ds and "u_eastward" not in self.ds:
+            self._uv2eastnorth()
+        return self.ds["east"]
+
+    @property
+    def north(self):
+        """Rotate grid-aligned v velocity to be northward.
+
+        Notes
+        -----
+        See `xroms.rotate_vectors` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.north
+        """
+
+        if "v_northward" in self.ds:
+            self.ds["north"] = self.ds["v_northward"]
+        elif "north" not in self.ds and "v_northward" not in self.ds:
+            self._uv2eastnorth()
+        return self.ds["north"]
+
+    def _eastnorth2uv(self):
+        """Call the velocity rotation for accessor."""
+
+        u_attrs = {
+            "name": "u",
+            "standard_name": "sea_water_x_velocity",
+            "long_name": "u-momentum component",
+            "units": "m/s",
+        }
+        v_attrs = {
+            "name": "v",
+            "standard_name": "sea_water_y_velocity",
+            "long_name": "v-momentum component",
+            "units": "m/s",
+        }
+
+        u, v = rotate_vectors(
+            self.east,
+            self.north,
+            -self.ds.angle,
+            isradians=True,
+            reference="xaxis",
+            xgrid=self.xgrid,
+            hcoord="rho",
+            attrs={"x": u_attrs, "y": v_attrs},
+        )
+        self.ds["u"] = u
+        self.ds["v"] = v
+        self.ds["u"] = self.ds.xroms.to_grid(varname="u", hcoord="u")
+        self.ds["v"] = self.ds.xroms.to_grid(varname="v", hcoord="v")
+
+    @property
+    def u(self):
+        """Rotate eastward velocity to be grid-aligned u velocity
+
+        Notes
+        -----
+        See `xroms.rotate_vectors` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.u
+        """
+
+        if "u" not in self.ds:
+            self._eastnorth2uv()
+        return self.ds["u"]
+
+    @property
+    def v(self):
+        """Rotate northward velocity to be grid-aligned v velocity
+
+        Notes
+        -----
+        See `xroms.rotate_vectors` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.v
+        """
+
+        if "v" not in self.ds:
+            self._eastnorth2uv()
+        return self.ds["v"]
+
+    def _eastnorth_rotated(self, angle, include_vars_adcp: bool = False, **kwargs):
+        """Call the velocity rotation for accessor.
+
+        include_vars_adcp : bool
+            If True, include all variables that might be compared with ADCP data and ways to convert between: east_rotated, north_rotated, angle, east, north, grid_angle.
+
+        """
+
+        eastrot_attrs = {
+            "name": "eastrot",
+            "standard_name": "sea_water_x_velocity",
+            "long_name": "eastward velocity rotated by angle",
+            "units": "m/s",
+        }
+        northrot_attrs = {
+            "name": "northrot",
+            "standard_name": "sea_water_y_velocity",
+            "long_name": "northward velocity rotated by angle",
+            "units": "m/s",
+        }
+
+        eastrot, northrot = rotate_vectors(
+            self.east,
+            self.north,
+            angle,
+            isradians=kwargs.get("isradians", None),
+            reference=kwargs.get("reference", None),
+            xgrid=self.xgrid,
+            hcoord="rho",
+            attrs={"x": eastrot_attrs, "y": northrot_attrs},
+        )
+
+        if "name" in kwargs:
+            eastrot.name = kwargs["name"]["x"]
+            eastrot.attrs["name"] = kwargs["name"]["x"]
+            northrot.name = kwargs["name"]["y"]
+            northrot.attrs["name"] = kwargs["name"]["y"]
+
+        # add angle to long_name if just a number
+        if isinstance(angle, (int, float)):
+            eastrot.attrs["long_name"] += f" {angle}"
+            northrot.attrs["long_name"] += f" {angle}"
+
+        if include_vars_adcp:
+            ds_out = self.ds[["east", "north", "angle"]]
+            ds_out[eastrot.name] = eastrot
+            ds_out[northrot.name] = northrot
+            ds_out["rotation_angle"] = angle
+            return ds_out
+        else:
+            return eastrot, northrot
+
+    def east_rotated(
+        self, angle: Union[float, xr.DataArray], name: Optional[dict] = None, **kwargs
+    ):
+        """Rotate eastward velocity by angle.
+
+        Parameters
+        ----------
+        angle : float,xr.DataArray
+            Angle to rotate eastward, northward velocities by to get x component of rotated velocities.
+        name : str, optional
+            If input, will be used for output array name.
+        kwargs : optional
+            will be input to ``xroms.rotate_vectors()``.
+
+        Notes
+        -----
+        See `xroms.rotate_vectors()` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.east_rotated(angle, reference="compass", isradians=False, name="along_channel")
+        """
+
+        east_rotated, _ = self._eastnorth_rotated(angle, **kwargs)
+
+        if name is not None:
+            east_rotated.name = name
+            east_rotated.attrs["name"] = name
+
+        # add angle to long_name if just a number
+        if isinstance(angle, (int, float)):
+            east_rotated.attrs["long_name"] += f" {angle}"
+        return east_rotated
+
+    def north_rotated(
+        self, angle: Union[float, xr.DataArray], name: Optional[str] = None, **kwargs
+    ):
+        """Rotate northward velocity by angle.
+
+        Parameters
+        ----------
+        angle : float,xr.DataArray
+            Angle to rotate eastward, northward velocities by to get y component of rotated velocities.
+        name : str, optional
+            If input, will be used for output array name.
+        kwargs : optional
+            will be input to ``xroms.rotate_vectors()``.
+
+        Notes
+        -----
+        See `xroms.rotate_vectors()` for full docstring.
+
+        Examples
+        --------
+        >>> ds.xroms.north_rotated(angle, reference="compass", isradians=False, name="across_channel")
+        """
+
+        north_rotated, _ = self._eastnorth_rotated(angle, **kwargs)
+        if name is not None:
+            north_rotated.name = name
+            north_rotated.attrs["name"] = name
+        # add angle to long_name if just a number
+        if isinstance(angle, (int, float)):
+            north_rotated.attrs["long_name"] += f" {angle}"
+        return north_rotated
 
     @property
     def EKE(self):
@@ -141,13 +447,13 @@ class xromsDatasetAccessor:
 
         See `xroms.EKE` for full docstring.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.EKE
         """
 
         if "EKE" not in self.ds:
-            var = xroms.EKE(self.ug, self.vg, self.grid, hboundary="extend")
+            var = EKE(self.ug, self.vg, self.xgrid, hboundary="extend")
             self.ds["EKE"] = var
         return self.ds["EKE"]
 
@@ -162,13 +468,13 @@ class xromsDatasetAccessor:
         `sboundary` is set to 'extend'.
 
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.dudz
         """
 
         if "dudz" not in self.ds:
-            var = xroms.dudz(self.ds.u, self.grid, sboundary="extend")
+            var = dudz(self.ds.u, self.xgrid, sboundary="extend")
             self.ds["dudz"] = var
         return self.ds["dudz"]
 
@@ -183,13 +489,13 @@ class xromsDatasetAccessor:
         `sboundary` is set to 'extend'.
 
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.dvdz
         """
 
         if "dvdz" not in self.ds:
-            var = xroms.dvdz(self.ds.v, self.grid, sboundary="extend")
+            var = dvdz(self.ds.v, self.xgrid, sboundary="extend")
             self.ds["dvdz"] = var
         return self.ds["dvdz"]
 
@@ -203,15 +509,13 @@ class xromsDatasetAccessor:
 
         `hboundary` is set to 'extend'.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.vertical_shear
         """
 
         if "shear" not in self.ds:
-            var = xroms.vertical_shear(
-                self.dudz, self.dvdz, self.grid, hboundary="extend"
-            )
+            var = vertical_shear(self.dudz, self.dvdz, self.xgrid, hboundary="extend")
             self.ds["shear"] = var
         return self.ds["shear"]
 
@@ -225,17 +529,88 @@ class xromsDatasetAccessor:
 
         `hboundary` and `sboundary` both set to 'extend'.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.vort
         """
 
         if "vort" not in self.ds:
-            var = xroms.relative_vorticity(
-                self.ds.u, self.ds.v, self.grid, hboundary="extend", sboundary="extend"
+            var = relative_vorticity(
+                self.ds.u, self.ds.v, self.xgrid, hboundary="extend", sboundary="extend"
             )
             self.ds["vort"] = var
         return self.ds.vort
+
+    def find_horizontal_velocities(self):
+        vel_options = [("u", "v"), ("u_eastward", "v_northward"), ("east", "north")]
+        vel_use = None
+        for vel_option in vel_options:
+            if all([vel in self.ds for vel in vel_option]):
+                # if ([hasattr(self, vel) or vel in self.ds for vel in vel_option]).all():
+                vel_use = vel_option
+        if vel_use is None:
+            raise KeyError("cannot identify horizontal velocity variable names")
+        return vel_use
+
+    @property
+    def convergence(self):
+        """Calculate convergence, rho/rho grid.
+
+        Notes
+        -----
+        See `xroms.convergence` for full docstring.
+
+        `hboundary` and `sboundary` both set to 'extend'.
+
+        Examples
+        --------
+        >>> ds.xroms.convergence
+        """
+
+        if "convergence" not in self.ds:
+            # # find names of horizontal velocities, in case they are different
+            # # just need to be ortogonal.
+            # uname, vname = self.find_horizontal_velocities()
+            var = convergence(
+                self.u,
+                self.v,
+                self.xgrid,
+                hboundary="extend",
+                sboundary="extend",
+            )
+            self.ds["convergence"] = var
+        return self.ds.convergence
+
+    @property
+    def convergence_norm(self):
+        """Calculate normalized surface convergence, rho/rho grid.
+
+        The surface currents are selected for this calculation, so return is `[T,Y,X]`.
+        The convergence is normalized by $f$. It is dimensionless.
+
+        Notes
+        -----
+        See `xroms.convergence` for full docstring.
+
+        `hboundary` and `sboundary` both set to 'extend'.
+
+        Examples
+        --------
+        >>> ds.xroms.convergence_norm
+        """
+
+        if "convergence_norm" not in self.ds:
+            var = self.convergence
+            self.ds["convergence_norm"] = var.cf.isel(Z=-1) / self.ds.f
+            self.ds["convergence_norm"].name = "convergence_norm"
+            attrs = {
+                "name": "convergence_norm",
+                "long_name": "normalized surface horizontal convergence",
+                "units": "",
+            }
+            self.ds["convergence_norm"].attrs = attrs
+
+        return self.ds.convergence_norm
 
     @property
     def ertel(self):
@@ -247,18 +622,18 @@ class xromsDatasetAccessor:
 
         `hboundary` and `sboundary` both set to 'extend'.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.ertel
         """
 
         if "ertel" not in self.ds:
-            var = xroms.ertel(
+            var = ertel(
                 self.buoyancy,
                 self.ds.u,
                 self.ds.v,
                 self.ds.f,
-                self.grid,
+                self.xgrid,
                 hcoord="rho",
                 scoord="s_rho",
                 hboundary="extend",
@@ -272,32 +647,32 @@ class xromsDatasetAccessor:
     @property
     def w(self):
         """Calculate vertical velocity on [horizontal]/[vertical] grids.
-        VRX
+
         Notes
         -----
         See `xroms.w` for full docstring.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.w
         """
 
-        return xroms.w(self.ds.u, self.ds.v)
+        return w(self.ds.u, self.ds.v)
 
     @property
     def omega(self):
         """Calculate s-grid vertical velocity on [horizontal]/[vertical] grids.
-        VRX
+
         Notes
         -----
         See `xroms.omega` for full docstring.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.omega
         """
 
-        return xroms.omega(self.ds.u, self.ds.v)
+        return omega(self.ds.u, self.ds.v)
 
     @property
     def rho(self):
@@ -307,13 +682,13 @@ class xromsDatasetAccessor:
         -----
         See `xroms.density` for full docstring.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.rho
         """
 
         if "rho" not in self.ds:
-            var = xroms.density(self.ds.temp, self.ds.salt, self.ds.z_rho)
+            var = density(self.ds.temp, self.ds.salt, self.ds.z_rho)
             self.ds["rho"] = var
 
         return self.ds.rho
@@ -326,13 +701,13 @@ class xromsDatasetAccessor:
         -----
         See `xroms.potential_density` for full docstring.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.sig0
         """
 
         if "sig0" not in self.ds:
-            var = xroms.potential_density(self.ds.temp, self.ds.salt, 0)
+            var = potential_density(self.ds.temp, self.ds.salt, 0)
             self.ds["sig0"] = var
         return self.ds.sig0
 
@@ -344,13 +719,13 @@ class xromsDatasetAccessor:
         -----
         See `xroms.buoyancy` for full docstring.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.buoyancy
         """
 
         if "buoyancy" not in self.ds:
-            var = xroms.buoyancy(self.sig0, self.ds.rho0)
+            var = buoyancy(self.sig0, self.ds.rho0)
             self.ds["buoyancy"] = var
         return self.ds.buoyancy
 
@@ -364,14 +739,14 @@ class xromsDatasetAccessor:
 
         `sboundary` set to 'fill' with `sfill_value=np.nan`.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.N2
         """
 
         if "N2" not in self.ds:
-            var = xroms.N2(
-                self.rho, self.grid, self.ds.rho0, sboundary="fill", sfill_value=np.nan
+            var = N2(
+                self.rho, self.xgrid, self.ds.rho0, sboundary="fill", sfill_value=np.nan
             )
             self.ds["N2"] = var
         return self.ds.N2
@@ -386,15 +761,15 @@ class xromsDatasetAccessor:
 
         `hboundary` set to 'extend' and `sboundary='fill'` with `sfill_value=np.nan`.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.M2
         """
 
         if "M2" not in self.ds:
-            var = xroms.M2(
+            var = M2(
                 self.rho,
-                self.grid,
+                self.xgrid,
                 self.ds.rho0,
                 hboundary="extend",
                 sboundary="fill",
@@ -415,12 +790,12 @@ class xromsDatasetAccessor:
         -----
         See `xroms.mld` for full docstring.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.mld(thresh=0.03).isel(ocean_time=0).plot(vmin=-20, vmax=0)
         """
 
-        return xroms.mld(self.sig0, self.ds.h, self.ds.mask_rho, thresh=thresh)
+        return mld(self.sig0, self.xgrid, self.ds.h, self.ds.mask_rho, thresh=thresh)
 
     def ddxi(
         self,
@@ -435,8 +810,8 @@ class xromsDatasetAccessor:
     ):
         """Calculate d/dxi for a variable.
 
-        Inputs
-        ------
+        Parameters
+        ----------
         varname: str
             Name of variable in Dataset to operate on.
         hcoord: string, optional.
@@ -500,8 +875,8 @@ class xromsDatasetAccessor:
 
         This will alter the number of points in the xi and s dimensions.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.ddxi('salt')
         """
 
@@ -509,9 +884,9 @@ class xromsDatasetAccessor:
             varname, str
         ), "varname should be a string of the name of a variable stored in the Dataset"
         assert varname in self.ds, 'variable called "varname" must be in Dataset'
-        var = xroms.ddxi(
+        var = ddxi(
             self.ds[varname],
-            self.grid,
+            self.xgrid,
             attrs=attrs,
             hcoord=hcoord,
             scoord=scoord,
@@ -537,8 +912,8 @@ class xromsDatasetAccessor:
     ):
         """Calculate d/deta for a variable.
 
-        Inputs
-        ------
+        Parameters
+        ----------
         varname: str
             Name of variable in Dataset to operate on.
         hcoord: string, optional.
@@ -602,8 +977,8 @@ class xromsDatasetAccessor:
 
         This will alter the number of points in the eta and s dimensions.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.ddeta('salt')
         """
 
@@ -611,9 +986,9 @@ class xromsDatasetAccessor:
             varname, str
         ), "varname should be a string of the name of a variable stored in the Dataset"
         assert varname in self.ds, 'variable called "varname" must be in Dataset'
-        var = xroms.ddeta(
+        var = ddeta(
             self.ds[varname],
-            self.grid,
+            self.xgrid,
             hcoord=hcoord,
             scoord=scoord,
             hboundary=hboundary,
@@ -639,8 +1014,8 @@ class xromsDatasetAccessor:
     ):
         """Calculate d/dz for a variable.
 
-        Inputs
-        ------
+        Parameters
+        ----------
         varname: str
             Name of variable in Dataset to operate on.
         hcoord: string, optional.
@@ -696,8 +1071,8 @@ class xromsDatasetAccessor:
         -----
         This will alter the number of points in the s dimension.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.ddz('salt')
         """
 
@@ -705,9 +1080,9 @@ class xromsDatasetAccessor:
             varname, str
         ), "varname should be a string of the name of a variable stored in the Dataset"
         assert varname in self.ds, 'variable called "varname" must be in Dataset'
-        var = xroms.ddz(
+        var = ddz(
             self.ds[varname],
-            self.grid,
+            self.xgrid,
             hcoord=hcoord,
             scoord=scoord,
             hboundary=hboundary,
@@ -719,6 +1094,61 @@ class xromsDatasetAccessor:
 
         self._ds[var.name] = var
         return self._ds[var.name]
+
+    def zslice(self, varname, depths, z=None):
+        """Interpolate var to depths.
+
+        This wraps `xgcm` `transform` function for slice interpolation,
+        though `transform` has additional functionality.
+        See ``xroms.isoslice`` for full docs.
+
+        Parameters
+        ----------
+        depths: list, ndarray
+            Values to interpolate to (called iso_values in other functions).
+            Should be negative if
+            below mean sea level. If input as array, should be 1D.
+        z: DataArray, optional
+            Array that var is interpolated onto (e.g., z coordinates or
+            density). The "vertical" coordinate is selected by default.
+            Use this option if you want to interpolate with z depths constant in
+            time and input the appropriate z coordinate (e.g. z_rho0).
+
+        Returns
+        -------
+        DataArray of var interpolated to depths. Dimensionality will be the
+        same as var except with dim dimension of size of depths.
+
+        Notes
+        -----
+        var cannot have chunks in the dimension dim.
+
+        cf-xarray should still be usable after calling this function.
+
+        Examples
+        --------
+        To calculate temperature onto fixed depths:
+
+        >>> ds.temp.xroms.zslice(depths)
+
+        To calculate temperature onto fixed depths without considering time for z coord:
+
+        >>> ds.temp.xroms.zslice(depths, z=ds.temp.z_rho0)
+
+        """
+
+        da = self.ds[varname]
+
+        if z is None:
+            z = da.cf["vertical"]
+
+        return isoslice(
+            da,
+            depths,
+            self.xgrid,
+            iso_array=z,
+            axis="Z",
+        )
 
     def to_grid(
         self,
@@ -732,8 +1162,8 @@ class xromsDatasetAccessor:
     ):
         """Implement grid changes.
 
-        Inputs
-        ------
+        Parameters
+        ----------
         varname: str
             Name of variable in Dataset to operate on.
         hcoord: string, optional.
@@ -784,8 +1214,8 @@ class xromsDatasetAccessor:
         -----
         If var is already on selected grid, nothing happens.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.xroms.to_grid('salt', hcoord='rho', scoord='w')
         """
 
@@ -793,9 +1223,9 @@ class xromsDatasetAccessor:
             varname, str
         ), "varname should be a string of the name of a variable stored in the Dataset"
         assert varname in self.ds, 'variable called "varname" must be in Dataset'
-        var = xroms.to_grid(
+        var = to_grid(
             self.ds[varname],
-            self.grid,
+            self.xgrid,
             hcoord=hcoord,
             scoord=scoord,
             hboundary=hboundary,
@@ -810,8 +1240,8 @@ class xromsDatasetAccessor:
     def subset(self, X=None, Y=None):
         """Subset model output horizontally using isel, properly accounting for horizontal grids.
 
-        Inputs
-        ------
+        Parameters
+        ----------
         X: slice, optional
             Slice in X dimension using form `X=slice(start, stop, step)`. For example,
             >>> X=slice(20,40,2)
@@ -831,15 +1261,15 @@ class xromsDatasetAccessor:
         -----
         X and Y must be slices, not single numbers.
 
-        Example usage
-        -------------
+        Examples
+        --------
         Subset only in Y direction:
         >>> ds.xroms.subset(Y=slice(50,100))
         Subset in X and Y:
         >>> ds.xroms.subset(X=slice(20,40), Y=slice(50,100))
         """
 
-        return xroms.subset(self.ds, X=X, Y=Y)
+        return subset(self.ds, X=X, Y=Y)
 
 
 @xr.register_dataarray_accessor("xroms")
@@ -850,12 +1280,13 @@ class xromsDataArrayAccessor:
 
         self.da = da
 
-        # make copy of ds that I can use to stash DataArrays to
-        # retrieve coords without changing original ds.
-        self.ds = self.da.attrs["grid"]._ds.copy(deep=True)
+        # # make copy of ds that I can use to stash DataArrays to
+        # # retrieve coords without changing original ds.
+        # self.ds = self.da.attrs["grid"]._ds.copy(deep=True)
 
     def to_grid(
         self,
+        xgrid,
         hcoord=None,
         scoord=None,
         hboundary="extend",
@@ -865,8 +1296,10 @@ class xromsDataArrayAccessor:
     ):
         """Implement grid changes.
 
-        Inputs
-        ------
+        Parameters
+        ----------
+        xgrid:
+            xgcm grid
         hcoord: string, optional.
             Name of horizontal grid to interpolate output to.
             Options are 'rho', 'psi', 'u', 'v'.
@@ -915,14 +1348,18 @@ class xromsDataArrayAccessor:
         -----
         If var is already on selected grid, nothing happens.
 
-        Example usage
-        -------------
-        >>> ds.salt.xroms.to_grid(hcoord='rho', scoord='w')
+        Examples
+        --------
+        >>> ds.salt.xroms.to_grid(xgrid, hcoord='rho', scoord='w')
         """
+
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.to_grid(
             self.da,
-            self.da.attrs["grid"],
+            xgrid,
             hcoord=hcoord,
             scoord=scoord,
             hboundary=hboundary,
@@ -935,6 +1372,7 @@ class xromsDataArrayAccessor:
 
     def ddz(
         self,
+        xgrid,
         hcoord=None,
         scoord=None,
         hboundary="extend",
@@ -945,6 +1383,10 @@ class xromsDataArrayAccessor:
     ):
         """Calculate d/dz for a variable.
 
+        Parameters
+        ----------
+        xgrid
+            xgcm grid
         hcoord: string, optional.
             Name of horizontal grid to interpolate output to.
             Options are 'rho', 'psi', 'u', 'v'.
@@ -998,14 +1440,18 @@ class xromsDataArrayAccessor:
         -----
         This will alter the number of points in the s dimension.
 
-        Example usage
-        -------------
-        >>> ds.salt.xroms.ddz()
+        Examples
+        --------
+        >>> ds.salt.xroms.ddz(xgrid)
         """
+
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.ddz(
             self.da,
-            self.da.attrs["grid"],
+            xgrid,
             hcoord=hcoord,
             scoord=scoord,
             hboundary=hboundary,
@@ -1019,6 +1465,7 @@ class xromsDataArrayAccessor:
 
     def ddxi(
         self,
+        xgrid,
         hcoord=None,
         scoord=None,
         hboundary="extend",
@@ -1029,8 +1476,10 @@ class xromsDataArrayAccessor:
     ):
         """Calculate d/dxi for variable.
 
-        Inputs
-        ------
+        Parameters
+        ----------
+        xgrid
+            xgcm grid
         hcoord: string, optional.
             Name of horizontal grid to interpolate output to.
             Options are 'rho', 'psi', 'u', 'v'.
@@ -1092,14 +1541,18 @@ class xromsDataArrayAccessor:
 
         This will alter the number of points in the xi and s dimensions.
 
-        Example usage
-        -------------
-        >>> ds.salt.xroms.ddxi()
+        Examples
+        --------
+        >>> ds.salt.xroms.ddxi(xgrid)
         """
+
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.ddxi(
             self.da,
-            self.da.attrs["grid"],
+            xgrid,
             attrs=attrs,
             hcoord=hcoord,
             scoord=scoord,
@@ -1113,6 +1566,7 @@ class xromsDataArrayAccessor:
 
     def ddeta(
         self,
+        xgrid,
         hcoord=None,
         scoord=None,
         hboundary="extend",
@@ -1123,8 +1577,10 @@ class xromsDataArrayAccessor:
     ):
         """Calculate d/deta for a variable.
 
-        Inputs
-        ------
+        Parameters
+        ----------
+        xgrid
+            xgcm grid
         hcoord: string, optional.
             Name of horizontal grid to interpolate output to.
             Options are 'rho', 'psi', 'u', 'v'.
@@ -1186,14 +1642,18 @@ class xromsDataArrayAccessor:
 
         This will alter the number of points in the eta and s dimensions.
 
-        Example usage
-        -------------
-        >>> ds.salt.xroms.ddeta()
+        Examples
+        --------
+        >>> ds.salt.xroms.ddeta(xgrid)
         """
+
+        raise KeyError(
+            "Other coordinates are not available on DataArray, so this transformation is only possible on Dataset."
+        )
 
         var = xroms.ddeta(
             self.da,
-            self.da.attrs["grid"],
+            xgrid,
             attrs=attrs,
             hcoord=hcoord,
             scoord=scoord,
@@ -1208,8 +1668,8 @@ class xromsDataArrayAccessor:
     def argsel2d(self, lon0, lat0):
         """Find the indices of coordinate pair closest to another point.
 
-        Inputs
-        ------
+        Parameters
+        ----------
         lon0: float, int
             Longitude of comparison point.
         lat0: float, int
@@ -1225,20 +1685,18 @@ class xromsDataArrayAccessor:
         longitudes and latitudes as point coordinates. Uses cartopy function
         `Geodesic`: https://scitools.org.uk/cartopy/docs/latest/cartopy/geodesic.html
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.temp.xroms.argsel2d(-96, 27)
         """
 
-        return xroms.argsel2d(
-            self.da.cf["longitude"], self.da.cf["latitude"], lon0, lat0
-        )
+        return argsel2d(self.da.cf["longitude"], self.da.cf["latitude"], lon0, lat0)
 
     def sel2d(self, lon0, lat0):
         """Find the value of the var at closest location to lon0,lat0.
 
-        Inputs
-        ------
+        Parameters
+        ----------
         lon0: float, int
             Longitude of comparison point.
         lat0: float, int
@@ -1256,20 +1714,22 @@ class xromsDataArrayAccessor:
 
         This wraps `argsel2d`.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.temp.xroms.sel2d(-96, 27)
         """
 
-        return xroms.sel2d(
+        return sel2d(
             self.da, self.da.cf["longitude"], self.da.cf["latitude"], lon0, lat0
         )
 
-    def gridmean(self, dim):
+    def gridmean(self, xgrid, dim):
         """Calculate mean accounting for variable spatial grid.
 
-        Inputs
-        ------
+        Parameters
+        ----------
+        xgrid
+            xgcm grid
         dim: str, list, tuple
             Spatial dimension names to average over. In the `xgcm`
             convention, the allowable names are 'Z', 'Y', or 'X'.
@@ -1284,21 +1744,23 @@ class xromsDataArrayAccessor:
         If result is DataArray, long name attribute is modified to describe
         calculation.
 
-        Example usage
-        -------------
+        Examples
+        --------
         Note that the following two approaches are equivalent:
-        >>> app1 = ds.u.xroms.gridmean(('Y','X'))
+        >>> app1 = ds.u.xroms.gridmean(xgrid, ('Y','X'))
         >>> app2 = (ds.u*ds.dy_u*ds.dx_u).sum(('eta_rho','xi_u'))/(ds.dy_u*ds.dx_u).sum(('eta_rho','xi_u'))
         >>> np.allclose(app1, app2)
         """
 
-        return xroms.gridmean(self.da, self.da.attrs["grid"], dim)
+        return gridmean(self.da, xgrid, dim)
 
-    def gridsum(self, dim):
+    def gridsum(self, xgrid, dim):
         """Calculate sum accounting for variable spatial grid.
 
-        Inputs
-        ------
+        Parameters
+        ----------
+        xgrid
+            xgcm grid
         dim: str, list, tuple
             Spatial dimension names to sum over. In the `xgcm`
             convention, the allowable names are 'Z', 'Y', or 'X'.
@@ -1313,23 +1775,23 @@ class xromsDataArrayAccessor:
         If result is DataArray, long name attribute is modified to describe
         calculation.
 
-        Example usage
-        -------------
+        Examples
+        --------
         Note that the following two approaches are equivalent:
-        >>> app1 = ds.u.xroms.gridsum(('Z','X'))
+        >>> app1 = ds.u.xroms.gridsum(xgrid, ('Z','X'))
         >>> app2 = (ds.u*ds.dz_u * ds.dx_u).sum(('s_rho','xi_u'))
         >>> np.allclose(app1, app2)
         """
 
-        return xroms.gridsum(self.da, self.da.attrs["grid"], dim)
+        return gridsum(self.da, xgrid, dim)
 
-    def interpll(self, lons, lats, which="pairs"):
+    def interpll(self, lons, lats, which="pairs", **kwargs):
         """Interpolate var to lons/lats positions.
 
         Wraps xESMF to perform proper horizontal interpolation on non-flat Earth.
 
-        Inputs
-        ------
+        Parameters
+        ----------
         lons: list, ndarray
             Longitudes to interpolate to. Will be flattened upon input.
         lats: list, ndarray
@@ -1340,6 +1802,8 @@ class xromsDataArrayAccessor:
               (in xESMF language, LocStream).
             * "grid": 2D array of points with 1 dimension the lons and
               the other dimension the lats.
+        **kwargs:
+            passed on to xESMF Regridder class
 
         Returns
         -------
@@ -1355,43 +1819,41 @@ class xromsDataArrayAccessor:
 
         cf-xarray should still be usable after calling this function.
 
-        Example usage
-        -------------
+        Examples
+        --------
         To return 1D pairs of points, in this case 3 points:
         >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='pairs')
         To return 2D pairs of points, in this case a 3x3 array of points:
         >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='grid')
         """
 
-        return xroms.interpll(self.da, lons, lats, which=which)
+        return interpll(self.da, lons, lats, which=which, **kwargs)
 
-    def isoslice(self, iso_values, iso_array=None, axis="Z"):
-        """Interpolate var to iso_values.
+    def zslice(self, xgrid, depths, z=None):
+        """Interpolate var to depths.
 
         This wraps `xgcm` `transform` function for slice interpolation,
         though `transform` has additional functionality.
+        See ``xroms.isoslice`` for full docs.
 
-        Inputs
-        ------
-        iso_values: list, ndarray
-            Values to interpolate to. If calculating var at fixed depths,
-            iso_values are the fixed depths, which should be negative if
+        Parameters
+        ----------
+        xgrid
+            xgcm grid
+        depths: list, ndarray
+            Values to interpolate to (called iso_values in other functions).
+            Should be negative if
             below mean sea level. If input as array, should be 1D.
-        iso_array: DataArray, optional
+        z: DataArray, optional
             Array that var is interpolated onto (e.g., z coordinates or
-            density). If calculating var on fixed depth slices, iso_array
-            contains the depths [m] associated with var. In that case and
-            if None, will use z coordinate attached to var. Also use this
-            option if you want to interpolate with z depths constant in
-            time and input the appropriate z coordinate.
-        dim: str, optional
-            Dimension over which to calculate isoslice. If calculating var
-            onto fixed depths, `dim='Z'`. Options are 'Z', 'Y', and 'X'.
+            density). The "vertical" coordinate is selected by default.
+            Use this option if you want to interpolate with z depths constant in
+            time and input the appropriate z coordinate (e.g. z_rho0).
 
         Returns
         -------
-        DataArray of var interpolated to iso_values. Dimensionality will be the
-        same as var except with dim dimension of size of iso_values.
+        DataArray of var interpolated to depths. Dimensionality will be the
+        same as var except with dim dimension of size of depths.
 
         Notes
         -----
@@ -1399,52 +1861,122 @@ class xromsDataArrayAccessor:
 
         cf-xarray should still be usable after calling this function.
 
-        Example usage
-        -------------
+        Examples
+        --------
         To calculate temperature onto fixed depths:
-        >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50))
 
-        To calculate temperature onto salinity:
-        >>> xroms.isoslice(ds.temp, np.arange(0, 36), iso_array=ds.salt, axis='Z')
+        >>> ds.temp.xroms.zslice(depths)
 
-        Calculate lat-z slice of salinity along a constant longitude value (-91.5):
-        >>> xroms.isoslice(ds.salt, -91.5, iso_array=ds.lon_rho, axis='X')
+        To calculate temperature onto fixed depths without considering time for z coord:
 
-        Calculate slice of salt at 28 deg latitude
-        >>> xroms.isoslice(ds.salt, 28, iso_array=ds.lat_rho, axis='Y')
+        >>> ds.temp.xroms.zslice(depths, z=ds.temp.z_rho0)
 
-        Interpolate temp to salinity values between 0 and 36 in the X direction
-        >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='X')
-
-        Interpolate temp to salinity values between 0 and 36 in the Z direction
-        >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='Z')
-
-        Calculate the depth of a specific isohaline (33):
-        >>> xroms.isoslice(ds.salt, 33, iso_array=ds.z_rho, axis='Z')
-
-        Calculate dye 10 meters above seabed. Either do this on the vertical
-        rho grid, or first change to the w grid and then use `isoslice`. You may prefer
-        to do the latter if there is a possibility that the distance above the seabed you are
-        interpolating to (10 m) could be below the deepest rho grid depth.
-        * on rho grid directly:
-        >>> height_from_seabed = ds.z_rho + ds.h
-        >>> height_from_seabed.name = 'z_rho'
-        >>> xroms.isoslice(ds.dye_01, 10, iso_array=height_from_seabed, axis='Z')
-        * on w grid:
-        >>> var_w = ds.dye_01.xroms.to_grid(scoord='w').chunk({'s_w': -1})
-        >>> ds['dye_01_w'] = var_w  # currently this is the easiest way to reattached coords xgcm variables
-        >>> height_from_seabed = ds.z_w + ds.h
-        >>> height_from_seabed.name = 'z_w'
-        >>> xroms.isoslice(ds['dye_01_w'], 10, iso_array=height_from_seabed, axis='Z')
         """
 
-        return xroms.isoslice(
+        if z is None:
+            z = self.da.cf["vertical"]
+
+        return isoslice(
             self.da,
-            iso_values,
-            grid=self.da.attrs["grid"],
-            iso_array=iso_array,
-            axis=axis,
+            depths,
+            xgrid,
+            iso_array=z,
+            axis="Z",
         )
+
+    # def isoslice(self, xgrid, iso_values, iso_array=None, axis="Z"):
+    #     """Interpolate var to iso_values.
+
+    #     This wraps `xgcm` `transform` function for slice interpolation,
+    #     though `transform` has additional functionality.
+
+    #     Parameters
+    #     ----------
+    #     xgrid
+    #         xgcm grid
+    #     iso_values: list, ndarray
+    #         Values to interpolate to. If calculating var at fixed depths,
+    #         iso_values are the fixed depths, which should be negative if
+    #         below mean sea level. If input as array, should be 1D.
+    #     iso_array: DataArray, optional
+    #         Array that var is interpolated onto (e.g., z coordinates or
+    #         density). If calculating var on fixed depth slices, iso_array
+    #         contains the depths [m] associated with var. In that case and
+    #         if None, will use z coordinate attached to var. Also use this
+    #         option if you want to interpolate with z depths constant in
+    #         time and input the appropriate z coordinate.
+    #     dim: str, optional
+    #         Dimension over which to calculate isoslice. If calculating var
+    #         onto fixed depths, `dim='Z'`. Options are 'Z', 'Y', and 'X'.
+
+    #     Returns
+    #     -------
+    #     DataArray of var interpolated to iso_values. Dimensionality will be the
+    #     same as var except with dim dimension of size of iso_values.
+
+    #     Notes
+    #     -----
+    #     var cannot have chunks in the dimension dim.
+
+    #     cf-xarray should still be usable after calling this function.
+
+    #     Examples
+    #     --------
+    #     To calculate temperature onto fixed depths:
+
+    #     >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50), xgrid)
+
+    #     To calculate temperature onto salinity:
+
+    #     >>> xroms.isoslice(ds.temp, np.arange(0, 36), xgrid, iso_array=ds.salt, axis='Z')
+
+    #     Calculate lat-z slice of salinity along a constant longitude value (-91.5):
+
+    #     >>> xroms.isoslice(ds.salt, -91.5, xgrid, iso_array=ds.lon_rho, axis='X')
+
+    #     Calculate slice of salt at 28 deg latitude
+
+    #     >>> xroms.isoslice(ds.salt, 28, xgrid, iso_array=ds.lat_rho, axis='Y')
+
+    #     Interpolate temp to salinity values between 0 and 36 in the X direction
+
+    #     >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), xgrid, iso_array=ds.salt, axis='X')
+
+    #     Interpolate temp to salinity values between 0 and 36 in the Z direction
+
+    #     >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), xgrid, iso_array=ds.salt, axis='Z')
+
+    #     Calculate the depth of a specific isohaline (33):
+
+    #     >>> xroms.isoslice(ds.salt, 33, xgrid, iso_array=ds.z_rho, axis='Z')
+
+    #     Calculate dye 10 meters above seabed. Either do this on the vertical
+    #     rho grid, or first change to the w grid and then use `isoslice`. You may prefer
+    #     to do the latter if there is a possibility that the distance above the seabed you are
+    #     interpolating to (10 m) could be below the deepest rho grid depth.
+
+    #     * on rho grid directly:
+
+    #     >>> height_from_seabed = ds.z_rho + ds.h
+    #     >>> height_from_seabed.name = 'z_rho'
+    #     >>> xroms.isoslice(ds.dye_01, 10, xgrid, iso_array=height_from_seabed, axis='Z')
+
+    #     * on w grid:
+
+    #     >>> var_w = ds.dye_01.xroms.to_grid(xgrid, scoord='w').chunk({'s_w': -1})
+    #     >>> ds['dye_01_w'] = var_w  # currently this is the easiest way to reattached coords xgcm variables
+    #     >>> height_from_seabed = ds.z_w + ds.h
+    #     >>> height_from_seabed.name = 'z_w'
+    #     >>> xroms.isoslice(ds['dye_01_w'], 10, xgrid, iso_array=height_from_seabed, axis='Z')
+    #     """
+
+    #     return isoslice(
+    #         self.da,
+    #         iso_values,
+    #         xgrid,
+    #         iso_array=iso_array,
+    #         axis=axis,
+    #     )
 
     def order(self):
         """Reorder self to typical dimensional ordering.
@@ -1459,9 +1991,9 @@ class xromsDataArrayAccessor:
         Do not consider previously-selected dimensions that are kept on as coordinates but
         cannot be transposed anymore. This is accomplished with `.reset_coords(drop=True)`.
 
-        Example usage
-        -------------
+        Examples
+        --------
         >>> ds.temp.xroms.order()
         """
 
-        return xroms.order(self.da)
+        return order(self.da)

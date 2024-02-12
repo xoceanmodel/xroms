@@ -1,0 +1,25 @@
+name: test_env_intake-axds
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  ############## These will have to be adjusted to your specific project
+  - cartopy
+  - cf_xarray
+  - dask
+  # # https://github.com/h5py/h5py/issues/1880
+  # # https://github.com/conda-forge/h5py-feedstock/issues/92
+  # - h5py < 3.2
+  - netcdf4
+  - numba >= 0.49
+  - numpy
+  - pooch
+  - xarray
+  # - xgcm >= 0.8.1
+  ##############
+  - pytest
+  - pip:
+    - xgcm >= 0.8.1
+    - codecov
+    - pytest-cov
+    - coverage[toml]

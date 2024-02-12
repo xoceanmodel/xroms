@@ -1,0 +1,47 @@
+name: xroms_docs
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+   - python=3.10
+   # If your docs code examples depend on other packages add them here
+   - cartopy
+   - cf_xarray
+   - cmocean
+   - dask
+   - esmf==8.4.1  # https://github.com/pangeo-data/xESMF/issues/246
+   - matplotlib-base
+   - netcdf4
+   - numpy <1.24  # https://github.com/numba/numba/issues/8615#issuecomment-1360792615
+   - numba >= 0.49 # required by xgcm
+   - pip
+   - pooch
+   - requests
+   - xarray
+   - xcmocean
+   - xgcm >= 0.8.1
+   - xesmf  # don't install if on windows
+   - xroms
+   # These are needed for the docs themselves
+   - furo
+   - jupytext
+   - numpydoc
+   - sphinx
+   - sphinx_rtd_theme
+   - ipython
+   - jinja2 #<3.1
+   - myst-nb
+   - nbconvert
+   - nbformat
+   - ipykernel
+   - pandoc
+   - recommonmark
+   - pip
+   - pip:
+    #  - xroms
+     - docrep<=0.2.7
+     - nbsphinx>=0.8.7
+     - jupyter_client
+     - sphinx_pangeo_theme
+     - sphinx-copybutton
+     - sphinxcontrib-srclinks

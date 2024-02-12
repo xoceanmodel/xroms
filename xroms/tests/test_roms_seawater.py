@@ -13,7 +13,7 @@ grid1 = xr.open_dataset("xroms/tests/input/grid.nc")
 ds = xr.open_dataset("xroms/tests/input/ocean_his_0001.nc")
 # combine the two:
 ds = ds.merge(grid1, overwrite_vars=True, compat="override")
-ds, grid = xroms.roms_dataset(ds)
+ds, grid = xroms.roms_dataset(ds, include_3D_metrics=True)
 # missing psi grid in variables
 ds = ds.assign_coords({"lon_psi": ds.lon_psi, "lat_psi": ds.lat_psi})
 
@@ -79,5 +79,6 @@ def test_mld():
     xsig0 = xroms.density(ds.temp, ds.salt, 0)
     thresh = xsig0[0, -2, 0, 0] - xsig0[0, -1, 0, 0]
     assert np.allclose(
-        xroms.mld(xsig0, ds.h, ds.mask_rho, thresh=thresh)[0, 0, 0], z_rho[-2]
+        xroms.mld(xsig0, grid, ds.h, ds.mask_rho, thresh=thresh)[0, 0, 0],
+        abs(z_rho[-2]),
     )
