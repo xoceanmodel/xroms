@@ -79,14 +79,15 @@ You can choose to install with conda the optional dependencies for full function
 
 and to install optional dependency `xcmocean`:
 
-    pip install git+git://github.com/pangeo-data/xcmocean
+
+    pip install git+https://github.com/pangeo-data/xcmocean
 
 Then choose one of the following to install `xroms` from GitHub:
 
 1. Clone `xroms` into a particular directory then install so that it is editable (`-e`)
 
     ```
-    git clone git@github.com:xoceanmodel/xroms.git
+    git clone https://github.com/xoceanmodel/xroms.git
     cd xroms
     pip install -e .
     ```
@@ -94,5 +95,5 @@ Then choose one of the following to install `xroms` from GitHub:
 1. Directly install `xroms` from github
 
     ```
-    pip install git+git://github.com/xoceanmodel/xroms
+    pip install git+https://github.com/xoceanmodel/xroms
     ```
