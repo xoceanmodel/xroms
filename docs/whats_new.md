@@ -1,6 +1,6 @@
 # What's New
 
-## v0.6.0 (February 9, 2023)
+## v0.6.0 (February 9, 2024)
 * fixed error in `derived.py`'s `uv_geostrophic` function after being pointed out by @ak11283
 * updated docs so mostly well-formatted and working
 
