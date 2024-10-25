@@ -59,8 +59,16 @@ def speed(u, v, xgrid, hboundary="extend", hfill_value=None):
     assert isinstance(u, xr.DataArray), "var must be DataArray"
     assert isinstance(v, xr.DataArray), "var must be DataArray"
 
-    u = to_rho(u, xgrid, hboundary=hboundary, hfill_value=hfill_value)
-    v = to_rho(v, xgrid, hboundary=hboundary, hfill_value=hfill_value)
+    # need to fill nans with zeros so that the masked locations in
+    # velocity fields are not fully brought forward into the rho mask
+    # but are instead interpolated over. By making them 0, they are
+    # calculated into the mask_rho positions by combining them with
+    # neighboring cells. If this wasn't done, the fact that they are masked
+    # would supersede the neighboring cells and they would be masked in mask_rho.
+    # this needs to be done anytime the velocities are moved from their native
+    # grids to the rho or other grids to preserve their locations around masked cells.
+    u = to_rho(u.fillna(0), xgrid, hboundary=hboundary, hfill_value=hfill_value)
+    v = to_rho(v.fillna(0), xgrid, hboundary=hboundary, hfill_value=hfill_value)
     var = np.sqrt(u**2 + v**2)
 
     var.attrs["name"] = "speed"
