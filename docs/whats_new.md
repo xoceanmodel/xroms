@@ -1,6 +1,6 @@
 # What's New
 
-## v0.6.1 (October 25, 2024)
+## v0.6.1 (October 28, 2024)
 * Correction in a few built-in calculations of u/v grid to rho-grid interpolations of u and v velocities (currently `speed` and `_uv2eastnorth`). In these cases, we need to fill nans with zeros so that the masked locations in the velocity fields are not fully brought forward into the rho mask but are instead interpolated over. By making them 0, they are calculated into the mask\_rho positions by combining them with neighboring cells. If this wasn't done, the fact that they are masked would supersede the neighboring cells and they would be masked in mask\_rho. This needs to be done anytime the velocities are moved from their native grids to the rho or other grids to preserve their locations around masked cells.
 
 ## v0.6.0 (February 9, 2024)
