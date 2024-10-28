@@ -202,9 +202,17 @@ class xromsDatasetAccessor:
             "units": "m/s",
         }
 
+        # need to fill nans with zeros so that the masked locations in
+        # velocity fields are not fully brought forward into the rho mask
+        # but are instead interpolated over. By making them 0, they are
+        # calculated into the mask_rho positions by combining them with
+        # neighboring cells. If this wasn't done, the fact that they are masked
+        # would supersede the neighboring cells and they would be masked in mask_rho.
+        # this needs to be done anytime the velocities are moved from their native
+        # grids to the rho or other grids to preserve their locations around masked cells.
         east, north = rotate_vectors(
-            self.ds.u,
-            self.ds.v,
+            self.ds.u.fillna(0),
+            self.ds.v.fillna(0),
             self.ds.angle,
             isradians=True,
             reference="xaxis",
@@ -252,6 +260,21 @@ class xromsDatasetAccessor:
         elif "north" not in self.ds and "v_northward" not in self.ds:
             self._uv2eastnorth()
         return self.ds["north"]
+
+    @property
+    def eastnorth(self):
+        """East/north combined and returned as a tuple.
+
+        Notes
+        -----
+        This is a convenience function to return the east and north velocities as a tuple.
+
+        Examples
+        --------
+        >>> ds.xroms.eastnorth
+        """
+
+        return self.east, self.north
 
     def _eastnorth2uv(self):
         """Call the velocity rotation for accessor."""
