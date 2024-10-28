@@ -9,7 +9,7 @@ dependencies:
    - cf_xarray
    - cmocean
    - dask
-   - esmf==8.4.1  # https://github.com/pangeo-data/xESMF/issues/246
+   - esmf #==8.4.1  # https://github.com/pangeo-data/xESMF/issues/246
    - esmpy=>8.5.0 # https://github.com/esmf-org/esmf/issues/140
    - matplotlib-base
    - netcdf4
