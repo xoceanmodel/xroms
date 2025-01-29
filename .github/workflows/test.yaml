@@ -32,7 +32,7 @@ jobs:
         with:
           # mamba-version: "*" # activate this to build with mamba.
           python-version: ${{ matrix.python-version }}
-          miniforge-variant: Mambaforge
+          miniforge-variant: Miniforge3
           channels: conda-forge, defaults # These need to be specified to use mamba
           channel-priority: true
           environment-file: ci/environment-py${{ matrix.python-version }}.yml
