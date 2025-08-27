@@ -457,7 +457,9 @@ def roms_dataset(
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        pm_psi = xgrid.interp(xgrid.interp(ds.pm, "Y"), "X")  # at psi points (eta_v, xi_u)
+        pm_psi = xgrid.interp(
+            xgrid.interp(ds.pm, "Y"), "X"
+        )  # at psi points (eta_v, xi_u)
     # ds["pm_psi"].attrs = {
     #     "long_name": "curvilinear coordinate metric in XI on PSI grid",
     #     "units": "meter-1",
@@ -466,7 +468,9 @@ def roms_dataset(
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        pn_psi = xgrid.interp(xgrid.interp(ds.pn, "X"), "Y")  # at psi points (eta_v, xi_u)
+        pn_psi = xgrid.interp(
+            xgrid.interp(ds.pn, "X"), "Y"
+        )  # at psi points (eta_v, xi_u)
     # ds["pn_psi"].attrs = {
     #     "long_name": "curvilinear coordinate metric in ETA on PSI grid",
     #     "units": "meter-1",

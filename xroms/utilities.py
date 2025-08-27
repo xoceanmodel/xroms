@@ -221,25 +221,33 @@ def hgrad(
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 dqdx = xgrid.interp(
-                    xgrid.derivative(q, "X", boundary=hboundary, fill_value=hfill_value),
+                    xgrid.derivative(
+                        q, "X", boundary=hboundary, fill_value=hfill_value
+                    ),
                     "Z",
                     boundary=sboundary,
                     fill_value=sfill_value,
                 )
                 dqdz = xgrid.interp(
-                    xgrid.derivative(q, "Z", boundary=sboundary, fill_value=sfill_value),
+                    xgrid.derivative(
+                        q, "Z", boundary=sboundary, fill_value=sfill_value
+                    ),
                     "X",
                     boundary=hboundary,
                     fill_value=hfill_value,
                 )
                 dzdx = xgrid.interp(
-                    xgrid.derivative(z, "X", boundary=hboundary, fill_value=hfill_value),
+                    xgrid.derivative(
+                        z, "X", boundary=hboundary, fill_value=hfill_value
+                    ),
                     "Z",
                     boundary=sboundary,
                     fill_value=sfill_value,
                 )
                 dzdz = xgrid.interp(
-                    xgrid.derivative(z, "Z", boundary=sboundary, fill_value=sfill_value),
+                    xgrid.derivative(
+                        z, "Z", boundary=sboundary, fill_value=sfill_value
+                    ),
                     "X",
                     boundary=hboundary,
                     fill_value=hfill_value,
@@ -250,7 +258,9 @@ def hgrad(
         else:  # 2D variables
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                dqdxi = xgrid.derivative(q, "X", boundary=hboundary, fill_value=hfill_value)
+                dqdxi = xgrid.derivative(
+                    q, "X", boundary=hboundary, fill_value=hfill_value
+                )
 
         if attrs is None and isinstance(q, xr.DataArray):
             attrs = q.attrs.copy()
@@ -277,25 +287,33 @@ def hgrad(
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 dqdy = xgrid.interp(
-                    xgrid.derivative(q, "Y", boundary=hboundary, fill_value=hfill_value),
+                    xgrid.derivative(
+                        q, "Y", boundary=hboundary, fill_value=hfill_value
+                    ),
                     "Z",
                     boundary=sboundary,
                     fill_value=sfill_value,
                 )
                 dqdz = xgrid.interp(
-                    xgrid.derivative(q, "Z", boundary=sboundary, fill_value=sfill_value),
+                    xgrid.derivative(
+                        q, "Z", boundary=sboundary, fill_value=sfill_value
+                    ),
                     "Y",
                     boundary=hboundary,
                     fill_value=hfill_value,
                 )
                 dzdy = xgrid.interp(
-                    xgrid.derivative(z, "Y", boundary=hboundary, fill_value=hfill_value),
+                    xgrid.derivative(
+                        z, "Y", boundary=hboundary, fill_value=hfill_value
+                    ),
                     "Z",
                     boundary=sboundary,
                     fill_value=sfill_value,
                 )
                 dzdz = xgrid.interp(
-                    xgrid.derivative(z, "Z", boundary=sboundary, fill_value=sfill_value),
+                    xgrid.derivative(
+                        z, "Z", boundary=sboundary, fill_value=sfill_value
+                    ),
                     "Y",
                     boundary=hboundary,
                     fill_value=hfill_value,
