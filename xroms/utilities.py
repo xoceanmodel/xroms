@@ -53,9 +53,11 @@ def grid_interp(xgrid, da, dim, which_xgcm_function="interp", **kwargs):
         chunk = list(da.chunks[i_chunk_dim])
 
         # to interpolate, first remove chunking to 1 chunk
-        new_coord = getattr(xgrid, which_xgcm_function)(
-            da.chunk({dim_name: -1}), dim, **kwargs
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            new_coord = getattr(xgrid, which_xgcm_function)(
+                da.chunk({dim_name: -1}), dim, **kwargs
+            )
         # new_coord = xgrid.interp(da.chunk({dim_name: -1}), dim, **kwargs)
 
         if (
@@ -87,7 +89,9 @@ def grid_interp(xgrid, da, dim, which_xgcm_function="interp", **kwargs):
             raise ValueError("chunks probably are not being dealt with properly")
 
     else:
-        new_coord = getattr(xgrid, which_xgcm_function)(da, dim, **kwargs)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            new_coord = getattr(xgrid, which_xgcm_function)(da, dim, **kwargs)
         # new_coord = xgrid.interp(da, dim, **kwargs)
         return new_coord
 
@@ -214,35 +218,49 @@ def hgrad(
     if which in ["both", "xi"]:
 
         if is3D:
-            dqdx = xgrid.interp(
-                xgrid.derivative(q, "X", boundary=hboundary, fill_value=hfill_value),
-                "Z",
-                boundary=sboundary,
-                fill_value=sfill_value,
-            )
-            dqdz = xgrid.interp(
-                xgrid.derivative(q, "Z", boundary=sboundary, fill_value=sfill_value),
-                "X",
-                boundary=hboundary,
-                fill_value=hfill_value,
-            )
-            dzdx = xgrid.interp(
-                xgrid.derivative(z, "X", boundary=hboundary, fill_value=hfill_value),
-                "Z",
-                boundary=sboundary,
-                fill_value=sfill_value,
-            )
-            dzdz = xgrid.interp(
-                xgrid.derivative(z, "Z", boundary=sboundary, fill_value=sfill_value),
-                "X",
-                boundary=hboundary,
-                fill_value=hfill_value,
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                dqdx = xgrid.interp(
+                    xgrid.derivative(
+                        q, "X", boundary=hboundary, fill_value=hfill_value
+                    ),
+                    "Z",
+                    boundary=sboundary,
+                    fill_value=sfill_value,
+                )
+                dqdz = xgrid.interp(
+                    xgrid.derivative(
+                        q, "Z", boundary=sboundary, fill_value=sfill_value
+                    ),
+                    "X",
+                    boundary=hboundary,
+                    fill_value=hfill_value,
+                )
+                dzdx = xgrid.interp(
+                    xgrid.derivative(
+                        z, "X", boundary=hboundary, fill_value=hfill_value
+                    ),
+                    "Z",
+                    boundary=sboundary,
+                    fill_value=sfill_value,
+                )
+                dzdz = xgrid.interp(
+                    xgrid.derivative(
+                        z, "Z", boundary=sboundary, fill_value=sfill_value
+                    ),
+                    "X",
+                    boundary=hboundary,
+                    fill_value=hfill_value,
+                )
 
             dqdxi = dqdx * dzdz - dqdz * dzdx
 
         else:  # 2D variables
-            dqdxi = xgrid.derivative(q, "X", boundary=hboundary, fill_value=hfill_value)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                dqdxi = xgrid.derivative(
+                    q, "X", boundary=hboundary, fill_value=hfill_value
+                )
 
         if attrs is None and isinstance(q, xr.DataArray):
             attrs = q.attrs.copy()
@@ -266,37 +284,49 @@ def hgrad(
     if which in ["both", "eta"]:
 
         if is3D:
-            dqdy = xgrid.interp(
-                xgrid.derivative(q, "Y", boundary=hboundary, fill_value=hfill_value),
-                "Z",
-                boundary=sboundary,
-                fill_value=sfill_value,
-            )
-            dqdz = xgrid.interp(
-                xgrid.derivative(q, "Z", boundary=sboundary, fill_value=sfill_value),
-                "Y",
-                boundary=hboundary,
-                fill_value=hfill_value,
-            )
-            dzdy = xgrid.interp(
-                xgrid.derivative(z, "Y", boundary=hboundary, fill_value=hfill_value),
-                "Z",
-                boundary=sboundary,
-                fill_value=sfill_value,
-            )
-            dzdz = xgrid.interp(
-                xgrid.derivative(z, "Z", boundary=sboundary, fill_value=sfill_value),
-                "Y",
-                boundary=hboundary,
-                fill_value=hfill_value,
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                dqdy = xgrid.interp(
+                    xgrid.derivative(
+                        q, "Y", boundary=hboundary, fill_value=hfill_value
+                    ),
+                    "Z",
+                    boundary=sboundary,
+                    fill_value=sfill_value,
+                )
+                dqdz = xgrid.interp(
+                    xgrid.derivative(
+                        q, "Z", boundary=sboundary, fill_value=sfill_value
+                    ),
+                    "Y",
+                    boundary=hboundary,
+                    fill_value=hfill_value,
+                )
+                dzdy = xgrid.interp(
+                    xgrid.derivative(
+                        z, "Y", boundary=hboundary, fill_value=hfill_value
+                    ),
+                    "Z",
+                    boundary=sboundary,
+                    fill_value=sfill_value,
+                )
+                dzdz = xgrid.interp(
+                    xgrid.derivative(
+                        z, "Z", boundary=sboundary, fill_value=sfill_value
+                    ),
+                    "Y",
+                    boundary=hboundary,
+                    fill_value=hfill_value,
+                )
 
             dqdeta = dqdy * dzdz - dqdz * dzdy
 
         else:  # 2D variables
-            dqdeta = xgrid.derivative(
-                q, "Y", boundary=hboundary, fill_value=hfill_value
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                dqdeta = xgrid.derivative(
+                    q, "Y", boundary=hboundary, fill_value=hfill_value
+                )
 
         if attrs is None and isinstance(q, xr.DataArray):
             attrs = q.attrs.copy()
@@ -639,7 +669,9 @@ def ddz(
             "long_name", "var"
         )
 
-    var = xgrid.derivative(var, "Z", boundary=sboundary, fill_value=sfill_value)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        var = xgrid.derivative(var, "Z", boundary=sboundary, fill_value=sfill_value)
     var = to_grid(
         var,
         xgrid,
@@ -1042,9 +1074,11 @@ def to_s_rho(var, xgrid, sboundary="extend", sfill_value=None):
 
     # only change if not already on s_rho
     if "s_rho" not in var.dims:
-        var = xgrid.interp(
-            var, "Z", to="center", boundary=sboundary, fill_value=sfill_value
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            var = xgrid.interp(
+                var, "Z", to="center", boundary=sboundary, fill_value=sfill_value
+            )
     return var
 
 
@@ -1094,9 +1128,11 @@ def to_s_w(var, xgrid, sboundary="extend", sfill_value=None):
 
     # only change if not already on s_w
     if "s_w" not in var.dims:
-        var = xgrid.interp(
-            var, "Z", to="outer", boundary=sboundary, fill_value=sfill_value
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            var = xgrid.interp(
+                var, "Z", to="outer", boundary=sboundary, fill_value=sfill_value
+            )
     return var
 
 
@@ -1257,7 +1293,9 @@ def gridmean(var, xgrid, dim):
             attrs.setdefault("long_name", "var") + ", grid mean over dim " + dimstr
         )
 
-    var = xgrid.average(var, dim)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        var = xgrid.average(var, dim)
 
     return var
 

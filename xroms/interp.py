@@ -261,7 +261,9 @@ def isoslice(var, iso_values, xgrid, iso_array=None, axis="Z"):
             key = "z"
 
     # perform interpolation
-    transformed = xgrid.transform(var, axis, iso_values, target_data=iso_array)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        transformed = xgrid.transform(var, axis, iso_values, target_data=iso_array)
 
     if key not in transformed.coords:
         transformed = transformed.assign_coords({key: iso_array})
@@ -287,9 +289,11 @@ def isoslice(var, iso_values, xgrid, iso_array=None, axis="Z"):
                 iso_array = iso_array.cf.isel(Z=0).drop_vars(
                     iso_array.cf["Z"].name, errors="ignore"
                 )
-            transformedlon = xgrid.transform(
-                var[lonkey], axis, iso_values, target_data=iso_array
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                transformedlon = xgrid.transform(
+                    var[lonkey], axis, iso_values, target_data=iso_array
+                )
             transformed = transformed.assign_coords({lonkey: transformedlon})
 
         transformed[lonkey].attrs["standard_name"] = "longitude"
@@ -308,9 +312,11 @@ def isoslice(var, iso_values, xgrid, iso_array=None, axis="Z"):
                 iso_array = iso_array.cf.isel(Z=0).drop_vars(
                     iso_array.cf["Z"].name, errors="ignore"
                 )
-            transformedlat = xgrid.transform(
-                var[latkey], axis, iso_values, target_data=iso_array
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                transformedlat = xgrid.transform(
+                    var[latkey], axis, iso_values, target_data=iso_array
+                )
             transformed = transformed.assign_coords({latkey: transformedlat})
 
         transformed[latkey].attrs["standard_name"] = "latitude"
@@ -319,9 +325,11 @@ def isoslice(var, iso_values, xgrid, iso_array=None, axis="Z"):
         zkey = var.cf["vertical"].name
 
         if zkey not in transformed.coords:
-            transformedZ = xgrid.transform(
-                var[zkey], axis, iso_values, target_data=iso_array
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                transformedZ = xgrid.transform(
+                    var[zkey], axis, iso_values, target_data=iso_array
+                )
             transformed = transformed.assign_coords({zkey: transformedZ})
 
         transformed[zkey].attrs["positive"] = "up"
