@@ -186,7 +186,9 @@ def roms_dataset(
             }
         )
 
-    xgrid = xgcm.Grid(ds, coords=coords, periodic=[])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        xgrid = xgcm.Grid(ds, coords=coords, periodic=[])
 
     if "Vtransform" in ds.variables.keys():
         Vtransform = ds.Vtransform
@@ -339,21 +341,27 @@ def roms_dataset(
 
         if include_Z0:
             ds.coords["z_rho0"] = order(z_rho0)
-            ds.coords["z_rho_u0"] = xgrid.interp(ds.z_rho0, "X")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds.coords["z_rho_u0"] = xgrid.interp(ds.z_rho0, "X")
             ds.coords["z_rho_u0"].attrs = {
                 "long_name": "depth of U-points on vertical RHO grid",
                 "field": "z_rho_u0, scalar",
                 "units": "m",
             }
 
-            ds.coords["z_rho_v0"] = xgrid.interp(ds.z_rho0, "Y")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds.coords["z_rho_v0"] = xgrid.interp(ds.z_rho0, "Y")
             ds.coords["z_rho_v0"].attrs = {
                 "long_name": "depth of V-points on vertical RHO grid",
                 "field": "z_rho_v0, scalar",
                 "units": "m",
             }
 
-            ds.coords["z_rho_psi0"] = xgrid.interp(ds.z_rho_u0, "Y")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds.coords["z_rho_psi0"] = xgrid.interp(ds.z_rho_u0, "Y")
             ds.coords["z_rho_psi0"].attrs = {
                 "long_name": "depth of PSI-points on vertical RHO grid",
                 "field": "z_rho_psi0, scalar",
@@ -361,21 +369,27 @@ def roms_dataset(
             }
 
             ds.coords["z_w0"] = order(z_w0)
-            ds.coords["z_w_u0"] = xgrid.interp(ds.z_w0, "X")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds.coords["z_w_u0"] = xgrid.interp(ds.z_w0, "X")
             ds.coords["z_w_u0"].attrs = {
                 "long_name": "depth of U-points on vertical W grid",
                 "field": "z_w_u0, scalar",
                 "units": "m",
             }
 
-            ds.coords["z_w_v0"] = xgrid.interp(ds.z_w0, "Y")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds.coords["z_w_v0"] = xgrid.interp(ds.z_w0, "Y")
             ds.coords["z_w_v0"].attrs = {
                 "long_name": "depth of V-points on vertical W grid",
                 "field": "z_w_v0, scalar",
                 "units": "m",
             }
 
-            ds.coords["z_w_psi0"] = xgrid.interp(ds.z_w_u0, "Y")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds.coords["z_w_psi0"] = xgrid.interp(ds.z_w_u0, "Y")
             ds.coords["z_w_psi0"].attrs = {
                 "long_name": "depth of PSI-points on vertical W grid",
                 "field": "z_w_psi0, scalar",
@@ -405,42 +419,54 @@ def roms_dataset(
 
     # just keep these local instead of saving to Dataset — doesn't look like they
     # are used in any functions outside of this function.
-    pm_v = xgrid.interp(ds.pm, "Y")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pm_v = xgrid.interp(ds.pm, "Y")
     # ds["pm_v"].attrs = {
     #     "long_name": "curvilinear coordinate metric in XI on V grid",
     #     "units": "meter-1",
     #     "field": "pm_v, scalar",
     # }
 
-    pn_u = xgrid.interp(ds.pn, "X")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pn_u = xgrid.interp(ds.pn, "X")
     # ds["pn_u"].attrs = {
     #     "long_name": "curvilinear coordinate metric in ETA on U grid",
     #     "units": "meter-1",
     #     "field": "pn_u, scalar",
     # }
 
-    pm_u = xgrid.interp(ds.pm, "X")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pm_u = xgrid.interp(ds.pm, "X")
     # ds["pm_u"].attrs = {
     #     "long_name": "curvilinear coordinate metric in XI on U grid",
     #     "units": "meter-1",
     #     "field": "pm_u, scalar",
     # }
 
-    pn_v = xgrid.interp(ds.pn, "Y")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pn_v = xgrid.interp(ds.pn, "Y")
     # ds["pn_v"].attrs = {
     #     "long_name": "curvilinear coordinate metric in ETA on V grid",
     #     "units": "meter-1",
     #     "field": "pn_v, scalar",
     # }
 
-    pm_psi = xgrid.interp(xgrid.interp(ds.pm, "Y"), "X")  # at psi points (eta_v, xi_u)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pm_psi = xgrid.interp(xgrid.interp(ds.pm, "Y"), "X")  # at psi points (eta_v, xi_u)
     # ds["pm_psi"].attrs = {
     #     "long_name": "curvilinear coordinate metric in XI on PSI grid",
     #     "units": "meter-1",
     #     "field": "pm_psi, scalar",
     # }
 
-    pn_psi = xgrid.interp(xgrid.interp(ds.pn, "X"), "Y")  # at psi points (eta_v, xi_u)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pn_psi = xgrid.interp(xgrid.interp(ds.pn, "X"), "Y")  # at psi points (eta_v, xi_u)
     # ds["pn_psi"].attrs = {
     #     "long_name": "curvilinear coordinate metric in ETA on PSI grid",
     #     "units": "meter-1",
@@ -504,7 +530,9 @@ def roms_dataset(
     }
 
     if ds["3d"] and include_3D_metrics:
-        ds["dz"] = xgrid.diff(ds.z_w.chunk({ds.z_w.cf["Z"].name: -1}), "Z")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ds["dz"] = xgrid.diff(ds.z_w.chunk({ds.z_w.cf["Z"].name: -1}), "Z")
         ds["dz"].attrs = {
             "long_name": "vertical layer thickness on vertical RHO grid",
             "time": "ocean_time",
@@ -512,7 +540,9 @@ def roms_dataset(
             "units": "m",
         }
 
-        ds["dz_w"] = xgrid.diff(ds.z_rho, "Z", boundary="fill")
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            ds["dz_w"] = xgrid.diff(ds.z_rho, "Z", boundary="fill")
         ds["dz_w"].attrs = {
             "long_name": "vertical layer thickness on vertical W grid",
             "time": "ocean_time",
@@ -577,56 +607,72 @@ def roms_dataset(
         if include_Z0:
 
             # also include z coordinates with mean sea level (constant over time)
-            ds["dz0"] = xgrid.diff(ds.z_w0, "Z")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds["dz0"] = xgrid.diff(ds.z_w0, "Z")
             ds["dz0"].attrs = {
                 "long_name": "vertical layer thickness on vertical RHO grid",
                 "field": "dz0, scalar",
                 "units": "m",
             }
 
-            ds["dz_w0"] = xgrid.diff(ds.z_rho0, "Z", boundary="fill")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds["dz_w0"] = xgrid.diff(ds.z_rho0, "Z", boundary="fill")
             ds["dz_w0"].attrs = {
                 "long_name": "vertical layer thickness on vertical W grid",
                 "field": "dz_w0, scalar",
                 "units": "m",
             }
 
-            ds["dz_u0"] = xgrid.interp(ds.dz0, "X")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds["dz_u0"] = xgrid.interp(ds.dz0, "X")
             ds["dz_u0"].attrs = {
                 "long_name": "vertical layer thickness on vertical RHO grid on U grid",
                 "field": "dz_u0, scalar",
                 "units": "m",
             }
 
-            ds["dz_w_u0"] = xgrid.interp(ds.dz_w0, "X")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds["dz_w_u0"] = xgrid.interp(ds.dz_w0, "X")
             ds["dz_w_u0"].attrs = {
                 "long_name": "vertical layer thickness on vertical W grid on U grid",
                 "field": "dz_w_u0, scalar",
                 "units": "m",
             }
 
-            ds["dz_v0"] = xgrid.interp(ds.dz0, "Y")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds["dz_v0"] = xgrid.interp(ds.dz0, "Y")
             ds["dz_v0"].attrs = {
                 "long_name": "vertical layer thickness on vertical RHO grid on V grid",
                 "field": "dz_v0, scalar",
                 "units": "m",
             }
 
-            ds["dz_w_v0"] = xgrid.interp(ds.dz_w0, "Y")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds["dz_w_v0"] = xgrid.interp(ds.dz_w0, "Y")
             ds["dz_w_v0"].attrs = {
                 "long_name": "vertical layer thickness on vertical W grid on V grid",
                 "field": "dz_w_v0, scalar",
                 "units": "m",
             }
 
-            ds["dz_psi0"] = xgrid.interp(ds.dz_v0, "X")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds["dz_psi0"] = xgrid.interp(ds.dz_v0, "X")
             ds["dz_psi0"].attrs = {
                 "long_name": "vertical layer thickness on vertical RHO grid on PSI grid",
                 "field": "dz_psi0, scalar",
                 "units": "m",
             }
 
-            ds["dz_w_psi0"] = xgrid.interp(ds.dz_w_v0, "X")
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                ds["dz_w_psi0"] = xgrid.interp(ds.dz_w_v0, "X")
             ds["dz_w_psi0"].attrs = {
                 "long_name": "vertical layer thickness on vertical W grid on PSI grid",
                 "field": "dz_w_psi0, scalar",
@@ -792,7 +838,9 @@ def roms_dataset(
             ("X", "Y"): ["dA"],  # Areas
         }
 
-    xgrid = xgcm.Grid(ds, coords=coords, metrics=metrics, periodic=[])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        xgrid = xgcm.Grid(ds, coords=coords, metrics=metrics, periodic=[])
 
     # #     ds.attrs['grid'] = grid  # causes recursion error
     # # also put grid into every variable with at least 2D
