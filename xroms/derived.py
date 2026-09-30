@@ -504,8 +504,9 @@ def relative_vorticity(
     sfill_value: float, optional
         Edge value used with ``sboundary="fill"``. Default NaN.
     along_s: bool, optional
-        For single selected s-levels only: accept derivatives along the s-surface
-        instead of at constant depth (see `xroms.ddxi`). Default False.
+        For single selected s-levels (or a one-level vertical dim): accept
+        derivatives along the s-surface instead of at constant depth (see
+        `xroms.ddxi`). Default False.
 
     Returns
     -------
@@ -593,8 +594,9 @@ def convergence(
     sfill_value: float, optional
         Edge value used with ``sboundary="fill"``. Default NaN.
     along_s: bool, optional
-        For single selected s-levels only: accept derivatives along the s-surface
-        instead of at constant depth (see `xroms.ddxi`). Default False.
+        For single selected s-levels (or a one-level vertical dim): accept
+        derivatives along the s-surface instead of at constant depth (see
+        `xroms.ddxi`). Default False.
 
     Returns
     -------

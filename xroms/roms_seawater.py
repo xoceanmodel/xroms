@@ -383,8 +383,9 @@ def M2(
     sfill_value : float, optional
         Value used at the vertical edges with ``sboundary="fill"``.
     along_s : bool, optional
-        For a single selected s-level only: accept derivatives along the
-        s-surface instead of at constant depth (see :func:`xroms.ddxi`).
+        For a single selected s-level (or a one-level vertical dim): accept
+        derivatives along the s-surface instead of at constant depth (see
+        :func:`xroms.ddxi`).
 
     Returns
     -------

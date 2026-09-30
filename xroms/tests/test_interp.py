@@ -623,3 +623,9 @@ class TestInterpll:
     def test_cartesian_output_without_lonlat_is_explained(self, remora):
         with pytest.raises(ValueError, match="lon_rho/lat_rho"):
             xroms.interpll(C.canonicalize(remora).temp, [1.0], [2.0])
+
+
+def test_linear_slicing_needs_two_levels():
+    ds = merged("rutgers", N=1)
+    with pytest.raises(ValueError, match="at least 2 points"):
+        xroms.zslice(ds.temp, [-5.0], ds)

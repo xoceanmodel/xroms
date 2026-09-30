@@ -174,6 +174,11 @@ def isoslice(var, iso_values, iso_array, *, dim=None, new_dim=None, method="line
         iso_values = canonicalize(iso_values)
     dim = _resolve_dim(var, dim)
     _check_pairing(var, iso_values, iso_array, dim)
+    if method == "linear" and var.sizes[dim] < 2:
+        raise ValueError(
+            f"linear interpolation along {dim!r} needs at least 2 points, but {var.name!r} has "
+            f"{var.sizes[dim]}; slice the field before selecting a single level, or use method='nearest'."
+        )
     new_dim = new_dim or (iso_array.name if isinstance(iso_array.name, str) and iso_array.name not in var.dims else "iso")
     if method == "linear":
         out = _xgcm.transform(var, iso_values, iso_array, dim, new_dim=new_dim, mask_edges=mask_edges)

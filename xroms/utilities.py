@@ -10,9 +10,11 @@ the input's vertical levels; ``ddz`` moves the vertical position
 (``s_rho`` <-> ``s_w``). Pass ``hcoord``/``scoord`` to get the result elsewhere.
 
 Boundaries: ``"extend"`` (default) gives one-sided values at the edges, taken
-from the data; ``"fill"`` puts ``fill_value`` there (NaN by default; 0 imposes a
-zero-gradient condition). Nothing is ever padded with the field's own edge
-value before differencing, which is what produced spurious zeros before v1.0.
+from the data (the nearest computed derivative, not the nearest difference: grid
+spacing varies from point to point); ``"fill"`` puts ``fill_value`` there (NaN by
+default; 0 imposes a zero-gradient condition). Nothing is ever padded with the
+field's own edge value before differencing, which is what produced spurious zeros
+before v1.0.
 """
 
 import numpy as np
@@ -26,6 +28,7 @@ from .vertical import z_like
 
 
 HDIMS = {"X": ("xi_rho", "xi_u"), "Y": ("eta_rho", "eta_v")}
+_HORIZONTAL = {d for pair in HDIMS.values() for d in pair}
 
 
 # --- moving between grid positions ------------------------------------------------
@@ -169,11 +172,19 @@ def _gradient_kernel(f, z, mode, fill_value):
 
 
 def _ddz_same_levels(var, zz, sboundary, sfill_value):
-    """d var / d z on var's own vertical levels (no staggering)."""
+    """d var / d z on var's own vertical levels (no staggering).
+
+    Returns ``var``'s coords (and the index coords of ``zz``) on the result.
+    """
     dim = vposition(var)
-    zz = zz.reset_coords(drop=True)
-    work = var.chunk({dim: -1}) if var.chunks is not None else var
-    zwork = zz.chunk({dim: -1}) if zz.chunks is not None else zz
+    var, zz = xr.align(var, zz.reset_coords(drop=True), join="exact", copy=False)
+    # bare arrays into apply_ufunc, coords back on afterwards: before xarray 2025.8
+    # apply_ufunc strips the attrs of the coordinates it merges in place, which
+    # would empty the attrs of the user's lon_rho etc.
+    work = xr.DataArray(var.variable)
+    zwork = xr.DataArray(zz.variable)
+    work = work.chunk({dim: -1}) if work.chunks is not None else work
+    zwork = zwork.chunk({dim: -1}) if zwork.chunks is not None else zwork
     out = xr.apply_ufunc(
         _gradient_kernel,
         work,
@@ -186,7 +197,8 @@ def _ddz_same_levels(var, zz, sboundary, sfill_value):
     )
     if var.chunks is not None:
         out = out.chunk({dim: var.chunksizes[dim]})
-    return out.transpose(*[d for d in var.dims if d in out.dims], ...)
+    out = out.transpose(*[d for d in var.dims if d in out.dims], ...)
+    return out.assign_coords({**zz.coords, **var.coords})
 
 
 def ddz(
@@ -211,13 +223,15 @@ def ddz(
     levels rather than averaging the staggered result.
 
     ``z`` (at ``var``'s position) or ``grid`` (to compute it, with ``zeta``) is
-    required.
+    required. ``var`` needs at least 2 vertical levels.
     """
     grid = _check_grid(grid, "ddz")
     var = canonicalize(var)
     vpos = vposition(var)
     if vpos is None:
         raise ValueError(f"{var.name!r} has no vertical dimension")
+    if var.sizes[vpos] < 2:
+        raise ValueError(f"ddz needs at least 2 levels ({vpos} has length {var.sizes[vpos]})")
     if z is None and grid is None:
         raise ValueError("ddz needs z= (depths at var's points) or grid= (to compute them)")
     zz = z_like(var, grid, zeta=zeta, z=z)
@@ -225,12 +239,11 @@ def ddz(
     scoord = normalize_scoord(scoord)
     if scoord == vpos:
         result = _ddz_same_levels(var, zz, sboundary, sfill_value)
-        result = result.assign_coords({k: v for k, v in var.coords.items() if k in result.dims or all(d in result.dims for d in v.dims)})
         scoord = None
     else:
-        num = _xgcm.diff(var, "Z", boundary=sboundary, fill_value=sfill_value)
+        # slopes, not differences, so that the edges are the derivative (extend) or sfill_value (fill)
         den = _xgcm.diff(zz.reset_coords(drop=True), "Z", boundary="extend")
-        result = num / den
+        result = _xgcm.diff(var, "Z", boundary=sboundary, fill_value=sfill_value, spacing=den)
     return _finish(result, new_attrs, hcoord, scoord, hboundary, hfill_value, sboundary, sfill_value)
 
 
@@ -256,8 +269,22 @@ def _flip(pos, axis):
     return {pair: p for p, pair in CANONICAL.items()}[(eta, xi)]
 
 
-def _single_level(var):
-    return any(c in var.coords and var[c].ndim == 0 for c in ("s_rho", "s_w"))
+def _single_level(var, grid):
+    """Was ``var`` cut out of a 3-D field at one s-level (so it has no vertical dim)?
+
+    ``isel(s_rho=k)`` leaves a scalar s coordinate behind when the file has s labels
+    (Rutgers, REMORA). UCLA and CROCO files have none, so there the level is
+    recognised by ``var`` having the name of a variable of ``grid`` that has a
+    vertical dim, and no dim that variable lacks (other than a horizontal one: the
+    level may have been moved to other points). A z-slice, say, has a dim of its own
+    and is at constant depth already.
+    """
+    if any(c in var.coords and var[c].ndim == 0 for c in ("s_rho", "s_w")):
+        return True
+    if var.name not in grid.variables:
+        return False
+    dims = grid.variables[var.name].dims
+    return any(d in ("s_rho", "s_w") for d in dims) and set(var.dims) <= set(dims) | _HORIZONTAL
 
 
 def _hderivative(var, grid, axis, *, z, zeta, hcoord, scoord, hboundary, hfill_value, sboundary, sfill_value, along_s, attrs, func):
@@ -270,22 +297,32 @@ def _hderivative(var, grid, axis, *, z, zeta, hcoord, scoord, hboundary, hfill_v
         raise ValueError(f"cannot tell the horizontal grid position of {var.name!r} from dims {var.dims}")
     dest = _flip(pos, axis)
     vpos = vposition(var)
+    levels = 0 if vpos is None else var.sizes[vpos]
+    if vpos is None and not along_s and _single_level(var, grid):
+        raise ValueError(
+            f"{var.name!r} is a single selected s-level of a 3-D field. A horizontal derivative "
+            "along that s-surface is not a derivative at constant depth; compute on the 3-D "
+            "field and then select the level, or pass along_s=True to accept the along-s derivative "
+            "(which is also the plain derivative you want for a field that is not on an s-surface, "
+            "such as a depth average)."
+        )
+    if vpos is not None and levels < 2 and not along_s:
+        raise ValueError(
+            "the chain rule needs at least 2 vertical levels; pass along_s=True for the derivative "
+            f"along the single layer ({vpos} has length {levels})"
+        )
+    chain_rule = levels >= 2
     # name everything that is missing at once, not one variable per attempt
-    require(grid, "pm" if axis == "X" else "pn", *(["h"] if vpos is not None and z is None else []), purpose=func)
+    require(grid, "pm" if axis == "X" else "pn", *(["h"] if chain_rule and z is None else []), purpose=func)
     spacing = _spacing_at(grid, "pm" if axis == "X" else "pn", var, dest)
     new_attrs = _derivative_attrs(var, "dxi" if axis == "X" else "deta", attrs)
-    if vpos is None:
-        if _single_level(var) and not along_s:
-            raise ValueError(
-                f"{var.name!r} is a single selected s-level of a 3-D field. A horizontal derivative "
-                "along that s-surface is not a derivative at constant depth; compute on the 3-D "
-                "field and then select the level, or pass along_s=True to accept the along-s derivative."
-            )
-        result = _xgcm.diff(var, axis, boundary=hboundary, fill_value=hfill_value) / spacing
+    # slopes, not differences, so that "extend" copies the derivative at the edges
+    if not chain_rule:
+        result = _xgcm.diff(var, axis, boundary=hboundary, fill_value=hfill_value, spacing=spacing)
     else:
         zz = z_like(var, grid, zeta=zeta, z=z).reset_coords(drop=True)
-        dqds = _xgcm.diff(var, axis, boundary=hboundary, fill_value=hfill_value) / spacing
-        dzds = _xgcm.diff(zz, axis, boundary=hboundary, fill_value=hfill_value) / spacing
+        dqds = _xgcm.diff(var, axis, boundary=hboundary, fill_value=hfill_value, spacing=spacing)
+        dzds = _xgcm.diff(zz, axis, boundary=hboundary, fill_value=hfill_value, spacing=spacing)
         dqdz = _ddz_same_levels(var, zz, sboundary, sfill_value)
         dqdz = _xgcm.interp(dqdz, axis, boundary=hboundary, fill_value=hfill_value)
         result = dqds - dqdz * dzds
@@ -311,9 +348,13 @@ def ddxi(
 
     ``(dq/dxi)_z = (dq/dxi)_s - (dq/dz) (dz/dxi)_s``, evaluated at the staggered
     point (a rho-point input lands on u points) on the input's own vertical
-    levels. ``grid`` supplies ``pm`` and, for 3-D inputs, ``h``/``zeta``/s-params
-    (or pass ``z``). Variables without a vertical dim get a plain derivative; a
-    single selected s-level raises unless ``along_s=True``.
+    levels, so it needs at least 2 of them. ``grid`` supplies ``pm`` and, for 3-D
+    inputs, ``h``/``zeta``/s-params (or pass ``z``). Variables without a vertical
+    dim get a plain derivative, except a single selected s-level (known by its
+    scalar s coordinate, or on UCLA and CROCO output, which have none, by carrying
+    the name of a 3-D variable of ``grid``) and a vertical dim of length 1: those
+    raise unless ``along_s=True``, which takes the derivative along the layer (also
+    the way to take the plain derivative of, say, a depth average that kept its name).
     """
     return _hderivative(
         var, grid, "X", z=z, zeta=zeta, hcoord=hcoord, scoord=scoord, hboundary=hboundary,
@@ -437,6 +478,11 @@ def _haversine(lon, lat, lon0, lat0):
     return 2 * R_EARTH * np.arcsin(np.sqrt(np.clip(a, 0, 1)))
 
 
+def _canonical_xy(lons, lats):
+    """``lons`` and ``lats`` with canonical dim names (plain arrays pass through)."""
+    return tuple(canonicalize(a) if isinstance(a, xr.DataArray) else a for a in (lons, lats))
+
+
 def argsel2d(lons, lats, lon0, lat0, *, method="haversine"):
     """Index (or indices) of the grid point(s) nearest to ``(lon0, lat0)``.
 
@@ -445,13 +491,17 @@ def argsel2d(lons, lats, lon0, lat0, *, method="haversine"):
     REMORA's). ``lon0``/``lat0`` may be scalars or 1-D arrays; the result is a
     tuple of indices in ``lons``' shape (arrays for array input).
     """
-    lons, lats = np.asarray(lons), np.asarray(lats)
+    lons, lats = (np.asarray(a) for a in _canonical_xy(lons, lats))
     pts_lon, pts_lat = np.atleast_1d(np.asarray(lon0, dtype=float)), np.atleast_1d(np.asarray(lat0, dtype=float))
     flat_lon, flat_lat = lons.reshape(-1), lats.reshape(-1)
     idx = np.empty(pts_lon.size, dtype=int)
     if method == "geodesic":
-        import pyproj
-
+        try:
+            import pyproj
+        except ImportError:
+            raise ModuleNotFoundError(
+                'method="geodesic" needs pyproj: pip install "xroms[geodesic]" or conda install pyproj'
+            ) from None
         geod = pyproj.Geod(ellps="WGS84")
     for i, (x0, y0) in enumerate(zip(pts_lon, pts_lat)):
         if method == "haversine":
@@ -473,10 +523,13 @@ def sel2d(var, lons, lats, lon0, lat0, **kwargs):
     """Values of ``var`` at the grid point(s) nearest to ``(lon0, lat0)``.
 
     ``lons``/``lats`` are the 2-D coordinates at ``var``'s grid position; their
-    dims name the dims of ``var`` to index.
+    dims name the dims of ``var`` to index. Rutgers-style names (``eta_u``,
+    ``xi_v``, ...) may be mixed with canonical ones: all are canonicalized first.
     """
     if not isinstance(var, xr.DataArray):
         raise TypeError("var must be a DataArray")
+    var = canonicalize(var)
+    lons, lats = _canonical_xy(lons, lats)
     inds = argsel2d(lons, lats, lon0, lat0, **kwargs)
     dims = lons.dims if isinstance(lons, xr.DataArray) else [d for d in var.dims if d.startswith(("eta", "xi"))][-2:]
     if np.ndim(lon0) == 0:

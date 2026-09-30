@@ -140,7 +140,7 @@ def interp(da, axis, boundary="extend", fill_value=np.nan):
     return _apply("interp", da, axis, _padding(boundary), fill_value)
 
 
-def diff(da, axis, boundary="extend", fill_value=np.nan):
+def diff(da, axis, boundary="extend", fill_value=np.nan, spacing=None):
     """Difference neighbours along ``axis`` onto the other stagger position.
 
     Where the result needs values outside the data (the two edges when moving
@@ -148,10 +148,19 @@ def diff(da, axis, boundary="extend", fill_value=np.nan):
     *computed* difference (a one-sided estimate), never the zero that padding the
     field with its own edge value would produce. ``boundary="fill"`` sets those
     edges to ``fill_value`` (NaN by default; 0 imposes a zero-gradient condition).
+
+    With ``spacing`` (the distance between the differenced points, at the output
+    points) the result is the slope ``difference / spacing``, and the edges are set
+    after the division. The spacing of a stretched grid changes from point to
+    point, so copying a neighbour's difference under the edge's own spacing would
+    scale the edge's slope by the ratio of the two; here the nearest slope is
+    copied, or ``fill_value`` is the slope itself.
     """
     dim, from_center = axis_dim(da, axis)
     padded_edges = (axis == "Z" and from_center) or (axis != "Z" and not from_center)
     out = _apply("diff", da, axis, "fill", np.nan)
+    if spacing is not None:
+        out = out / spacing
     if padded_edges:
         out = _set_edges(out, target_dim(axis, from_center), boundary, fill_value)
     return out

@@ -1,5 +1,7 @@
 """Derivatives, grid moves, weighted sums, selection and interpolation on analytic fields."""
 
+import sys
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -190,9 +192,18 @@ class TestSelection:
     def test_argsel2d_methods(self, rutgers):
         lon, lat = float(rutgers.lon_rho[4, 7]), float(rutgers.lat_rho[4, 7])
         assert xroms.argsel2d(rutgers.lon_rho, rutgers.lat_rho, lon, lat) == (4, 7)
-        assert xroms.argsel2d(rutgers.lon_rho, rutgers.lat_rho, lon, lat, method="geodesic") == (4, 7)
         many = xroms.argsel2d(rutgers.lon_rho, rutgers.lat_rho, [lon, float(rutgers.lon_rho[1, 1])], [lat, float(rutgers.lat_rho[1, 1])])
         assert list(many[0]) == [4, 1] and list(many[1]) == [7, 1]
+
+    def test_argsel2d_geodesic(self, rutgers):
+        pytest.importorskip("pyproj")  # optional: pip install "xroms[geodesic]"
+        lon, lat = float(rutgers.lon_rho[4, 7]), float(rutgers.lat_rho[4, 7])
+        assert xroms.argsel2d(rutgers.lon_rho, rutgers.lat_rho, lon, lat, method="geodesic") == (4, 7)
+
+    def test_geodesic_without_pyproj_says_how_to_install_it(self, rutgers, monkeypatch):
+        monkeypatch.setitem(sys.modules, "pyproj", None)  # makes `import pyproj` fail
+        with pytest.raises(ModuleNotFoundError, match=r"xroms\[geodesic\].*conda install pyproj"):
+            xroms.argsel2d(rutgers.lon_rho, rutgers.lat_rho, -89.9, 28.0, method="geodesic")
 
     def test_cartesian(self, remora):
         x0, y0 = float(remora.x_rho[2, 3]), float(remora.y_rho[2, 3])
@@ -201,6 +212,47 @@ class TestSelection:
     def test_sel2d(self, rutgers):
         out = xroms.sel2d(rutgers.temp, rutgers.lon_rho, rutgers.lat_rho, float(rutgers.lon_rho[4, 7]), float(rutgers.lat_rho[4, 7]))
         assert out.dims == ("ocean_time", "s_rho")
+
+    @pytest.mark.parametrize(
+        "make, lon, lat, point",
+        [
+            (lambda ds: xroms.ddxi(ds.temp, ds), "lon_u", "lat_u", {"eta_rho": 4, "xi_u": 7}),
+            (lambda ds: xroms.ddeta(ds.temp, ds), "lon_v", "lat_v", {"eta_v": 3, "xi_rho": 6}),
+            (lambda ds: xroms.to_psi(ds.temp), "lon_psi", "lat_psi", {"eta_v": 3, "xi_u": 5}),
+        ],
+        ids=["u", "v", "psi"],
+    )
+    def test_sel2d_takes_canonical_results_with_rutgers_coords(self, rutgers, make, lon, lat, point):
+        # results come back with canonical dims (eta_rho, xi_u, ...) while Rutgers
+        # files name the dims of their coordinates eta_u, xi_v, eta_psi, xi_psi
+        out = make(rutgers)
+        lons, lats = rutgers[lon], rutgers[lat]
+        assert set(lons.dims) - set(out.dims)
+        can_lons, can_lats = C.canonicalize(lons), C.canonicalize(lats)
+        lon0, lat0 = float(can_lons.isel(point)), float(can_lats.isel(point))
+        got = xroms.sel2d(out, lons, lats, lon0, lat0)
+        xr.testing.assert_identical(got, out.isel(point))
+        xr.testing.assert_identical(rutgers.xroms.sel2d(out, lon0, lat0), got)
+        assert xroms.argsel2d(lons, lats, lon0, lat0) == tuple(point[d] for d in can_lons.dims)
+        # several points at once
+        first = {d: 1 for d in point}
+        lon1, lat1 = float(can_lons.isel(first)), float(can_lats.isel(first))
+        many = xroms.sel2d(out, lons, lats, [lon0, lon1], [lat0, lat1])
+        assert many.dims[-1] == "points" and many.sizes["points"] == 2
+        np.testing.assert_array_equal(many.isel(points=0).values, out.isel(point).values)
+        np.testing.assert_array_equal(many.isel(points=1).values, out.isel(first).values)
+
+    def test_sel2d_takes_rutgers_variables_with_canonical_coords(self, rutgers):
+        can = C.canonicalize(rutgers)
+        lon0, lat0 = float(can.lon_u[4, 7]), float(can.lat_u[4, 7])
+        got = xroms.sel2d(rutgers.u, can.lon_u, can.lat_u, lon0, lat0)
+        np.testing.assert_array_equal(got.values, can.u.isel(eta_rho=4, xi_u=7).values)
+
+    def test_sel2d_cartesian_remora_results(self, remora):
+        out = xroms.ddxi(remora.temp, remora)
+        x0, y0 = float(remora.x_u[2, 3]), float(remora.y_u[2, 3])
+        got = xroms.sel2d(out, remora.x_u, remora.y_u, x0, y0, method="cartesian")
+        xr.testing.assert_identical(got, out.isel(eta_rho=2, xi_u=3))
 
 
 class TestSlices:
@@ -282,3 +334,226 @@ class TestInputsAreMatchedToTheGrid:
         for t in range(can.sizes["ocean_time"]):
             one = xroms.isoslice(z0, [can.temp.mean().item()], can.temp.isel(ocean_time=t), new_dim="temp")
             np.testing.assert_allclose(out.isel(ocean_time=t).values, one.values)
+
+
+# --- regression tests for the code-review findings on the calculus module (2026-09-30) ------------
+
+HORIZONTAL_DERIVATIVES = {
+    "ddxi": xroms.ddxi,
+    "ddeta": xroms.ddeta,
+    "hgrad": xroms.hgrad,
+    "hgrad-xi": lambda var, grid, **kw: xroms.hgrad(var, grid, which="xi", **kw),
+    "hgrad-eta": lambda var, grid, **kw: xroms.hgrad(var, grid, which="eta", **kw),
+}
+
+
+def _metric_along_xi(ds):
+    """``1 / dx`` between neighbouring rho points, i.e. at u points."""
+    pm = C.canonicalize(ds).pm.values
+    return 0.5 * (pm[:, :-1] + pm[:, 1:])
+
+
+class TestSingleSelectedLevel:
+    """A level cut out of a 3-D field has no vertical dim left to correct the slope with.
+
+    Rutgers and REMORA files keep a scalar s coordinate behind ``isel``; UCLA and CROCO
+    files have no s labels, so nothing but the name gives the level away there.
+    """
+
+    @pytest.mark.parametrize("lazy", [False, True], ids=["numpy", "dask"])
+    @pytest.mark.parametrize("func", HORIZONTAL_DERIVATIVES.values(), ids=HORIZONTAL_DERIVATIVES)
+    def test_raises_unless_along_s_on_every_layout(self, layout, func, lazy):
+        ds = chunked(merged(layout)) if lazy else merged(layout)
+        with pytest.raises(ValueError, match="along_s"):
+            func(ds.temp.isel(s_rho=-1), ds)
+
+    @pytest.mark.parametrize("select", [xroms.surface, xroms.bottom])
+    def test_surface_and_bottom_are_single_levels(self, layout, select):
+        ds = merged(layout)
+        for func in (xroms.ddxi, xroms.ddeta):
+            with pytest.raises(ValueError, match="along_s"):
+                func(select(ds.temp), ds)
+
+    def test_along_s_is_the_plain_difference_over_the_metric(self, layout):
+        ds = merged(layout)
+        bottom = ds.temp.isel(s_rho=0)
+        got = xroms.ddxi(bottom, ds, along_s=True)
+        assert got.dims[-2:] == ("eta_rho", "xi_u")
+        np.testing.assert_allclose(got.values, np.diff(bottom.values, axis=-1) * _metric_along_xi(ds), rtol=1e-10, atol=1e-14)
+        # which is not the derivative at constant depth that a silent return passed it off as
+        assert np.abs(got.values - syn.TEMP_A).max() > 1e-4
+
+    def test_reductions_over_s_keep_the_name_and_take_along_s(self, layout):
+        # a depth mean is named like the 3-D variable it came from but has no levels to correct
+        ds = merged(layout)
+        mean = ds.temp.mean("s_rho")
+        got = xroms.ddxi(mean, ds, along_s=True)
+        np.testing.assert_allclose(got.values, np.diff(mean.values, axis=-1) * _metric_along_xi(ds), rtol=1e-10, atol=1e-14)
+
+    @pytest.mark.parametrize("name", ["zeta", "h"])
+    def test_variables_that_never_had_levels_still_work(self, layout, name):
+        ds = merged(layout)
+        out = xroms.ddxi(ds[name], ds)
+        assert out.dims[-2:] == ("eta_rho", "xi_u")
+
+    def test_a_z_slice_is_at_constant_depth_already(self, layout):
+        # same name as the 3-D variable, no s dim, but a z dim of its own: not a selected level
+        ds = merged(layout)
+        zs = xroms.zslice(ds.temp, [-10.0, -5.0], ds)
+        np.testing.assert_allclose(xroms.ddxi(zs, ds).values, syn.TEMP_A, rtol=1e-9, atol=ATOL)
+        np.testing.assert_allclose(xroms.ddeta(zs, ds).values, 0.0, atol=1e-12)
+
+
+class TestNeedsTwoLevels:
+    """The chain rule and the vertical derivative need two levels; one used to give all NaN."""
+
+    CUTS = ["one-level dataset", "isel list", "isel slice"]
+
+    @staticmethod
+    def thin(layout, cut):
+        """``(ds, temp)`` with a single s_rho level, cut the way ``cut`` says."""
+        if cut == "one-level dataset":
+            ds = merged(layout, N=1)
+            return ds, ds.temp
+        ds = merged(layout)
+        return ds, ds.temp.isel(s_rho=[5] if cut == "isel list" else slice(5, 6))
+
+    @pytest.mark.parametrize("cut", CUTS)
+    @pytest.mark.parametrize("func", HORIZONTAL_DERIVATIVES.values(), ids=HORIZONTAL_DERIVATIVES)
+    def test_chain_rule_raises(self, layout, cut, func):
+        ds, var = self.thin(layout, cut)
+        with pytest.raises(ValueError, match=r"chain rule needs at least 2 vertical levels; pass along_s=True"):
+            func(var, ds)
+
+    @pytest.mark.parametrize("cut", CUTS)
+    def test_along_s_takes_the_derivative_along_the_single_layer(self, layout, cut):
+        ds, var = self.thin(layout, cut)
+        out = xroms.ddxi(var, ds, along_s=True)
+        assert out.sizes["s_rho"] == 1 and out.dims[-3:] == ("s_rho", "eta_rho", "xi_u")
+        np.testing.assert_allclose(out.values, np.diff(var.values, axis=-1) * _metric_along_xi(ds), rtol=1e-10, atol=1e-14)
+
+    @pytest.mark.parametrize("cut", CUTS)
+    @pytest.mark.parametrize("scoord", [None, "s_rho"])
+    def test_ddz_raises(self, layout, cut, scoord):
+        ds, var = self.thin(layout, cut)
+        with pytest.raises(ValueError, match="ddz needs at least 2 levels"):
+            xroms.ddz(var, ds, scoord=scoord)
+
+    def test_ddz_raises_on_a_single_w_level(self, layout):
+        ds = merged(layout)
+        with pytest.raises(ValueError, match="ddz needs at least 2 levels"):
+            xroms.ddz(xroms.to_s_w(ds.temp).isel(s_w=[3]), ds)
+
+    def test_functions_built_on_ddz_and_the_chain_rule_raise_too(self, layout):
+        ds = merged(layout, N=1)
+        with pytest.raises(ValueError, match="at least 2"):
+            xroms.N2(ds.salt, ds)
+        with pytest.raises(ValueError, match="at least 2"):
+            xroms.relative_vorticity(ds.u, ds.v, ds)
+
+    def test_two_levels_are_enough(self, layout):
+        ds = merged(layout, N=2)
+        np.testing.assert_allclose(xroms.ddxi(ds.temp, ds).values, syn.TEMP_A, rtol=1e-9, atol=ATOL)
+        np.testing.assert_allclose(xroms.ddz(ds.temp, ds).values, syn.TEMP_B, rtol=1e-9)
+        np.testing.assert_allclose(xroms.ddz(ds.temp, ds, scoord="s_rho").values, syn.TEMP_B, rtol=1e-9)
+
+
+def _linear_at_staggered_points(ds, axis, slope):
+    """A field on the u (``axis="X"``) or v points that is exactly linear in the grid's own position.
+
+    The two staggered points on either side of a rho point are ``1/pm`` (``1/pn``) apart
+    *at that rho point*, so the difference over that spacing is ``slope`` at every rho
+    point. (Positions averaged from the synthetic dataset's x and y give the slope only
+    to about 2e-4 on stretched grids: fine for judging the interior, but it leaves too
+    little room to tell an edge that is off by the 2-3 % spacing ratio from one that is not.)
+    """
+    can = C.canonicalize(ds)
+    if axis == "X":
+        step = 1.0 / can.pm.values
+        position = np.concatenate([np.zeros_like(step[:, :1]), np.cumsum(step[:, 1:-1], axis=1)], axis=1)
+        return xr.DataArray(slope * position, dims=("eta_rho", "xi_u"))
+    step = 1.0 / can.pn.values
+    position = np.concatenate([np.zeros_like(step[:1]), np.cumsum(step[1:-1], axis=0)], axis=0)
+    return xr.DataArray(slope * position, dims=("eta_v", "xi_rho"))
+
+
+class TestEdgesAreOneSidedDerivatives:
+    """``extend`` copies the nearest derivative to the edge, not the nearest difference.
+
+    Moving from u (v) to rho points leaves the first and last rho point without a
+    neighbour pair. On a stretched grid the spacing there is not the neighbour's, so a
+    copied difference gave the edge a slope off by the ratio of the two spacings.
+    """
+
+    AXES = {"X": (xroms.ddxi, "u", "xi_rho"), "Y": (xroms.ddeta, "v", "eta_rho")}
+
+    @pytest.mark.parametrize("vertical", [False, True], ids=["2d", "3d"])
+    @pytest.mark.parametrize("axis", ["X", "Y"])
+    def test_linear_fields_have_the_analytic_slope_at_the_edges_too(self, layout, axis, vertical):
+        func, hcoord, dim = self.AXES[axis]
+        ds = merged(layout, uniform=False)
+        slope = syn.TEMP_A
+        field = _linear_at_staggered_points(ds, axis, slope)
+        if vertical:
+            # linear in z as well: dq/ds and dz/ds must both be one-sided slopes or the
+            # chain rule no longer cancels them at the edges
+            field = syn.TEMP_B * xroms.z(ds, hcoord=hcoord) + field
+        out = func(field, ds)
+        assert out.dims[-2:] == ("eta_rho", "xi_rho")
+        np.testing.assert_allclose(out.isel({dim: slice(1, -1)}).values, slope, rtol=1e-9, atol=ATOL)
+        np.testing.assert_allclose(out.isel({dim: [0, -1]}).values, slope, rtol=1e-9, atol=ATOL)
+
+    @pytest.mark.parametrize("axis", ["X", "Y"])
+    def test_2d_edges_equal_the_neighbour_for_any_field(self, layout, axis):
+        func, hcoord, dim = self.AXES[axis]
+        ds = merged(layout, uniform=False)
+        out = func(xroms.to_grid(ds.h, hcoord), ds)  # the sloping bathymetry: not linear in anything
+        np.testing.assert_array_equal(out.isel({dim: 0}).values, out.isel({dim: 1}).values)
+        np.testing.assert_array_equal(out.isel({dim: -1}).values, out.isel({dim: -2}).values)
+
+    @pytest.mark.parametrize("axis", ["X", "Y"])
+    def test_lazy_input_gets_the_same_edges(self, layout, axis):
+        func, hcoord, dim = self.AXES[axis]
+        ds = chunked(merged(layout, uniform=False))
+        field = syn.TEMP_B * xroms.z(ds, hcoord=hcoord) + _linear_at_staggered_points(ds, axis, syn.TEMP_A)
+        out = func(field.chunk({d: 4 for d in field.dims}), ds)
+        assert out.chunks is not None
+        np.testing.assert_allclose(out.values, syn.TEMP_A, rtol=1e-9, atol=ATOL)
+
+    def test_fill_value_is_the_derivative_at_the_edges(self, layout):
+        ds = merged(layout, uniform=False)
+        field = _linear_at_staggered_points(ds, "X", syn.TEMP_A)
+        out = xroms.ddxi(field, ds, hboundary="fill", hfill_value=5.0)
+        np.testing.assert_array_equal(out.isel(xi_rho=[0, -1]).values, 5.0)
+        np.testing.assert_allclose(out.isel(xi_rho=slice(1, -1)).values, syn.TEMP_A, rtol=1e-9, atol=ATOL)
+        assert np.isnan(xroms.ddxi(field, ds, hboundary="fill").isel(xi_rho=[0, -1]).values).all()
+
+
+class TestInputsAreNotModified:
+    """xarray up to 2025.7 stripped the attrs of merged coordinates in place (``apply_ufunc``)."""
+
+    CALLS = {
+        "ddxi": lambda ds: xroms.ddxi(ds.temp, ds),
+        "ddeta": lambda ds: xroms.ddeta(ds.temp, ds),
+        "ddxi-u": lambda ds: xroms.ddxi(ds.u, ds),
+        "ddeta-v": lambda ds: xroms.ddeta(ds.v, ds),
+        "hgrad": lambda ds: xroms.hgrad(ds.temp, ds),
+        "ddz": lambda ds: xroms.ddz(ds.temp, ds),
+        "ddz-same-levels": lambda ds: xroms.ddz(ds.temp, ds, scoord="rho"),
+        "accessor": lambda ds: ds.xroms.ddxi("temp"),
+    }
+
+    @pytest.mark.parametrize("lazy", [False, True], ids=["numpy", "dask"])
+    @pytest.mark.parametrize("call", CALLS)
+    def test_coordinates_and_attrs_are_left_alone(self, layout, call, lazy):
+        ds = chunked(merged(layout)) if lazy else merged(layout)
+        before = ds.copy(deep=True)
+        self.CALLS[call](ds)
+        xr.testing.assert_identical(ds, before)
+
+
+def test_ddz_fill_value_is_the_derivative_at_the_edges(rutgers):
+    # sfill_value is the value of the derivative there, not a difference divided by dz
+    out = xroms.ddz(rutgers.temp, rutgers, sboundary="fill", sfill_value=7.0)
+    assert (out.isel(s_w=[0, -1]) == 7.0).all()
+    assert np.isfinite(out.isel(s_w=slice(1, -1))).all()

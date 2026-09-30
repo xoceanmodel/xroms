@@ -488,6 +488,8 @@ _UNIT_NAMES = {
 _UNIT_SECONDS = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400}
 # calendars whose dates datetime64 can hold (proleptic Gregorian); the others need cftime
 _DATETIME64_CALENDARS = ("standard", "gregorian", "proleptic_gregorian")
+# the dates datetime64[ns] can hold
+_NS_RANGE = (np.datetime64("1677-09-22", "us"), np.datetime64("2262-04-11", "us"))
 
 
 def _parse_epoch(text):
@@ -534,7 +536,10 @@ def _add_offsets(epoch, values, unit, name):
     try:
         if (np.abs(micro) >= 1e18).any():
             raise OverflowError
-        return (epoch.astype("datetime64[us]") + micro.astype("timedelta64[us]")).astype("datetime64[ns]")
+        times = epoch.astype("datetime64[us]") + micro.astype("timedelta64[us]")
+        if ((times < _NS_RANGE[0]) | (times > _NS_RANGE[1])).any():
+            raise OverflowError  # numpy < 2.3 wraps around silently when casting to ns
+        return times.astype("datetime64[ns]")
     except OverflowError:
         raise ValueError(
             f"the times of {name!r} ({unit} since {epoch}) fall outside the range datetime64 can hold "
