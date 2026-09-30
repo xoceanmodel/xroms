@@ -48,7 +48,8 @@ def target_dim(axis, from_center):
     return stag if from_center else center
 
 
-def _grid(n_center, axis, padding, fill_value):
+def _grid(n_center, axis, padding):
+    # fill_value is passed per call: xgcm 0.10 warns whenever Grid gets one
     center, stag, kind = AXES[axis]
     n_stag = n_center - 1 if kind == "inner" else n_center + 1
     ds = xr.Dataset(coords={center: np.arange(n_center), stag: np.arange(n_stag)})
@@ -56,7 +57,6 @@ def _grid(n_center, axis, padding, fill_value):
         ds,
         coords={axis: {"center": center, kind: stag}},
         padding={axis: padding},
-        fill_value={axis: fill_value},
         autoparse_metadata=False,
     )
 
@@ -105,8 +105,8 @@ def _apply(func, da, axis, padding, fill_value):
         in_chunks = bare.chunksizes.get(dim)
         if len(in_chunks) > 1:
             bare = bare.chunk({dim: -1})
-    grid = _grid(_n_center(da, axis), axis, padding, fill_value)
-    out = getattr(grid, func)(bare, axis)
+    grid = _grid(_n_center(da, axis), axis, padding)
+    out = getattr(grid, func)(bare, axis, fill_value=fill_value)
     out = out.drop_vars([c for c in out.coords], errors="ignore")
     delta = out.sizes[new_dim] - da.sizes[dim]
     out = _restore_chunks(out, in_chunks, new_dim, delta)

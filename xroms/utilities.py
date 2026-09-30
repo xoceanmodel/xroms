@@ -288,9 +288,11 @@ def _hderivative(var, grid, axis, *, z, zeta, hcoord, scoord, hboundary, hfill_v
     if pos is None:
         raise ValueError(f"cannot tell the horizontal grid position of {var.name!r} from dims {var.dims}")
     dest = _flip(pos, axis)
+    vpos = vposition(var)
+    # name everything that is missing at once, not one variable per attempt
+    require(grid, "pm" if axis == "X" else "pn", *(["h"] if vpos is not None and z is None else []), purpose=func)
     spacing = _spacing_at(grid, "pm" if axis == "X" else "pn", var, dest)
     new_attrs = _derivative_attrs(var, "dxi" if axis == "X" else "deta", attrs)
-    vpos = vposition(var)
     if vpos is None:
         if _single_level(var) and not along_s:
             raise ValueError(

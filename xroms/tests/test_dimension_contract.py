@@ -73,7 +73,8 @@ def test_contract(layout, variant, label, op, same_pos):
     has_time = time_dim(ds) is not None
     assert (time_dim(out) is not None) == has_time, f"{label}: time dim {'lost' if has_time else 'added'}: {out.dims}"
     _ordered(out)
-    extra = set(out.dims) - set(ds.dims) - {"z"}
+    # s_w is legitimate even when the Dataset has no w-level variables (UCLA output)
+    extra = set(out.dims) - set(ds.dims) - {"z", "s_w"}
     assert not extra, f"{label}: dims {extra} not in the Dataset"
     if same_pos is not None:
         combined = ds[same_pos] + out if same_pos != "zeta" else ds[same_pos] * 0 + out
