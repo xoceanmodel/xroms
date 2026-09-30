@@ -19,32 +19,13 @@ import numpy as np
 import xarray as xr
 
 from . import _xgcm
-from ._align import require, select_like
+from ._align import _check_grid, _reject_legacy, require, select_like
 from .conventions import CANONICAL, canonicalize, hposition, normalize_hcoord, normalize_scoord, time_dim, vposition
 from .vertical import dz as _dz
 from .vertical import z_like
 
 
 HDIMS = {"X": ("xi_rho", "xi_u"), "Y": ("eta_rho", "eta_v")}
-
-
-def _reject_legacy(args, func, hint):
-    """Guardrail for pre-1.0 calls that passed an ``xgcm.Grid`` positionally."""
-    if args:
-        raise TypeError(f"xroms 1.0: {func} no longer takes an xgcm grid argument. {hint}")
-
-
-def _check_grid(grid, func):
-    if grid is None:
-        return None
-    if type(grid).__module__.startswith("xgcm"):
-        raise TypeError(
-            f"xroms 1.0: pass the Dataset holding the grid variables instead of an xgcm Grid, "
-            f"e.g. xroms.{func}(var, ds). xroms no longer builds or stores xgcm grids."
-        )
-    if not isinstance(grid, xr.Dataset):
-        raise TypeError(f"grid must be an xarray Dataset, not {type(grid).__name__}")
-    return canonicalize(grid)
 
 
 # --- moving between grid positions ------------------------------------------------

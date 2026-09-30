@@ -15,6 +15,7 @@ variable, and they make that pairing explicit:
 """
 
 import numpy as np
+import xarray as xr
 
 from .conventions import TIME_NAMES, canonicalize
 
@@ -24,6 +25,25 @@ HAXES = {"X": ("xi_rho", "xi_u"), "Y": ("eta_rho", "eta_v")}
 
 class GridMismatchError(ValueError):
     """The variable and the grid data cannot be paired unambiguously."""
+
+
+def _reject_legacy(args, func, hint):
+    """Guardrail for pre-1.0 calls that passed an ``xgcm.Grid`` positionally."""
+    if args:
+        raise TypeError(f"xroms 1.0: {func} no longer takes an xgcm grid argument. {hint}")
+
+
+def _check_grid(grid, func):
+    if grid is None:
+        return None
+    if type(grid).__module__.startswith("xgcm"):
+        raise TypeError(
+            f"xroms 1.0: pass the Dataset holding the grid variables instead of an xgcm Grid, "
+            f"e.g. xroms.{func}(var, ds). xroms no longer builds or stores xgcm grids."
+        )
+    if not isinstance(grid, xr.Dataset):
+        raise TypeError(f"grid must be an xarray Dataset, not {type(grid).__name__}")
+    return canonicalize(grid)
 
 
 def _is_time_dim(obj, dim):
