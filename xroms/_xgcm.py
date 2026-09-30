@@ -199,20 +199,36 @@ def transform(da, iso_values, iso_array, dim, *, new_dim="z", method="linear", m
 
     ``iso_values`` may be 1-D (numpy/list) or an N-D DataArray whose extra dim
     is ``new_dim``. Only ``dim`` is rechunked to a single chunk.
+
+    A dim only ``iso_array`` has is broadcast onto ``da`` (lazily) unless it is a
+    grid dim (``xi_*``, ``eta_*``, ``s_*``): those name positions, so a missing one
+    means the two sit on different points and xgcm refuses the pair.
+
+    The result has the dtype numpy promotes ``da`` and ``iso_array`` to (at least
+    float32), lazy or not. xgcm's kernel runs in float64 on float64 targets but
+    declares ``da``'s dtype for a lazy result, so the inputs are cast to float64
+    and the result once, explicitly, to that dtype.
     """
     if dim not in da.dims or dim not in iso_array.dims:
         raise ValueError(f"both the variable and the iso array need dim {dim!r}")
     work = xr.DataArray(da.variable, name=da.name or "var")
     target_data = xr.DataArray(iso_array.variable, name="iso_array")
     # xgcm needs the variable to carry every dim of the iso array (static depths
-    # sliced on a time-varying density, say): broadcast it, lazily
-    extra = {d: target_data.sizes[d] for d in target_data.dims if d not in work.dims}
+    # sliced on a time-varying density, say): broadcast it, lazily. Grid dims are
+    # never broadcast: a stagger or footprint the variable lacks is a mismatch
+    extra = {
+        d: target_data.sizes[d]
+        for d in target_data.dims
+        if d not in work.dims and not str(d).startswith(("xi_", "eta_", "s_"))
+    }
     if extra:
         work = work.expand_dims(extra)
     if work.chunks is not None:
         work = work.chunk({dim: -1})
     if target_data.chunks is not None:
         target_data = target_data.chunk({dim: -1})
+    work = work.astype(np.float64, copy=False)
+    target_data = target_data.astype(np.float64, copy=False)
     grid = _xgcm().Grid(
         xr.Dataset(coords={dim: np.arange(da.sizes[dim])}),
         coords={"Z": {"center": dim}},
@@ -227,6 +243,7 @@ def transform(da, iso_values, iso_array, dim, *, new_dim="z", method="linear", m
     else:
         values = np.atleast_1d(np.asarray(iso_values, dtype=float))
         target = xr.DataArray(values, dims=[new_dim], name=new_dim)
+    target = target.astype(np.float64, copy=False)
     out = grid.transform(
         work,
         "Z",
@@ -236,6 +253,7 @@ def transform(da, iso_values, iso_array, dim, *, new_dim="z", method="linear", m
         mask_edges=mask_edges,
         target_dim=new_dim,
     )
+    out = out.astype(np.result_type(da.dtype, iso_array.dtype, np.float32), copy=False)
     out = out.drop_vars([c for c in out.coords if c != new_dim], errors="ignore")
     if values is not None:
         out = out.assign_coords({new_dim: values})
