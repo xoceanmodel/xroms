@@ -3,7 +3,8 @@
 Core array functions never check whole-domain consistency (roms-tools passes
 boundary lines and margins). These helpers are used only when xroms reads grid
 primitives (``h``, ``zeta``, ``pm``, ...) out of a ``grid`` Dataset on behalf of a
-variable, and they make that pairing explicit:
+variable, or takes an explicit ``zeta=``/``z=`` for one, and they make that
+pairing explicit:
 
 * a dim the grid field has but the variable lacks (typically time after
   ``isel``/``sel``) is matched through the variable's scalar coord, or else
@@ -11,16 +12,24 @@ variable, and they make that pairing explicit:
 * shared dims of different lengths are matched by index labels when both sides
   have them, otherwise raise an error saying to subset the Dataset instead;
 * staggered footprints are handled: a u-point variable needs the rho-point
-  fields on both sides of each u point.
+  fields on both sides of each u point;
+* integer index labels that do not step by 1 (a strided subset) raise, because
+  ``pm``/``pn`` describe neighbouring cells;
+* arrays computed from the vertical parameters are matched to a variable cut
+  vertically on its own (:func:`level_positions`), by label or else by count.
 """
 
 import numpy as np
 import xarray as xr
 
-from .conventions import TIME_NAMES, canonicalize
+from .conventions import TIME_NAMES, canonicalize, time_dim
 
 
 HAXES = {"X": ("xi_rho", "xi_u"), "Y": ("eta_rho", "eta_v")}
+
+_LEVELS_ADVICE = (
+    "select levels on the Dataset rather than on the variable alone (e.g. ds.isel({dim}=slice(1, 4)))."
+)
 
 
 class GridMismatchError(ValueError):
@@ -52,14 +61,81 @@ def _is_time_dim(obj, dim):
     return dim in obj.coords and np.issubdtype(obj[dim].dtype, np.datetime64)
 
 
+def is_time_varying(like):
+    """True if ``like`` varies in time: it has a time dim, or the scalar time coord
+    that selecting one time leaves behind."""
+    if time_dim(like) is not None:
+        return True
+    return any(like[c].ndim == 0 and _is_time_dim(like, c) for c in like.coords)
+
+
 def time_mismatch_message(var_name, dim, field_name):
     return (
         f"{field_name!r} varies along {dim!r} but {var_name!r} has no {dim!r} dim or scalar "
         f"{dim!r} coord to match it (e.g. after a time mean, resample, groupby, or selecting a "
         "time on UCLA output without a decoded time coordinate). Choose the free surface "
-        "explicitly: zeta=0 (static depths), zeta='mean' (time-mean zeta), zeta=<DataArray>, "
-        "or pass z= directly. For UCLA ROMS output, run xroms.decode_time(ds) before selecting times."
+        "explicitly: zeta=0 (static depths), zeta='mean' (time-mean zeta), or a zeta=<DataArray> "
+        f"or z=<DataArray> without a {dim!r} dim (e.g. a time mean, or one selected time). "
+        "For UCLA ROMS output, run xroms.decode_time(ds) before selecting times."
     )
+
+
+def check_unstrided(labels, dim, what="variable"):
+    """Raise ``GridMismatchError`` if integer ``labels`` of horizontal ``dim`` do not step by 1.
+
+    A step other than 1 means the points were subsampled, e.g.
+    ``isel(xi_rho=slice(None, None, 2))``. ``pm``/``pn`` and the stagger
+    relationships describe neighbouring cells, so a derivative, average or metric
+    over strided points would be silently wrong (too large by the stride). Labels
+    that are not integers may be coordinates such as longitude and are not
+    checked; a strided subset without labels cannot be detected.
+    """
+    labels = np.asarray(labels)
+    if labels.size < 2 or not np.issubdtype(labels.dtype, np.integer):
+        return
+    if (np.diff(labels.astype("int64")) != 1).any():
+        shown = labels[:5].tolist()
+        raise GridMismatchError(
+            f"{what!r} has {dim!r} index labels {shown}{'...' if labels.size > 5 else ''} that do not "
+            "step by 1: strided subsets change the spacing that pm/pn describe, so derivatives, "
+            "averages and metrics on them would be wrong; subset with step 1 (e.g. "
+            "xroms.subset(ds, X=slice(...))) and thin the result afterwards."
+        )
+
+
+def level_positions(like, dim, n, labels=None, *, name=None):
+    """Positions among the grid's ``n`` levels along ``dim`` of the levels of ``like``.
+
+    For arrays computed from the grid's vertical parameters, which cover every
+    level the grid has, when the variable was cut vertically on its own
+    (``temp.isel(s_rho=slice(1, 4))``). ``labels`` is the grid's index along
+    ``dim`` (or None). Levels are matched by label when both sides have an index
+    and by position otherwise, which needs equal counts. Returns None when
+    ``like`` has all the levels in order, so nothing needs selecting.
+    """
+    like = canonicalize(like)
+    if dim not in like.dims:
+        return None
+    vname = name or like.name or "variable"
+    if labels is not None and dim in like.indexes:
+        wanted = like.indexes[dim]
+        if wanted.equals(labels):
+            return None
+        positions = labels.get_indexer(wanted)
+        if (positions < 0).any():
+            raise GridMismatchError(
+                f"{vname!r} has {dim!r} labels {wanted[positions < 0][:5].tolist()} that the grid "
+                "lacks, so its vertical levels cannot be matched to the vertical parameters; "
+                + _LEVELS_ADVICE.format(dim=dim)
+            )
+        return positions
+    if like.sizes[dim] != n:
+        raise GridMismatchError(
+            f"{vname!r} has {like.sizes[dim]} {dim!r} levels but the grid's vertical parameters "
+            f"have {n}, and without {dim!r} index labels on both they cannot be matched; "
+            + _LEVELS_ADVICE.format(dim=dim)
+        )
+    return None
 
 
 def select_like(field, like, *, name=None):
@@ -82,7 +158,14 @@ def select_like(field, like, *, name=None):
             continue  # a different stagger of the same axis: handled below
         if dim in like.coords and like[dim].ndim == 0:
             if dim in field.indexes:
-                field = field.sel({dim: like[dim].values})
+                try:
+                    field = field.sel({dim: like[dim].values})
+                except KeyError:
+                    raise GridMismatchError(
+                        f"{vname!r} was selected at {dim}={like[dim].values}, but {fname!r} has no such "
+                        f"{dim!r} label to match it; subset the Dataset instead of the variable, or "
+                        f"pass one that covers it."
+                    ) from None
                 continue
             raise GridMismatchError(
                 f"{vname!r} was selected along {dim!r} but {fname!r} has no {dim!r} index to "
@@ -111,11 +194,15 @@ def select_like(field, like, *, name=None):
                     )
                 field = field.sel({dim: labels})
         elif field.sizes[dim] != like.sizes[dim]:
+            if dim in ("s_rho", "s_w"):
+                advice = "; " + _LEVELS_ADVICE.format(dim=dim)
+            else:
+                advice = ". Subset the Dataset rather than a single variable"
+                advice += ", or run xroms.decode_time(ds) first for UCLA ROMS output." if _is_time_dim(field, dim) else "."
             raise GridMismatchError(
                 f"{vname!r} and {fname!r} have different lengths along {dim!r} "
-                f"({like.sizes[dim]} vs {field.sizes[dim]}) and no index coordinates to align them. "
-                "Subset the Dataset rather than a single variable"
-                + (", or run xroms.decode_time(ds) first for UCLA ROMS output." if _is_time_dim(field, dim) else ".")
+                f"({like.sizes[dim]} vs {field.sizes[dim]}) and no index coordinates to align them"
+                + advice
             )
 
     # horizontal footprint per axis
@@ -126,6 +213,10 @@ def select_like(field, like, *, name=None):
             continue
         offset = 0 if vdim == fdim else (1 if (vdim == stag and fdim == center) else -1)
         expected = like.sizes[vdim] + offset
+        if vdim in like.indexes:
+            check_unstrided(like[vdim].values, vdim, vname)
+        if fdim in field.indexes:
+            check_unstrided(field[fdim].values, fdim, fname)
         if vdim in like.indexes and fdim in field.indexes:
             labels = np.asarray(like[vdim].values)
             if labels.size == 0:

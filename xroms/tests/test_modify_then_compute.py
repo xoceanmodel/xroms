@@ -18,7 +18,9 @@ rather than regression numbers. Sections, in order: 1 single time, 2 horizontal
 subsets and labels, 3 subset validation, 4 halo round trip, 5 single s-level,
 6 dropped coordinates and analytic derivatives, 7 in-place edits, 8 output without
 grid variables, 9 time-reduced variables, 10 UCLA end to end, 11 chunked input,
-12 Rutgers naming, 13 no setup step.
+12 Rutgers naming, 13 no setup step. Sections 14-17 came from reviewing the
+rewrite: 14 explicit zeta and z, 15 grids without a free surface, 16 variables
+cut vertically, 17 strided subsets.
 
 The tests were written before the new API existed, each marked
 ``xfail(strict=True)``, and the markers came off as the features landed; they
@@ -800,3 +802,312 @@ def test_functions_that_prepare_a_dataset_are_idempotent(layout):
     if layout == "ucla":
         decoded = xroms.decode_time(ds)
         xr.testing.assert_identical(xroms.decode_time(decoded), decoded)
+
+
+# ------------------------------------ 14. explicit zeta and z follow the variable
+# name -> (call taking (variable, dataset, **explicit), the dims of its full-domain
+# result that hold the points of the X, Y window)
+EXPLICIT = {
+    "ddxi": (lambda v, d, **kw: xroms.ddxi(v, d, **kw), {"eta_rho": Y, "xi_u": XU}),
+    "ddeta": (lambda v, d, **kw: xroms.ddeta(v, d, **kw), {"eta_v": YV, "xi_rho": X}),
+    "ddz": (lambda v, d, **kw: xroms.ddz(v, d, **kw), {"eta_rho": Y, "xi_rho": X}),
+    "zslice": (
+        lambda v, d, **kw: xroms.zslice(v, [-15.0], d, **kw),
+        {"eta_rho": Y, "xi_rho": X},
+    ),
+    "gridsum": (
+        lambda v, d, **kw: xroms.gridsum(v, d, "Z", **kw),
+        {"eta_rho": Y, "xi_rho": X},
+    ),
+}
+# gridsum takes a free surface but has no argument for explicit depths
+EXPLICIT_CASES = [
+    (name, how)
+    for name in EXPLICIT
+    for how in ("zeta", "z")
+    if (name, how) != ("gridsum", "z")
+]
+
+
+def given(ds, how):
+    """The explicit free surface (``how="zeta"``) or depths (``"z"``) of ``ds``."""
+    return {"zeta": ds.zeta} if how == "zeta" else {"z": xroms.z(ds)}
+
+
+@pytest.mark.parametrize("name, how", EXPLICIT_CASES)
+@pytest.mark.parametrize("t", [0, 1])
+def test_explicit_zeta_or_z_follows_a_single_time_variable(rutgers, name, how, t):
+    """zeta=ds.zeta or z=xroms.z(ds) hold every time of the grid. A variable cut to
+    one time must be matched to its own time, like the grid's zeta is, and not come
+    back broadcast over all of them (shape (2, 6, 9, 11) instead of (6, 9, 11))."""
+    ds = rutgers
+    call = EXPLICIT[name][0]
+    one = ds.temp.isel(ocean_time=t)
+    got = call(one, ds, **given(ds, how))
+    assert "ocean_time" not in got.dims
+    assert_same(got, call(one, ds))
+
+
+def test_explicit_zeta_reaches_the_accessor_too(rutgers):
+    ds = rutgers
+    one = ds.temp.isel(ocean_time=1)
+    got = ds.xroms.ddxi(one, zeta=ds.zeta)
+    assert "ocean_time" not in got.dims
+    np.testing.assert_allclose(got.values, **ANALYTIC["ddxi"])
+
+
+@pytest.mark.parametrize("name, how", EXPLICIT_CASES)
+def test_explicit_zeta_or_z_follows_a_horizontal_subset(labelled, name, how):
+    """The explicit field covers the whole domain and the variable only a window of
+    it: they are matched by label, as the grid's own h and zeta are (a raw
+    AlignmentError before), also when the variable was cut in time as well."""
+    ds = labelled
+    call, window = EXPLICIT[name]
+    sub = ds.temp.isel(xi_rho=X, eta_rho=Y)
+    want = call(ds.temp, ds).isel(window)
+    assert_same(call(sub, ds, **given(ds, how)), want)
+
+    one = sub.isel(ocean_time=1)
+    got = call(one, ds, **given(ds, how))
+    assert "ocean_time" not in got.dims
+    assert_same(got, want.isel(ocean_time=1))
+
+
+@pytest.mark.parametrize("how", ["zeta", "z"])
+def test_explicit_zeta_or_z_varying_in_time_needs_a_time_reduced_variable(rutgers, how):
+    """A time mean has no time to pick from an explicit field either. The error says
+    so and what to pass, where the result used to grow a spurious time dimension."""
+    ds = rutgers
+    tm = ds.temp.mean("ocean_time")
+    with pytest.raises(xroms._align.GridMismatchError, match="ocean_time") as err:
+        xroms.ddxi(tm, ds, **given(ds, how))
+    assert "zeta=0" in str(err.value)
+
+    reduced = {
+        "zeta": {"zeta": ds.zeta.mean("ocean_time")},
+        "z": {"z": xroms.z(ds, zeta="mean")},
+    }[how]
+    got = xroms.ddxi(tm, ds, **reduced)
+    assert got.dims == ("s_rho", "eta_rho", "xi_u")
+    np.testing.assert_allclose(got.values, **ANALYTIC["ddxi"])
+
+
+def test_matching_explicit_zeta_z_and_levels_stays_lazy(rutgers):
+    """Matching uses labels and metadata only: no model field is evaluated."""
+    c, loads = tapped(chunked(rutgers))
+    cut = c.temp.isel(ocean_time=0)
+    results = {
+        "zeta": xroms.ddxi(cut, c, zeta=c.zeta),
+        "z": xroms.ddxi(cut, c, z=xroms.z(c)),
+        "levels": xroms.ddxi(c.temp.isel(s_rho=slice(1, 4)), c),
+        "sum": xroms.gridsum(c.temp.isel(s_rho=slice(1, 4)), c, "Z"),
+        "mean": xroms.depth_average(c.temp.isel(s_rho=slice(1, 4)), c),
+    }
+    assert not loads, "model fields were evaluated while building the results"
+    for key, got in results.items():
+        assert got.chunks is not None, key
+    want = xroms.ddxi(rutgers.temp.isel(ocean_time=0), rutgers)
+    np.testing.assert_allclose(results["zeta"].values, want.values, **TIGHT)
+    np.testing.assert_allclose(results["z"].values, want.values, **TIGHT)
+    np.testing.assert_allclose(results["levels"].values, **ANALYTIC["ddxi"])
+
+
+# ---------------------------------------- 15. grid without a free surface
+@pytest.mark.parametrize("name", list(EXPLICIT))
+def test_time_varying_variable_needs_a_free_surface_when_the_grid_has_none(rutgers, name):
+    """Output without its zeta used to get flat (zeta = 0) depths without a word. A
+    variable with a time dim, or the scalar time of a selection, now raises and says
+    how to choose; one without any time keeps the resting default."""
+    ds = rutgers
+    call = EXPLICIT[name][0]
+    bare = ds.drop_vars("zeta")
+    for var in (ds.temp, ds.temp.isel(ocean_time=1)):
+        with pytest.raises(xroms._align.GridMismatchError, match="zeta") as err:
+            call(var, bare)
+        for hint in ("zeta=0", "zeta=<DataArray>", "merge"):
+            assert hint in str(err.value), hint
+
+    assert_same(call(ds.temp, bare, zeta=0), call(ds.temp, ds, zeta=0))
+    assert_same(call(ds.temp, bare, zeta=ds.zeta), call(ds.temp, ds))
+
+    tm = ds.temp.mean("ocean_time")
+    assert_same(call(tm, bare), call(tm, bare, zeta=0))
+
+
+def test_output_with_a_grid_file_that_lacks_zeta(ucla_romstools):
+    """A roms-tools grid file holds the vertical parameters but no zeta, which the
+    output has: passing the grid file alone used to give flat depths. Merging the
+    two, or passing the output's zeta, gives the real ones."""
+    out, grid = ucla_romstools
+    with pytest.raises(xroms._align.GridMismatchError, match="zeta"):
+        xroms.ddxi(out.temp, grid=grid)
+    want = xroms.ddxi(out.temp, grid=ucla_dataset((out, grid)))
+    assert_same(xroms.ddxi(out.temp, grid=grid, zeta=out.zeta), want)
+
+
+# ------------------------------------------- 16. variables cut vertically
+CUTS = {"slice": slice(1, 4), "list": [1, 2, 3]}
+
+
+@pytest.mark.parametrize("levels", list(CUTS.values()), ids=list(CUTS))
+@pytest.mark.parametrize("lay", ["rutgers", "remora"])
+def test_variable_cut_vertically_is_matched_to_the_vertical_parameters_by_label(lay, levels):
+    """These files label s_rho, yet ``temp.isel(s_rho=...)`` on its own raised a raw
+    AlignmentError (join='exact'). The depths are matched to its levels by label, so
+    every result is that of its own layers."""
+    ds = merged(lay)
+    t = ds.temp.isel(s_rho=levels)
+    ax = t.dims.index("s_rho")
+
+    got = xroms.ddxi(t, ds)
+    assert got.sizes["s_rho"] == 3
+    np.testing.assert_allclose(got.values, **ANALYTIC["ddxi"])
+    np.testing.assert_allclose(xroms.ddeta(t, ds).values, **ANALYTIC["ddeta"])
+    w = xroms.ddz(t, ds)
+    assert w.sizes["s_w"] == 4
+    np.testing.assert_allclose(w.values, syn.TEMP_B, rtol=1e-9)
+
+    # thicknesses, sums and means over its own layers
+    layers = xroms.dz(ds).isel(s_rho=levels)
+    assert_same(xroms.dz(ds, like=t), layers)
+    np.testing.assert_allclose(
+        xroms.gridsum(t, ds, "Z").values, (t.values * layers.values).sum(ax), **TIGHT
+    )
+    np.testing.assert_allclose(
+        xroms.depth_average(t, ds).values,
+        (t.values * layers.values).sum(ax) / layers.values.sum(ax),
+        **TIGHT,
+    )
+
+    # zslice sees the same water as on the full column wherever the cut reaches
+    depth = [-15.0]
+    part = xroms.zslice(t, depth, ds)
+    full = xroms.zslice(ds.temp, depth, ds)
+    inside = np.isfinite(part.values)
+    assert inside.mean() > 0.5
+    np.testing.assert_allclose(part.values[inside], full.values[inside], **TIGHT)
+
+
+def test_explicit_depths_on_all_levels_follow_a_variable_cut_vertically(rutgers):
+    """A z with every level is matched to the variable's levels by label too."""
+    ds = rutgers
+    t = ds.temp.isel(s_rho=slice(1, 4))
+    got = xroms.ddxi(t, ds, z=xroms.z(ds))
+    assert got.sizes["s_rho"] == 3
+    np.testing.assert_allclose(got.values, **ANALYTIC["ddxi"])
+
+
+def test_w_level_variable_cut_vertically_is_matched_by_label_too(rutgers):
+    """Variables on w levels (like the w velocity, which these files label along s_w)
+    are matched to Cs_w and the w-level depths the same way."""
+    ds = rutgers
+    cut = slice(2, 6)
+    on_w = xroms.to_s_w(ds.temp).assign_coords(s_w=ds.s_w)
+    sub = on_w.isel(s_w=cut)
+    assert_same(xroms.vertical.z_like(sub, ds), xroms.z(ds, scoord="w").isel(s_w=cut))
+    assert_same(xroms.dz(ds, scoord="w", like=sub), xroms.dz(ds, scoord="w").isel(s_w=cut))
+    assert xroms.ddxi(sub, ds).sizes["s_w"] == 4
+
+
+@pytest.mark.parametrize("lay", ["ucla", "croco"])
+@pytest.mark.parametrize("name", ["ddxi", "ddeta", "ddz", "zslice", "gridsum", "depth_average"])
+def test_variable_cut_vertically_without_labels_says_to_cut_the_dataset(lay, name):
+    """Without s_rho labels on both sides the levels cannot be told apart: ddxi gave
+    "conflicting sizes {3, 6}" and zslice a numba core-dimension error. Now the error
+    says to select levels on the Dataset rather than on the variable alone."""
+    ds = merged(lay)
+    t = ds.temp.isel(s_rho=slice(1, 4))
+    calls = {
+        **{n: EXPLICIT[n][0] for n in EXPLICIT},
+        "depth_average": lambda v, d: xroms.depth_average(v, d),
+    }
+    with pytest.raises(xroms._align.GridMismatchError) as err:
+        calls[name](t, ds)
+    assert "select levels on the Dataset rather than on the variable alone" in str(err.value)
+
+    with pytest.raises(xroms._align.GridMismatchError, match="Dataset"):  # the same for a given z
+        xroms.ddxi(t, ds, z=xroms.z(ds))
+    # cutting z the same way says which levels, so that works
+    got = xroms.ddxi(t, ds, z=xroms.z(ds).isel(s_rho=slice(1, 4)))
+    np.testing.assert_allclose(got.values, **ANALYTIC["ddxi"])
+
+
+# ------------------------------------------------ 17. strided subsets
+@pytest.fixture
+def indexed(rutgers):
+    """Rutgers dataset with integer index coordinates on every horizontal dimension."""
+    return xroms.add_cf_attrs(rutgers, index_coords=True)
+
+
+@pytest.mark.parametrize("name, dim", [("ddxi", "xi_rho"), ("ddeta", "eta_rho")])
+@pytest.mark.parametrize("step", [2, -1], ids=["every-other", "reversed"])
+def test_strided_subset_with_index_coords_raises_instead_of_a_wrong_derivative(indexed, name, dim, step):
+    """pm and pn describe neighbouring cells. Every other point gave a derivative
+    twice too large, silently, once the dataset had index coordinates to match by."""
+    d = indexed
+    strided = d.temp.isel({dim: slice(None, None, step)})
+    with pytest.raises(xroms._align.GridMismatchError, match=rf"{dim}.*do not step by 1"):
+        getattr(xroms, name)(strided, d)
+    # the same subset with step 1 is what to do instead, and is exact
+    contiguous = d.temp.isel({dim: slice(2, 9)})
+    np.testing.assert_allclose(getattr(xroms, name)(contiguous, d).values, **ANALYTIC[name])
+
+
+def test_strided_index_labels_are_caught_wherever_grid_fields_are_matched(indexed):
+    d = indexed
+    strided = d.temp.isel(xi_rho=slice(None, None, 2))
+    with pytest.raises(xroms._align.GridMismatchError, match="step by 1"):
+        xroms._align.select_like(d.h, strided)
+    with pytest.raises(xroms._align.GridMismatchError, match="step by 1"):
+        xroms.dx(d, like=strided)
+    with pytest.raises(xroms._align.GridMismatchError, match="step by 1"):
+        xroms.z(d, like=strided)
+    # or in the grid field, whatever the variable has
+    plain = d.temp.isel(xi_rho=slice(0, 6)).drop_vars("xi_rho")
+    thinned = d.h.isel(xi_rho=slice(None, None, 2))
+    with pytest.raises(xroms._align.GridMismatchError, match=r"'h' has 'xi_rho' index labels .* step by 1"):
+        xroms._align.select_like(thinned, plain, name="h")
+
+
+@pytest.mark.parametrize(
+    "call, dim",
+    [
+        (lambda d: xroms.to_rho(d.u.isel(xi_u=slice(None, None, 2))), "xi_u"),
+        (lambda d: xroms.to_u(d.temp.isel(xi_rho=slice(None, None, 3))), "xi_rho"),
+        (lambda d: xroms.to_v(d.temp.isel(eta_rho=slice(None, None, 2))), "eta_rho"),
+        (lambda d: xroms.to_rho(d.v.isel(eta_v=slice(None, None, 2))), "eta_v"),
+    ],
+    ids=["u-to-rho", "rho-to-u", "rho-to-v", "v-to-rho"],
+)
+def test_moving_strided_index_labels_to_another_stagger_raises(indexed, call, dim):
+    """``to_rho(u[..., ::2]).xi_rho`` came out as [0 2 4 6 8 10 11]: labels that
+    describe no cell, made up across points that are not neighbours."""
+    with pytest.raises(xroms._align.GridMismatchError, match=rf"{dim}.*do not step by 1"):
+        call(indexed)
+
+
+def test_only_the_axis_that_is_operated_on_has_to_be_contiguous(indexed):
+    """Moving along xi does not look at eta: every other eta row is what it is. Moving
+    along eta does."""
+    d = xroms.canonicalize(indexed)
+    every_other_row = d.u.isel(eta_rho=slice(None, None, 2))
+    got = xroms.to_rho(every_other_row)
+    assert got.dims[-2:] == ("eta_rho", "xi_rho")
+    np.testing.assert_array_equal(got["eta_rho"].values, d.eta_rho.values[::2])
+    with pytest.raises(xroms._align.GridMismatchError, match=r"eta_rho.*do not step by 1"):
+        xroms.to_v(every_other_row)
+
+
+def test_labels_that_are_not_integer_positions_are_not_invented(indexed):
+    """Half-integer labels on u cannot be shifted onto rho points without inventing
+    values: the new dimension gets none, so adding rho-point data still lines up (it
+    came out with an xi_rho of size 0)."""
+    d = xroms.canonicalize(indexed)
+    half = d.assign_coords(xi_u=np.arange(d.sizes["xi_u"]) + 0.5)
+    rho = xroms.to_rho(half.u)
+    assert "xi_rho" not in rho.indexes
+    combined = rho + half.temp
+    assert combined.sizes["xi_rho"] == d.sizes["xi_rho"]
+    assert xroms.to_u(half.temp).sizes["xi_u"] == d.sizes["xi_u"]
+    # integer positions do carry across, as before
+    np.testing.assert_array_equal(xroms.to_rho(d.u)["xi_rho"].values, np.arange(d.sizes["xi_rho"]))

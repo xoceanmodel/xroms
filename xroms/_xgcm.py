@@ -81,11 +81,22 @@ def _restore_chunks(out, in_chunks, new_dim, delta):
     return out.chunk({new_dim: tuple(chunks)})
 
 
-def _new_labels(labels, axis, from_center):
-    """Integer labels along the new dim (inner[i] sits between center[i], [i+1])."""
+def _new_labels(labels, axis, from_center, dim=None, name=None):
+    """Integer labels along the new dim (inner[i] sits between center[i], [i+1]).
+
+    Only integer labels stepping by 1, the positions of the grid's own points, can
+    be shifted onto the other stagger. Any other labels (half-integers, longitudes,
+    ...) are not guessed at: the new dim gets none. A step other than 1 means the
+    points were subsampled, which raises (see ``_align.check_unstrided``).
+    """
+    from ._align import check_unstrided
+
     if labels is None or axis == "Z":
         return None
     labels = np.asarray(labels)
+    if not np.issubdtype(labels.dtype, np.integer):
+        return None
+    check_unstrided(labels, dim, name if name is not None else "variable")
     if from_center:
         return labels[:-1]
     return np.concatenate([labels, [labels[-1] + 1]]) if labels.size else labels
@@ -98,6 +109,7 @@ def _apply(func, da, axis, padding, fill_value):
         raise ValueError(f"{da.name!r} has no {axis!r} dimension; dims are {da.dims}")
     new_dim = target_dim(axis, from_center)
     labels = da[dim].values if dim in da.indexes else None
+    new_labels = _new_labels(labels, axis, from_center, dim, da.name)  # raises for strided labels
     keep_coords = {k: v for k, v in da.coords.items() if dim not in v.dims and k != dim}
     bare = xr.DataArray(da.variable, name=da.name)
     in_chunks = None
@@ -110,7 +122,6 @@ def _apply(func, da, axis, padding, fill_value):
     out = out.drop_vars([c for c in out.coords], errors="ignore")
     delta = out.sizes[new_dim] - da.sizes[dim]
     out = _restore_chunks(out, in_chunks, new_dim, delta)
-    new_labels = _new_labels(labels, axis, from_center)
     if new_labels is not None:
         out = out.assign_coords({new_dim: new_labels})
     out = out.assign_coords(keep_coords)

@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 
 from . import _xgcm
-from ._align import require, select_like
+from ._align import _check_grid, require, select_like
 from .conventions import canonicalize, normalize_hcoord
 
 
@@ -29,6 +29,7 @@ def _metric(grid, name, hcoord, like):
 
 def dx(grid, hcoord="rho", *, like=None):
     """Grid spacing along xi (metres), ``1 / pm`` averaged onto ``hcoord``."""
+    grid = _check_grid(grid, "dx")
     out = 1.0 / _metric(grid, "pm", hcoord, like)
     out.attrs = {"units": "m", "long_name": f"grid spacing in xi at {hcoord or 'rho'} points"}
     return out.rename(f"dx_{hcoord or 'rho'}")
@@ -36,6 +37,7 @@ def dx(grid, hcoord="rho", *, like=None):
 
 def dy(grid, hcoord="rho", *, like=None):
     """Grid spacing along eta (metres), ``1 / pn`` averaged onto ``hcoord``."""
+    grid = _check_grid(grid, "dy")
     out = 1.0 / _metric(grid, "pn", hcoord, like)
     out.attrs = {"units": "m", "long_name": f"grid spacing in eta at {hcoord or 'rho'} points"}
     return out.rename(f"dy_{hcoord or 'rho'}")
@@ -43,6 +45,7 @@ def dy(grid, hcoord="rho", *, like=None):
 
 def dA(grid, hcoord="rho", *, like=None):
     """Cell area (m²) at ``hcoord``: ``dx * dy``."""
+    grid = _check_grid(grid, "dA")
     out = dx(grid, hcoord, like=like) * dy(grid, hcoord, like=like)
     out.attrs = {"units": "m2", "long_name": f"cell area at {hcoord or 'rho'} points"}
     return out.rename(f"dA_{hcoord or 'rho'}")
@@ -52,6 +55,7 @@ def dV(grid, hcoord="rho", scoord="s_rho", *, zeta=None, like=None):
     """Cell volume (m³) at (``hcoord``, ``scoord``): ``dz * dA``."""
     from .vertical import dz
 
+    grid = _check_grid(grid, "dV")
     out = dz(grid, hcoord=hcoord, scoord=scoord, zeta=zeta, like=like) * dA(grid, hcoord, like=like)
     out.attrs = {"units": "m3", "long_name": f"cell volume at {hcoord or 'rho'}/{scoord} points"}
     return out.rename(f"dV_{scoord}_{hcoord or 'rho'}")
@@ -66,7 +70,7 @@ def nominal_resolution(grid, units="m", lat=None):
     ``units="degrees"`` converts to degrees of longitude at ``lat`` (default: the
     middle of the domain's latitude range), as roms-tools does.
     """
-    grid = canonicalize(grid)
+    grid = _check_grid(grid, "nominal_resolution")
     require(grid, "pm", "pn", purpose="nominal resolution")
     res = float(((1.0 / grid.pm).mean() + (1.0 / grid.pn).mean()) / 2)
     if units == "m":
