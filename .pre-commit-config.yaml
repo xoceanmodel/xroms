@@ -16,6 +16,7 @@ repos:
     - id: end-of-file-fixer
     - id: check-docstring-first
     - id: check-added-large-files
+      exclude: ^xroms/tests/golden/  # v0.6.2 regression outputs (~4 MB), needed by test_golden.py
     - id: requirements-txt-fixer
     - id: file-contents-sorter
       files: requirements-dev.txt
