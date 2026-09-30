@@ -44,6 +44,10 @@ RUTGERS = {
 HCOORDS = tuple(CANONICAL)
 TIME_NAMES = ("ocean_time", "time", "scrum_time")
 _HDIMS = {"xi_rho", "xi_u", "eta_rho", "eta_v"}
+# attrs of an SGRID topology variable that name dims
+_SGRID_DIM_ATTRS = ("face_dimensions", "edge1_dimensions", "edge2_dimensions", "vertical_dimensions", "node_dimensions")
+# attr that marks the topology variable add_cf_attrs writes, to tell it from one that came with a file
+_GENERATED = "xroms_generated"
 
 
 def normalize_hcoord(hcoord):
@@ -77,17 +81,38 @@ def _alias_map(obj):
     return mapping
 
 
+def _rename_topology(ds, mapping):
+    """``ds`` with the dim names in its SGRID topology attrs mapped through ``mapping``."""
+    token = re.compile(r"\b(" + "|".join(mapping) + r")\b")
+    renamed = {}
+    for name, var in ds.variables.items():
+        if var.attrs.get("cf_role") == "grid_topology":
+            for key in _SGRID_DIM_ATTRS:
+                old = var.attrs.get(key)
+                new = token.sub(lambda match: mapping[match.group(1)], old) if isinstance(old, str) else old
+                if new != old:
+                    renamed[name, key] = new
+    if renamed:
+        ds = ds.copy()  # own attrs dicts, so the caller's Dataset is left alone
+        for (name, key), value in renamed.items():
+            ds[name].attrs[key] = value
+    return ds
+
+
 def canonicalize(obj):
     """Rename Rutgers/REMORA alias dims to canonical names (metadata only).
 
     Index coords on alias dims are dropped where a canonical index already
-    exists (they describe the same positions). Works on Datasets and DataArrays.
+    exists (they describe the same positions). The dim names in an SGRID
+    topology variable's attrs are renamed too, so they keep describing the
+    dims. Works on Datasets and DataArrays.
     """
     mapping = _alias_map(obj)
     if not mapping:
         return obj
     drop = [a for a, c in mapping.items() if a in obj.indexes and c in obj.indexes]
-    return obj.drop_vars(drop).rename({k: v for k, v in mapping.items()})
+    out = obj.drop_vars(drop).rename(dict(mapping))
+    return _rename_topology(out, mapping) if isinstance(out, xr.Dataset) else out
 
 
 def convention(ds):
@@ -125,10 +150,11 @@ def rename_like(da, ds):
     Pure functions return canonical names; for Rutgers/REMORA-named data, this
     maps e.g. a u-point result ``(eta_rho, xi_u)`` to ``(eta_u, xi_u)`` so it
     combines with ``ds.u`` without broadcasting. Only names present in ``ds``
-    are used.
+    are used. If ``ds`` has canonical names, ``da`` is canonicalized, so a
+    Rutgers-named ``da`` comes back with canonical names too.
     """
     if convention(ds) != "rutgers":
-        return da
+        return canonicalize(da)
     pos = hposition(da)
     if pos is None or pos == "rho":
         return da
@@ -158,15 +184,30 @@ def sgrid_topology(ds):
     for name, var in ds.variables.items():
         if var.attrs.get("cf_role") == "grid_topology":
             parsed = {"variable": name}
-            for key in ("face_dimensions", "edge1_dimensions", "edge2_dimensions", "vertical_dimensions", "node_dimensions"):
+            for key in _SGRID_DIM_ATTRS:
                 if key in var.attrs:
                     parsed[key] = var.attrs[key]
             return parsed
     return None
 
 
+def _has_file_topology(ds):
+    """True if ``ds`` has an SGRID topology variable that did not come from :func:`add_cf_attrs`.
+
+    REMORA writes one, so it says which model made the file. The one xroms adds
+    only describes dim names (any Dataset can get it) and says nothing about the model.
+    """
+    return any(
+        var.attrs.get("cf_role") == "grid_topology" and _GENERATED not in var.attrs for var in ds.variables.values()
+    )
+
+
 def sgrid_attrs(ds):
-    """SGRID topology attributes describing ``ds``'s own dim names."""
+    """SGRID topology attributes describing ``ds``'s own dim names.
+
+    They are marked as written by xroms (``xroms_generated``), so that
+    :func:`vertical_params` does not mistake them for a REMORA file's own topology.
+    """
     rut = convention(ds) == "rutgers"
     if rut:
         face = "xi_rho: xi_psi (padding: both) eta_rho: eta_psi (padding: both)"
@@ -185,6 +226,7 @@ def sgrid_attrs(ds):
         "face_dimensions": face,
         "edge1_dimensions": edge1,
         "edge2_dimensions": edge2,
+        _GENERATED: "xroms.add_cf_attrs",
     }
     if "s_rho" in ds.dims and "s_w" in ds.dims:
         attrs["vertical_dimensions"] = "s_rho: s_w (padding: none)"
@@ -283,10 +325,20 @@ def _attr(sources, *names):
     return None
 
 
+def _first(value, keep=()):
+    """``value`` with every dim not in ``keep`` cut to its first element.
+
+    ``xr.open_mfdataset`` with its default ``data_vars="all"`` gives every
+    parameter (``hc``, ``Cs_r``, ...) a leading time dim, one identical copy per
+    record. The first copy stands for all of them; comparing them would read every file.
+    """
+    return value.isel({dim: 0 for dim in value.dims if dim not in keep})
+
+
 def _scalar(sources, name):
     value = _var(sources, name)
     if value is not None:
-        return float(np.asarray(value.values if hasattr(value, "values") else value).reshape(-1)[0])
+        return float(np.asarray(_first(value).values))
     value = _attr(sources, name)
     if value is not None:
         return float(np.asarray(value).reshape(-1)[0])
@@ -301,11 +353,22 @@ def _levels(sources, dim):
 
 
 def _as_level_array(value, dim):
+    """``value`` as a 1-D array along the level dim ``dim`` (``s_rho`` or ``s_w``).
+
+    The level dim is picked by name; any other dim (time, see :func:`_first`) is
+    cut to its first element. A 1-D variable on a differently named dim is taken
+    to be the profile.
+    """
     if isinstance(value, xr.Variable):
         return xr.DataArray(value.values, dims=dim)
     if isinstance(value, xr.DataArray):
-        arr = value.reset_coords(drop=True)
-        return arr.rename({arr.dims[0]: dim}) if arr.dims and arr.dims[0] != dim else arr
+        if dim in value.dims:
+            return _first(value, keep=(dim,)).reset_coords(drop=True)
+        if value.ndim != 1:
+            raise ValueError(
+                f"{value.name!r} has dims {value.dims} but no {dim!r} dim; rename its vertical dim to {dim!r}."
+            )
+        return value.reset_coords(drop=True).rename({value.dims[0]: dim})
     return xr.DataArray(np.asarray(value, dtype=float).reshape(-1), dims=dim)
 
 
@@ -323,12 +386,24 @@ def vertical_params(ds, grid=None, *, Vtransform=None):
     * ``hc``: variable or attribute.
     * ``Vtransform``: the argument, a variable, an attribute, ``VertCoordType``
       (``"NEW"`` -> 2, ``"OLD"`` -> 1), else 2 for UCLA-style files (stretching
-      only in attributes, or roms-tools ``sigma_r`` variables) and REMORA.
+      only in attributes, or roms-tools ``sigma_r`` variables) and REMORA (its
+      own SGRID topology variable; the one :func:`add_cf_attrs` writes does not count).
+
+    Parameters that carry a time dim (as after ``xr.open_mfdataset`` with its
+    default ``data_vars="all"``) are read from their first record. Raises
+    ``ValueError`` if ``s_w`` does not have one more level than ``s_rho``, if the
+    parameters do not match the levels of the data, or if ``Vtransform`` is not 1 or 2.
     """
     src = _sources(ds, grid)
     N = _levels(src, "s_rho")
     if N is None:
         raise ValueError("dataset has no 's_rho' dimension; it is not a 3-D ROMS dataset")
+    n_w = _levels(src, "s_w")
+    if n_w is not None and n_w != N + 1:
+        raise ValueError(
+            f"'s_rho' has {N} levels but 's_w' has {n_w}; 's_w' must have one more level than 's_rho'. "
+            "To subset vertically, select both together, e.g. ds.isel(s_rho=slice(a, b), s_w=slice(a, b + 1))."
+        )
 
     sigma_r = _var(src, "s_rho", "sigma_r", "sc_r")
     sigma_w = _var(src, "s_w", "sigma_w", "sc_w")
@@ -363,13 +438,23 @@ def vertical_params(ds, grid=None, *, Vtransform=None):
         vct = _attr(src, "VertCoordType")
         if vct is not None:
             vt = {"NEW": 2, "OLD": 1}.get(str(vct).strip().upper())
-    if vt is None and (cs_attr_only or _var(src, "sigma_r") is not None or any(sgrid_topology(s) for s in src)):
+    if vt is None and (cs_attr_only or _var(src, "sigma_r") is not None or any(_has_file_topology(s) for s in src)):
         vt = 2  # UCLA ROMS output / roms-tools grids / REMORA only use Vtransform 2
     if vt is None:
-        raise ValueError("cannot determine Vtransform; pass Vtransform=1 or 2")
-    vt = int(vt)
-    if vt not in (1, 2):
-        raise ValueError(f"Vtransform must be 1 or 2, not {vt}")
+        raise ValueError(
+            "cannot determine Vtransform (no variable, attribute or VertCoordType gives it). Set it on the "
+            "Dataset, e.g. ds['Vtransform'] = 1 (or 2); xroms.z and xroms.vertical_params also take Vtransform=."
+        )
+    try:
+        number = float(vt)
+    except (TypeError, ValueError):
+        number = None
+    if number not in (1.0, 2.0):  # also rejects 2.5, which int() would silently turn into 2
+        raise ValueError(
+            f"Vtransform must be 1 or 2, not {vt!r}. Correct the dataset's 'Vtransform' variable or attribute, "
+            "or the Vtransform= argument."
+        )
+    vt = int(number)
 
     for name, arr, dim in (("Cs_r", cs["Cs_r"], "s_rho"), ("Cs_w", cs["Cs_w"], "s_w"), ("sigma_r", sigma_r, "s_rho"), ("sigma_w", sigma_w, "s_w")):
         n_data = _levels(src, dim)
@@ -392,31 +477,95 @@ def rho0(ds, grid=None, default=1025.0):
 
 
 _EPOCH = re.compile(r"(\d{4})[/-](\d{1,2})[/-](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?")
-_UNIT_SECONDS = {"second": 1, "seconds": 1, "s": 1, "sec": 1, "day": 86400, "days": 86400}
+_SINCE = re.compile(r"\s*(\S+)\s+since\s+(\S.*)", re.IGNORECASE)
+# time units that come without an epoch, as CF names, and their length in seconds
+_UNIT_NAMES = {
+    "s": "seconds", "sec": "seconds", "secs": "seconds", "second": "seconds", "seconds": "seconds",
+    "min": "minutes", "mins": "minutes", "minute": "minutes", "minutes": "minutes",
+    "h": "hours", "hr": "hours", "hrs": "hours", "hour": "hours", "hours": "hours",
+    "d": "days", "day": "days", "days": "days",
+}
+_UNIT_SECONDS = {"seconds": 1, "minutes": 60, "hours": 3600, "days": 86400}
+# calendars whose dates datetime64 can hold (proleptic Gregorian); the others need cftime
+_DATETIME64_CALENDARS = ("standard", "gregorian", "proleptic_gregorian")
 
 
 def _parse_epoch(text):
-    match = _EPOCH.search(text or "")
+    match = _EPOCH.search("" if text is None else str(text))
     if not match:
         return None
     y, m, d, hh, mm, ss = match.groups()
     return np.datetime64(f"{int(y):04d}-{int(m):02d}-{int(d):02d}T{int(hh or 0):02d}:{int(mm or 0):02d}:{int(ss or 0):02d}")
 
 
+def _is_decoded(var):
+    """True if ``var`` holds dates already: datetime64, or cftime objects."""
+    if np.issubdtype(var.dtype, np.datetime64):
+        return True
+    if var.dtype != object or var.size == 0:
+        return False
+    first = var.isel({dim: 0 for dim in var.dims}).values.item()
+    return type(first).__module__.split(".")[0] == "cftime"
+
+
+def _decode_cf(values, units, calendar, name):
+    """CF-decode ``values`` with xarray, which honours ``calendar``.
+
+    Gives datetime64 where the calendar and the dates allow it, else cftime dates.
+    """
+    attrs = {"units": units} if calendar is None else {"units": units, "calendar": calendar}
+    try:
+        decoded = xr.decode_cf(xr.Dataset({"t": ("t", values, attrs)}), decode_timedelta=False)
+    except (ValueError, OverflowError) as err:
+        raise ValueError(
+            f"cannot decode the times of {name!r} with units {units!r} and calendar {calendar or 'standard'!r}. "
+            f"Correct the units/calendar attributes of ds[{name!r}], or pass reference_date= to supply the epoch."
+        ) from err
+    return decoded["t"].values
+
+
+def _add_offsets(epoch, values, unit, name):
+    """``epoch`` plus ``values`` (in ``unit``) as datetime64[ns], proleptic Gregorian.
+
+    Adds in microseconds, so an epoch outside the datetime64[ns] range (years 1678
+    to 2262) still works when the dates themselves fall inside it.
+    """
+    micro = np.rint(np.asarray(values, dtype="float64") * (_UNIT_SECONDS[unit] * 1e6))
+    try:
+        if (np.abs(micro) >= 1e18).any():
+            raise OverflowError
+        return (epoch.astype("datetime64[us]") + micro.astype("timedelta64[us]")).astype("datetime64[ns]")
+    except OverflowError:
+        raise ValueError(
+            f"the times of {name!r} ({unit} since {epoch}) fall outside the range datetime64 can hold "
+            "(years 1678 to 2262). If that epoch is not the real start date, correct it in the variable's "
+            "long_name/units and pass reference_date=. Otherwise decode with cftime: give "
+            f"ds[{name!r}] CF units such as 'seconds since 0001-01-01' and call xr.decode_cf(ds, use_cftime=True)."
+        ) from None
+
+
 def decode_time(ds, reference_date=None, time_var=None):
     """Return ``ds`` with a decoded datetime index on its time dimension.
 
-    For UCLA ROMS output, the ``time`` dim has no coordinate and ``ocean_time``
-    holds seconds with the epoch only in its ``long_name`` ("Time since
-    1995/01/01"). The epoch is parsed from ``long_name``/``units`` (or taken
-    from ``reference_date``; if both exist they must agree) and a datetime64
-    coordinate is attached on the time dim; ``ocean_time`` is kept unchanged.
-    Datasets whose time is already decoded are returned as is.
+    * Times with CF ``units`` ("hours since 2013-12-17 00:00:00"), for example
+      data opened with ``decode_times=False``, are decoded by xarray's CF
+      decoding, which honours the ``calendar`` attribute: datetime64 where the
+      calendar and the dates allow it, else cftime dates.
+    * For UCLA ROMS output, the ``time`` dim has no coordinate and ``ocean_time``
+      holds seconds (``units`` "second") with the epoch only in its ``long_name``
+      ("Time since 1995/01/01"). The epoch is then taken from ``long_name`` (or
+      from ``reference_date``; if both exist they must agree), seconds, minutes,
+      hours or days are added to it, and a datetime64 coordinate is attached on
+      the time dim; ``ocean_time`` is kept unchanged. Dates outside the datetime64
+      range raise an error that suggests cftime.
+
+    If ``units`` and ``long_name`` both give an epoch, they must agree. Datasets whose
+    time is already decoded (datetime64 or cftime) are returned as is.
     """
     tdim = time_dim(ds)
     if tdim is None:
         raise ValueError("no time dimension found")
-    if tdim in ds.coords and np.issubdtype(ds[tdim].dtype, np.datetime64):
+    if tdim in ds.coords and _is_decoded(ds[tdim]):
         return ds
     name = time_var
     if name is None:
@@ -425,23 +574,49 @@ def decode_time(ds, reference_date=None, time_var=None):
             raise ValueError(f"no time variable on dim {tdim!r}")
         name = candidates[0]
     var = ds[name]
-    if np.issubdtype(var.dtype, np.datetime64):
+    if _is_decoded(var):
         return ds.assign_coords({tdim: var.variable})
-    units = str(var.attrs.get("units", "seconds")).strip().lower()
-    epoch = _parse_epoch(var.attrs.get("long_name")) or _parse_epoch(units)
+
+    units = str(var.attrs.get("units", "seconds")).strip()
+    in_units, in_long_name = _parse_epoch(units), _parse_epoch(var.attrs.get("long_name"))
+    if in_units is not None and in_long_name is not None and in_units != in_long_name:
+        raise ValueError(
+            f"the units of {name!r} ({units!r}) and its long_name ({var.attrs['long_name']!r}) give different epochs. "
+            f"Correct or remove one of them in ds[{name!r}].attrs."
+        )
+    epoch = in_units if in_units is not None else in_long_name
     if reference_date is not None:
         ref = np.datetime64(reference_date, "s")
         if epoch is not None and ref != epoch:
-            raise ValueError(f"reference_date {ref} disagrees with the file's epoch {epoch}")
+            raise ValueError(
+                f"reference_date {ref} disagrees with the file's epoch {epoch}. "
+                f"Drop reference_date, or correct the epoch in the units/long_name of ds[{name!r}]."
+            )
         epoch = ref
-    if epoch is None:
-        raise ValueError(f"cannot find a reference date for {name!r}; pass reference_date=")
-    unit = units.split(" since ")[0].strip()
-    scale = _UNIT_SECONDS.get(unit)
-    if scale is None:
-        raise ValueError(f"unsupported time units {units!r}")
-    seconds = np.asarray(var.values, dtype="float64") * scale
-    times = epoch.astype("datetime64[ns]") + (seconds * 1e9).astype("timedelta64[ns]")
+    values = np.asarray(var.values)
+    calendar = str(var.attrs["calendar"]).strip().lower() if "calendar" in var.attrs else None
+
+    since = _SINCE.fullmatch(units)
+    times = None
+    if since:
+        try:
+            times = _decode_cf(values, f"{since[1].lower()} since {since[2]}", calendar, name)
+        except ValueError:
+            if epoch is None:  # the units are all there is
+                raise
+    if times is None:
+        if epoch is None:
+            raise ValueError(f"cannot find a reference date for {name!r}; pass reference_date=")
+        unit = _UNIT_NAMES.get((since[1] if since else units).lower())
+        if unit is None:
+            raise ValueError(
+                f"unsupported time units {units!r} for {name!r}; use seconds, minutes, hours or days, "
+                "or CF units such as 'seconds since 2000-01-01'"
+            )
+        if calendar is None or calendar in _DATETIME64_CALENDARS:
+            times = _add_offsets(epoch, values, unit, name)
+        else:
+            times = _decode_cf(values, f"{unit} since {str(epoch).replace('T', ' ')}", calendar, name)
     return ds.assign_coords({tdim: (tdim, times, {"long_name": "time"})})
 
 
@@ -449,12 +624,17 @@ def decode_time(ds, reference_date=None, time_var=None):
 
 
 def add_cf_attrs(ds, *, index_coords=False, sgrid=True):
-    """Return a copy of ``ds`` decorated for cf-xarray and xgcm (metadata only).
+    """Return a copy of ``ds`` decorated for cf-xarray (metadata only).
 
     * ``axis``/``standard_name`` attributes on the coordinates that exist;
-    * an SGRID ``grid`` topology variable if none is present (``sgrid=True``);
+    * an SGRID ``grid`` topology variable if none is present (``sgrid=True``),
+      marked ``xroms_generated`` so that it is never taken for a REMORA file's own;
     * integer index coords on horizontal dims **only if** ``index_coords=True``
       and the dim has none (existing labels are never renumbered).
+
+    This does not prepare ``ds`` for ``xgcm.Grid(ds)``, whose autoparse needs
+    ``c_grid_axis_shift`` attributes that are not added here. For an xgcm Grid
+    use ``ds.xroms.xgcm_grid()``.
     """
     ds = ds.copy()
     for pos in HCOORDS:

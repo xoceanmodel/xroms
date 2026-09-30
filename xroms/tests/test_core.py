@@ -1,13 +1,18 @@
 """Unit tests for the stateless core: xgcm engine, conventions, vertical, metrics, alignment."""
 
+import re
+
+import dask
+import dask.array
 import numpy as np
 import pytest
 import xarray as xr
 
+import xroms
 from xroms import _xgcm, conventions as C, metrics as M, vertical as V
 from xroms._align import GridMismatchError, select_like
 from xroms.tests import _synthetic as syn
-from xroms.tests.conftest import chunked, merged
+from xroms.tests.conftest import INPUT, chunked, merged
 
 
 @pytest.fixture
@@ -19,6 +24,33 @@ def canon():
 def _edge_pad(a, dim):
     p = a.variable.pad({dim: (1, 1)}, mode="edge")
     return 0.5 * (p.isel({dim: slice(None, -1)}).data + p.isel({dim: slice(1, None)}).data)
+
+
+def _time_copies(arr, nt=2):
+    """``arr`` with a leading ``ocean_time`` dim, as xr.open_mfdataset(data_vars="all") makes it.
+
+    Real copies are identical; here later ones are altered, so that a function
+    that compared the copies, or took the wrong one, would show it.
+    """
+    return xr.concat([arr + k for k in range(nt)], dim="ocean_time")
+
+
+def _first_record_only(arr, nt=2):
+    """Like :func:`_time_copies`, lazily, and computing any record but the first raises."""
+
+    def record(k):
+        if k:
+            raise AssertionError(f"record {k} was read")
+        return np.asarray(arr.values)[None]
+
+    shape = (1,) + arr.shape
+    blocks = [dask.array.from_delayed(dask.delayed(record)(k), shape=shape, dtype=arr.dtype) for k in range(nt)]
+    return xr.DataArray(dask.array.concatenate(blocks), dims=("ocean_time",) + arr.dims)
+
+
+def _ucla_time(values, **attrs):
+    """UCLA-style time: an ``ocean_time`` variable on a ``time`` dim without coordinate."""
+    return xr.Dataset({"ocean_time": ("time", np.asarray(values, dtype=float), attrs)})
 
 
 # --- engine -------------------------------------------------------------------
@@ -171,6 +203,95 @@ class TestConventions:
         p = C.vertical_params(out.drop_attrs() if hasattr(out, "drop_attrs") else out.assign_attrs({}), grid)
         np.testing.assert_allclose(p.sigma_r.values, canon[1]["s_rho"])
 
+    @pytest.mark.filterwarnings("ignore:In a future version of xarray the default value:FutureWarning")
+    @pytest.mark.parametrize(
+        "func",
+        [xroms.z, lambda ds: ds.xroms.z_rho, lambda ds: xroms.ddxi(ds.temp, ds), lambda ds: xroms.ddz(ds.temp, ds)],
+        ids=["z", "z_rho", "ddxi", "ddz"],
+    )
+    def test_open_mfdataset_defaults_match_minimal(self, func):
+        """Plain xr.open_mfdataset (data_vars="all") gives every parameter a time dim; results stay the same."""
+        files = [INPUT / "ocean_his_0001.nc", INPUT / "ocean_his_0002.nc"]
+        minimal_kw = dict(data_vars="minimal", coords="minimal", compat="override")
+        with xr.open_mfdataset(files) as plain, xr.open_mfdataset(files, **minimal_kw) as minimal:
+            if "ocean_time" not in plain.Cs_r.dims:
+                pytest.skip("this xarray no longer gives parameters a time dim by default")
+            xr.testing.assert_allclose(func(plain), func(minimal))
+
+    @pytest.mark.parametrize("time_last", [False, True])
+    def test_vertical_params_parameters_with_a_time_dim(self, rutgers, time_last):
+        """The level dim is found by name and the first record is used, wherever the time dim sits."""
+        names = ["Cs_r", "Cs_w", "hc", "theta_s", "theta_b", "Vtransform", "Vstretching"]
+        timed = rutgers.assign({name: _time_copies(rutgers[name]) for name in names})
+        if time_last:
+            timed = timed.assign({name: timed[name].transpose(..., "ocean_time") for name in ("Cs_r", "Cs_w")})
+        assert timed.Cs_r.dims == (("s_rho", "ocean_time") if time_last else ("ocean_time", "s_rho"))
+        got, want = C.vertical_params(timed), C.vertical_params(rutgers)
+        assert (got.Vtransform, got.hc) == (want.Vtransform, want.hc)
+        assert got.Cs_r.dims == ("s_rho",) and got.Cs_w.dims == ("s_w",)
+        for name in ("Cs_r", "Cs_w", "sigma_r", "sigma_w"):
+            xr.testing.assert_allclose(getattr(got, name), getattr(want, name))
+        xr.testing.assert_allclose(V.z(timed), V.z(rutgers))
+        assert V.z(chunked(timed)).chunks is not None
+
+    def test_vertical_params_reads_only_the_first_record(self, rutgers):
+        """The copies are identical by construction, and reading all of them would read every file."""
+        names = ["Cs_r", "Cs_w", "hc", "theta_s", "theta_b", "Vtransform", "Vstretching"]
+        lazy = rutgers.assign({name: _first_record_only(rutgers[name]) for name in names})
+        got, want = C.vertical_params(lazy), C.vertical_params(rutgers)  # computing another record raises
+        assert (got.Vtransform, got.hc) == (want.Vtransform, want.hc)
+        np.testing.assert_allclose(got.Cs_r.values, want.Cs_r.values)
+        np.testing.assert_allclose(V.z(lazy).values, V.z(rutgers).values)
+
+    def test_vertical_params_level_dim_with_another_name(self, rutgers):
+        """A 1-D profile on a differently named dim is taken as the profile; a 2-D one is ambiguous."""
+        one_d = rutgers.assign(Cs_r=("lev", rutgers.Cs_r.values))
+        got = C.vertical_params(one_d).Cs_r
+        assert got.dims == ("s_rho",)
+        np.testing.assert_allclose(got.values, rutgers.Cs_r.values)
+        two_d = rutgers.assign(Cs_r=(("ocean_time", "lev"), np.tile(rutgers.Cs_r.values, (2, 1))))
+        with pytest.raises(ValueError, match="rename its vertical dim"):
+            C.vertical_params(two_d)
+
+    def test_vertical_params_s_w_must_follow_s_rho(self, rutgers):
+        """Selecting only s_rho leaves s_w at full length, and dz used to return too many levels."""
+        sub = rutgers.isel(s_rho=slice(2, 5))
+        with pytest.raises(ValueError, match="together"):
+            C.vertical_params(sub)
+        with pytest.raises(ValueError, match="together"):
+            V.dz(sub)
+        both = rutgers.isel(s_rho=slice(2, 5), s_w=slice(2, 6))
+        assert V.dz(both).sizes["s_rho"] == 3
+        np.testing.assert_allclose(V.dz(both).values, V.dz(rutgers).isel(s_rho=slice(2, 5)).values)
+
+    def test_vertical_params_missing_vtransform_says_how_to_set_it(self, rutgers):
+        bare = rutgers.drop_vars("Vtransform")
+        with pytest.raises(ValueError, match=r"ds\['Vtransform'\] = 1"):
+            C.vertical_params(bare)
+        bare["Vtransform"] = 1  # what the message says to do
+        assert C.vertical_params(bare).Vtransform == 1
+        xr.testing.assert_allclose(V.z(bare), V.z(rutgers.drop_vars("Vtransform"), Vtransform=1))
+
+    @pytest.mark.parametrize("bad", [2.5, 0, 3, float("nan")])
+    def test_vertical_params_rejects_bad_vtransform(self, rutgers, bad):
+        """Vtransform=2.5 used to become 2 silently."""
+        bare = rutgers.drop_vars("Vtransform")
+        croco = syn.make_dataset("croco")
+        croco.attrs["Vtransform"] = bad
+        for call in (
+            lambda: C.vertical_params(bare, Vtransform=bad),
+            lambda: C.vertical_params(bare.assign(Vtransform=bad)),
+            lambda: C.vertical_params(croco),
+        ):
+            with pytest.raises(ValueError, match="Vtransform must be 1 or 2"):
+                call()
+        with pytest.raises(ValueError, match="Vtransform must be 1 or 2"):
+            C.vertical_params(bare, Vtransform="x")
+
+    def test_vertical_params_accepts_integer_valued_vtransform(self, rutgers):
+        bare = rutgers.drop_vars("Vtransform")
+        assert [C.vertical_params(bare, Vtransform=v).Vtransform for v in (1, 2.0, np.int64(2))] == [1, 2, 2]
+
     def test_stretching_matches(self, canon):
         _, ex = canon
         np.testing.assert_allclose(C.stretching(ex["s_rho"], 5.0, 2.0).values, ex["cs_r"])
@@ -195,6 +316,49 @@ class TestConventions:
         ds = xr.Dataset({"lon_psi": (("eta_psi", "xi_psi"), np.zeros((4, 5))), "h": (("eta_rho", "xi_rho"), np.zeros((3, 4)))})
         assert set(C.canonicalize(ds).lon_psi.dims) == {"eta_vert", "xi_vert"}
 
+    def test_rename_like_canonicalizes_for_a_canonical_dataset(self, rutgers):
+        """rename_like returns ds's naming; for canonical ds that was left as the Rutgers aliases."""
+        can = C.canonicalize(rutgers)
+        for name in ("u", "v", "mask_psi", "temp"):
+            assert C.rename_like(rutgers[name], can).dims == can[name].dims
+        assert (C.rename_like(rutgers.u, can) + can.u).dims == can.u.dims
+        u = can.u
+        assert C.rename_like(u, can) is u
+        # the other way round still gives the aliases
+        assert C.rename_like(rutgers.u, rutgers).dims == rutgers.u.dims
+
+    def test_canonicalize_renames_the_sgrid_topology(self, remora, rutgers):
+        """The topology attrs named the alias dims after canonicalize, no longer describing the dims."""
+        can = C.canonicalize(remora)
+        dim_attrs = {key: value for key, value in can["grid"].attrs.items() if key.endswith("_dimensions")}
+        assert dim_attrs
+        for key, value in dim_attrs.items():
+            assert not set(C.ALIASES) & set(re.findall(r"\w+", value)), key
+        # the text xroms writes for a canonically named Dataset
+        assert dim_attrs == {key: C.sgrid_attrs(can)[key] for key in dim_attrs}
+        assert "xi_psi" in remora["grid"].attrs["face_dimensions"]  # the input is left alone
+        assert C.canonicalize(can) is can
+        # decorated before or after renaming, xroms's own topology reads the same
+        before, after = C.canonicalize(C.add_cf_attrs(rutgers)), C.add_cf_attrs(C.canonicalize(rutgers))
+        assert before["grid"].attrs == after["grid"].attrs
+
+    def test_canonicalize_renames_sgrid_corner_dims(self):
+        topology = {
+            "cf_role": "grid_topology",
+            "node_dimensions": "xi_psi eta_psi",
+            "face_dimensions": "xi_rho: xi_psi (padding: both)",
+        }
+        ds = xr.Dataset(
+            {
+                "lon_psi": (("eta_psi", "xi_psi"), np.zeros((4, 5))),
+                "h": (("eta_rho", "xi_rho"), np.zeros((3, 4))),
+                "grid": ((), 0, topology),
+            }
+        )
+        attrs = C.canonicalize(ds)["grid"].attrs
+        assert attrs["node_dimensions"] == "xi_vert eta_vert"
+        assert attrs["face_dimensions"] == "xi_rho: xi_vert (padding: both)"
+
     def test_positions(self, rutgers):
         can = C.canonicalize(rutgers)
         assert [C.hposition(can[v]) for v in ("temp", "u", "v", "lon_psi")] == ["rho", "u", "v", "psi"]
@@ -218,6 +382,99 @@ class TestConventions:
             C.decode_time(croco)
         assert np.issubdtype(C.decode_time(croco, reference_date="2010-01-01").time.dtype, np.datetime64)
 
+    def test_decode_time_cf_units_with_decode_times_false(self):
+        """Data opened without decoding still carries CF units ("hours since ..."); decode_time reads them."""
+        path = INPUT / "ocean_his_0001.nc"
+        with xr.open_dataset(path, decode_times=False) as raw, xr.open_dataset(path) as reference:
+            assert not np.issubdtype(raw.ocean_time.dtype, np.datetime64)
+            decoded = C.decode_time(raw)
+            assert np.issubdtype(decoded.ocean_time.dtype, np.datetime64)
+            np.testing.assert_array_equal(decoded.ocean_time.values, reference.ocean_time.values)
+            assert not np.issubdtype(raw.ocean_time.dtype, np.datetime64)  # the input is not modified
+
+    @pytest.mark.parametrize(
+        "unit,seconds",
+        [
+            ("second", 1), ("seconds", 1), ("s", 1),
+            ("minutes", 60),
+            ("hour", 3600), ("hours", 3600),
+            ("day", 86400), ("days", 86400),
+        ],
+    )
+    def test_decode_time_units_without_an_epoch(self, unit, seconds):
+        """UCLA-style: the epoch is in the long_name and the units only give the step."""
+        ds = _ucla_time([0, 1, 2.5], units=unit, long_name="Time since 2000/01/01")
+        steps = (np.array([0, 1, 2.5]) * seconds * 1e9).astype("timedelta64[ns]")
+        want = np.datetime64("2000-01-01T00:00:00", "ns") + steps
+        np.testing.assert_array_equal(C.decode_time(ds).time.values, want)
+
+    def test_decode_time_unsupported_units(self):
+        with pytest.raises(ValueError, match="unsupported time units"):
+            C.decode_time(_ucla_time([0, 1], units="weeks", long_name="Time since 2000/01/01"))
+
+    def test_decode_time_epoch_outside_the_datetime64_range(self):
+        """A "since 0001/01/01" epoch raised OverflowError; now it decodes if the dates fit, else explains."""
+        late = _ucla_time([6.3e10, 6.3e10 + 86400], units="second", long_name="Time since 0001/01/01")
+        assert C.decode_time(late).time.values[0] == np.datetime64("1997-05-23T16:00:00")
+        early = _ucla_time([0, 86400], units="second", long_name="Time since 0001/01/01")
+        far = _ucla_time([0, 1e30], units="second", long_name="Time since 2000/01/01")
+        for ds in (early, far):
+            with pytest.raises(ValueError, match="cftime") as err:
+                C.decode_time(ds)
+            assert "reference_date" in str(err.value)
+
+    def test_decode_time_epoch_at_1970(self):
+        """np.datetime64 of the Unix epoch is falsy, which once made it look like no epoch at all."""
+        ds = _ucla_time([0, 86400], units="second", long_name="Time since 1970/01/01")
+        assert C.decode_time(ds).time.values[1] == np.datetime64("1970-01-02")
+
+    def test_decode_time_units_and_long_name_epochs(self):
+        """A long_name epoch used to override the CF units silently."""
+        agree = _ucla_time([0, 1], units="days since 2000-01-01", long_name="Time since 2000/01/01")
+        assert C.decode_time(agree).time.values[1] == np.datetime64("2000-01-02")
+        clash = _ucla_time([0, 1], units="days since 2000-01-01", long_name="Time since 1995/01/01")
+        with pytest.raises(ValueError, match="different epochs"):
+            C.decode_time(clash)
+        undated = _ucla_time([0, 1], units="days since 2000-01-01", long_name="time since initialization")
+        assert C.decode_time(undated).time.values[1] == np.datetime64("2000-01-02")
+
+    def test_decode_time_honours_the_calendar(self):
+        """calendar was ignored: day 365 of a noleap year count is 1 January, not 31 December."""
+
+        def dates(ds):  # cftime dates for these calendars; the first ten characters are the date either way
+            return [str(t)[:10] for t in C.decode_time(ds).time.values]
+
+        noleap = _ucla_time([0, 365, 730], units="days since 2000-01-01", calendar="noleap")
+        assert dates(noleap) == ["2000-01-01", "2001-01-01", "2002-01-01"]
+        day360 = _ucla_time([0, 360], units="days since 2000-01-01", calendar="360_day")
+        assert dates(day360) == ["2000-01-01", "2001-01-01"]
+        # an epoch from the long_name goes through the same calendar
+        no_cf_units = _ucla_time([0, 365], units="day", long_name="Time since 2000/01/01", calendar="noleap")
+        assert dates(no_cf_units) == ["2000-01-01", "2001-01-01"]
+        # calendars datetime64 can hold stay datetime64
+        proleptic = _ucla_time([0, 1], units="days since 2000-01-01", calendar="proleptic_gregorian")
+        assert np.issubdtype(C.decode_time(proleptic).time.dtype, np.datetime64)
+
+    def test_decode_time_leaves_decoded_times_alone(self):
+        """datetime64 and cftime ocean_time both count as decoded (cftime raised "cannot find a reference date")."""
+        cftime = pytest.importorskip("cftime")
+        dates = np.array([cftime.DatetimeNoLeap(2000, 1, 1 + k) for k in range(3)], dtype=object)
+        as_coord = xr.Dataset({"x": ("ocean_time", np.arange(3))}, coords={"ocean_time": dates})
+        assert C.decode_time(as_coord) is as_coord
+        on_time = xr.Dataset({"x": ("time", np.arange(3))}, coords={"time": dates})
+        assert C.decode_time(on_time) is on_time
+        # in a variable on a dim without coordinate, they become that dim's index
+        for values in (np.array(["2000-01-01", "2000-01-02"], dtype="datetime64[ns]"), dates[:2]):
+            ds = xr.Dataset({"ocean_time": ("time", values)})
+            np.testing.assert_array_equal(C.decode_time(ds).time.values, values)
+            assert "time" not in ds.indexes  # the input is not modified
+
+    def test_decode_time_reference_date_supplies_an_unreadable_epoch(self):
+        ds = _ucla_time([0, 3600], units="seconds since initialization")
+        with pytest.raises(ValueError, match="reference_date"):
+            C.decode_time(ds)
+        assert C.decode_time(ds, reference_date="2000-01-01").time.values[1] == np.datetime64("2000-01-01T01:00:00")
+
     def test_rho0(self, rutgers, ucla):
         assert C.rho0(ucla[0]) == 1027.4 and C.rho0(rutgers) == 1025.0
 
@@ -226,6 +483,25 @@ class TestConventions:
         assert C.sgrid_topology(rutgers) is None
         dec = C.add_cf_attrs(rutgers)
         assert C.sgrid_topology(dec) is not None and "grid" not in rutgers
+
+    def test_add_cf_attrs_topology_is_not_remora(self):
+        """The topology add_cf_attrs writes made any Dataset look like REMORA, which means Vtransform 2."""
+        ds = syn.make_dataset("rutgers", vtransform=1).drop_vars("Vtransform")
+        decorated = C.add_cf_attrs(ds)
+        assert C.sgrid_topology(decorated) is not None
+        for each in (ds, decorated, C.canonicalize(decorated)):
+            with pytest.raises(ValueError, match="cannot determine Vtransform"):
+                xroms.z(each)
+        assert C.vertical_params(decorated, Vtransform=1).Vtransform == 1
+        # a REMORA file's own topology still says what it is, decorated or not
+        assert C.vertical_params(merged("remora")).Vtransform == 2
+        assert C.vertical_params(C.add_cf_attrs(merged("remora"))).Vtransform == 2
+
+    def test_add_cf_attrs_is_not_an_xgcm_preparation(self, rutgers):
+        """xgcm's autoparse rejects the decorated Dataset, so the docs point to the accessor."""
+        doc = C.add_cf_attrs.__doc__
+        assert "xgcm_grid" in doc and "cf-xarray and xgcm" not in doc
+        assert {"X", "Y"} <= set(rutgers.xroms.xgcm_grid().axes)
 
     def test_add_cf_attrs_index_coords_only_when_asked(self, rutgers):
         assert "xi_rho" not in C.add_cf_attrs(rutgers).coords
