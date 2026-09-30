@@ -48,7 +48,7 @@ def _check_grid(grid, func):
     if type(grid).__module__.startswith("xgcm"):
         raise TypeError(
             f"xroms 1.0: pass the Dataset holding the grid variables instead of an xgcm Grid, "
-            f"e.g. xroms.{func}(var, ds). xroms no longer builds or stores xgcm grids."
+            f"in its place (e.g. xroms.{func}(..., ds)). xroms no longer builds or stores xgcm grids."
         )
     if not isinstance(grid, xr.Dataset):
         raise TypeError(f"grid must be an xarray Dataset, not {type(grid).__name__}")

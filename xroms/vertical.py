@@ -169,6 +169,11 @@ def _resolve_zeta(grid, zeta, like=None):
     """The free-surface field to use, already matched to ``like`` if given."""
     if isinstance(zeta, xr.DataArray):
         zeta = canonicalize(zeta)
+        if hposition(zeta) not in (None, "rho"):
+            raise ValueError(
+                f"zeta is on {hposition(zeta)} points; pass it on rho points, as ROMS stores it "
+                "(z is averaged onto other points from there)."
+            )
         return select_like(zeta, like, name="zeta") if like is not None else zeta
     if zeta is None:
         if "zeta" not in grid.variables:

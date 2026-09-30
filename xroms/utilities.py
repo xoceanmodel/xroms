@@ -53,6 +53,8 @@ def to_grid(
     neighbouring points.
     """
     _reject_legacy(args, "to_grid", "Use xroms.to_grid(var, hcoord=..., scoord=...).")
+    if type(hcoord).__module__.startswith("xgcm"):
+        _reject_legacy((hcoord,), "to_grid", "Use xroms.to_grid(var, hcoord=..., scoord=...).")
     var = canonicalize(var)
     hcoord = normalize_hcoord(hcoord)
     scoord = normalize_scoord(scoord)

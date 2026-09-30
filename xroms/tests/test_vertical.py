@@ -356,3 +356,16 @@ def test_depth_of_a_selected_level_is_found_by_its_label(layout, select):
     else:
         with pytest.raises(ValueError, match="compute on the 3-D fields and select afterwards"):
             xroms.density(one(ds.temp), one(ds.salt), grid=ds)
+
+
+def test_explicit_zeta_off_rho_points_is_refused():
+    ds = merged("rutgers")
+    zeta_u = xroms.to_u(C.canonicalize(ds).zeta)
+    with pytest.raises(ValueError, match="rho points"):
+        xroms.ddxi(ds.temp, ds, zeta=zeta_u)
+
+
+def test_to_grid_rejects_an_xgcm_grid_where_hcoord_goes():
+    ds = merged("rutgers")
+    with pytest.raises(TypeError, match="xgcm grid"):
+        xroms.to_grid(ds.temp, ds.xroms.xgcm_grid(), "u")
