@@ -7,7 +7,8 @@ results behind. Rutgers and UCLA ROMS, CROCO and REMORA layouts are detected
 automatically.
 """
 
-from importlib.metadata import PackageNotFoundError, version
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
+from importlib.metadata import version as _version
 
 from . import conventions, datasets, metrics, vertical
 from .conventions import (
@@ -65,6 +66,15 @@ from . import accessor  # noqa: E402  (registers ds.xroms / da.xroms)
 
 
 try:
-    __version__ = version("xroms")
-except PackageNotFoundError:  # pragma: no cover - not installed
+    __version__ = _version("xroms")
+except _PackageNotFoundError:  # pragma: no cover - not installed
     __version__ = "unknown"
+
+
+def __getattr__(name):
+    """``xroms.XESMF_AVAILABLE`` (v0.6.2's flag) is looked up on access, so nothing optional is imported."""
+    if name == "XESMF_AVAILABLE":
+        from importlib.util import find_spec
+
+        return find_spec("xesmf") is not None
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

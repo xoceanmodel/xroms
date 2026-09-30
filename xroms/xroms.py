@@ -15,9 +15,17 @@ _MIGRATION = (
 )
 
 
+_FLAGS = (
+    "Its flags map to: include_Z0=True -> zeta=0 on the depth functions, e.g. ds.xroms.z(zeta=0) or "
+    "ds.xroms.assign_z(zeta=0) (depths at rest); include_cell_area -> ds.xroms.dA(); include_cell_volume -> "
+    "ds.xroms.dV(); include_3D_metrics -> nothing to do (dz, dV and the 3-D derivatives are always computed "
+    "on demand); add_verts and proj -> gone (plot cell-centre data with shading='nearest' or 'auto'). "
+)
+
+
 def roms_dataset(*args, **kwargs):
     """Removed in xroms 1.0; raises an error explaining the replacement."""
-    raise RuntimeError("xroms.roms_dataset was removed in 1.0. " + _MIGRATION)
+    raise RuntimeError("xroms.roms_dataset was removed in 1.0. " + _FLAGS + _MIGRATION)
 
 
 def open_netcdf(*args, **kwargs):
@@ -27,7 +35,10 @@ def open_netcdf(*args, **kwargs):
 
 def open_mfnetcdf(*args, **kwargs):
     """Removed in xroms 1.0; use ``xarray.open_mfdataset``."""
-    raise RuntimeError("xroms.open_mfnetcdf was removed in 1.0; use xr.open_mfdataset. " + _MIGRATION)
+    raise RuntimeError(
+        "xroms.open_mfnetcdf was removed in 1.0; use xr.open_mfdataset. Its v0.6.2 defaults were "
+        'xr.open_mfdataset(files, data_vars="minimal", coords="minimal", compat="override"). ' + _MIGRATION
+    )
 
 
 def open_zarr(*args, **kwargs):

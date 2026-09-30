@@ -250,12 +250,23 @@ def transform(da, iso_values, iso_array, dim, *, new_dim="z", method="linear", m
     return out
 
 
-def grid_for(ds, hcoords=True, vertical=True, padding="extend"):
+def _labels(ds, dim):
+    """``ds``'s own index labels along ``dim``, else integer positions."""
+    return np.asarray(ds.indexes[dim]) if dim in ds.indexes else np.arange(ds.sizes[dim])
+
+
+def grid_for(ds, hcoords=True, vertical=True, padding="extend", metrics=None):
     """A fresh, correctly configured ``xgcm.Grid`` for the (canonical) ``ds``.
 
     Exposed to users as ``ds.xroms.xgcm_grid()`` for their own xgcm work. Only
-    axes whose dims are present are included; no metrics are attached, because
-    ROMS metrics depend on position and are computed by xroms on demand.
+    axes whose dims are present are included. Each dim is labelled with ``ds``'s
+    own index coordinate where it has one (so arrays from ``ds`` line up with the
+    grid's metrics) and with integer positions otherwise.
+
+    ROMS metrics depend on position, so the caller computes them and passes
+    ``metrics``: a mapping from axes, e.g. ``("X",)`` or ``("X", "Y")``, to lists of
+    named DataArrays (one per position). They are stored in the grid under their
+    names, stripped of coordinates, and those whose axes the grid lacks are skipped.
     """
     coords = {}
     for axis, (center, stag, kind) in AXES.items():
@@ -267,5 +278,11 @@ def grid_for(ds, hcoords=True, vertical=True, padding="extend"):
             coords[axis] = {"center": center, kind: stag}
     if not coords:
         raise ValueError("dataset has no complete ROMS axis (center + staggered dims)")
-    base = xr.Dataset(coords={d: np.arange(ds.sizes[d]) for pair in coords.values() for d in pair.values()})
-    return _xgcm().Grid(base, coords=coords, padding={a: padding for a in coords}, autoparse_metadata=False)
+    base = xr.Dataset(coords={d: _labels(ds, d) for pair in coords.values() for d in pair.values()})
+    specs = {}
+    for axes, arrays in (metrics or {}).items():
+        if all(a in coords for a in axes):
+            for array in arrays:
+                base[array.name] = array.variable
+            specs[axes] = [array.name for array in arrays]
+    return _xgcm().Grid(base, coords=coords, metrics=specs or None, padding={a: padding for a in coords}, autoparse_metadata=False)

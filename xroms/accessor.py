@@ -8,6 +8,11 @@ Dataset's own dim naming (Rutgers ``eta_u`` stays ``eta_u``) with the Dataset's
 coordinates for their grid position attached. Assign a result to a variable if
 you reuse it; use ``.persist()`` for expensive reuse.
 
+A ``grid=`` Dataset (a grid file kept apart from the output) is completed from
+the Dataset before use: whatever the grid lacks of the Dataset's own global
+attributes, s-coordinate parameters and ``zeta`` is taken from the Dataset, so
+results match those of the merged Dataset.
+
 ``da.xroms`` offers only operations that need nothing beyond the DataArray.
 """
 
@@ -15,7 +20,20 @@ import numpy as np
 import xarray as xr
 
 from . import _xgcm, derived, interp, metrics, roms_seawater, utilities, vector, vertical
-from .conventions import canonicalize, horizontal_coords, hposition, rename_like, rho0, vertical_params
+from ._align import GridMismatchError
+from .conventions import (
+    CANONICAL,
+    HCOORDS,
+    RUTGERS,
+    canonicalize,
+    convention,
+    horizontal_coords,
+    hposition,
+    rename_like,
+    rho0,
+    sgrid_topology,
+    vertical_params,
+)
 
 
 def _removed(name, hint):
@@ -24,6 +42,117 @@ def _removed(name, hint):
 
     method.__doc__ = f"Removed in xroms 1.0. {hint}"
     return method
+
+
+def _removed_property(name, hint):
+    def getter(self):
+        raise AttributeError(f"xroms 1.0 removed {name}. {hint}")
+
+    return property(getter, doc=f"Removed in xroms 1.0. {hint}")
+
+
+#: variables ``conventions.vertical_params`` reads by name (it also reads global attributes)
+_VERTICAL_VARS = (
+    "s_rho", "s_w", "sigma_r", "sigma_w", "sc_r", "sc_w", "Cs_r", "Cs_w",
+    "hc", "theta_s", "theta_b", "Vtransform", "Vstretching", "Tcline",
+)
+
+#: keyword arguments of v0.6.2 that no longer exist, with what to do instead
+_REMOVED_KWARGS = {
+    "include_vars_adcp": (
+        "Build the set you need from ds.xroms.east, ds.xroms.north, ds.xroms.east_rotated(angle) and "
+        "ds.xroms.north_rotated(angle), e.g. ds[['angle']].assign(east=..., north=..., eastrot=..., northrot=...)."
+    ),
+}
+
+
+def _reject_kwargs(kwargs, func):
+    """Raise ``TypeError`` for unexpected keywords, with a hint for those xroms 1.0 removed."""
+    for key in kwargs:
+        hint = _REMOVED_KWARGS.get(key)
+        detail = f" xroms 1.0 removed it. {hint}" if hint else ""
+        raise TypeError(f"{func}() got an unexpected keyword argument {key!r}.{detail}")
+
+
+def _keyword_only(args, func):
+    """Guardrail for v0.6.2 calls that passed ``hcoord`` and ``scoord`` positionally."""
+    if args:
+        raise TypeError(
+            f"xroms 1.0: ds.xroms.{func} takes everything after var (hcoord, scoord, grid, ...) as keyword-only "
+            f"arguments; v0.6.2 accepted hcoord and scoord positionally. Write ds.xroms.{func}(var, hcoord='rho', scoord='s_rho')."
+        )
+
+
+def _is_xgcm_grid(obj):
+    return type(obj).__module__.startswith("xgcm")
+
+
+def _check_footprint(obj, grid, what):
+    """Raise unless ``obj`` covers the same rho points as ``grid`` (sizes and, if both have them, labels)."""
+    for dim in ("eta_rho", "xi_rho"):
+        if dim not in obj.dims or dim not in grid.dims:
+            continue
+        labels_differ = dim in obj.indexes and dim in grid.indexes and not obj.indexes[dim].equals(grid.indexes[dim])
+        if obj.sizes[dim] != grid.sizes[dim] or labels_differ:
+            raise GridMismatchError(
+                f"{what} and grid= cover different {dim} points ({obj.sizes[dim]} vs {grid.sizes[dim]}), so "
+                "they cannot be used together. Subset the Dataset and the grid the same way "
+                "(e.g. xroms.subset on both), or merge them: xr.merge([ds, grid], compat='override')."
+            )
+
+
+def _effective_grid(ds, grid):
+    """``grid`` plus what it lacks of ``ds``: global attrs, s-coordinate parameters and ``zeta``.
+
+    A grid kept apart from the output (UCLA ROMS, roms-tools, a Rutgers grid file)
+    has ``h``, ``pm`` and ``pn`` but neither the free surface nor, often, the
+    vertical parameters, which live with the output. Wherever both have something,
+    ``grid`` wins. ``zeta`` joins only if it covers the grid's rho points. Only
+    metadata is touched (lazy under dask) and neither input is modified.
+    """
+    out = grid.assign_attrs({**ds.attrs, **grid.attrs})
+    names = [n for n in _VERTICAL_VARS if n in ds.variables and n not in out.variables]
+    topology = sgrid_topology(ds)
+    if topology is not None and topology["variable"] not in out.variables:
+        names.append(topology["variable"])  # vertical_params reads it to settle Vtransform
+    out = out.assign_coords({n: ds.variables[n] for n in names if n in ds.dims})
+    out = out.assign({n: ds.variables[n] for n in names if n not in ds.dims})
+    for dim in ("s_rho", "s_w"):
+        if dim in ds.dims and dim not in out.dims:
+            # no variable carries the dim (UCLA output keeps Cs_r etc. in attributes), and vertical_params needs its size
+            out = out.assign({f"_{dim}_levels": xr.Variable(dim, np.zeros(ds.sizes[dim]))})
+    if "zeta" in ds.variables and "zeta" not in out.variables:
+        _check_footprint(ds["zeta"], out, "this Dataset's zeta")
+        out = out.assign(zeta=ds["zeta"].reset_coords(drop=True))
+    return out
+
+
+def _with_w_levels(ds):
+    """``ds`` with an ``s_w`` dim (integer labels) if only ``s_rho`` exists, as in UCLA output."""
+    if "s_rho" in ds.dims and "s_w" not in ds.dims:
+        return ds.assign_coords(s_w=np.arange(ds.sizes["s_rho"] + 1))
+    return ds
+
+
+def _grid_metrics(grid, vertical_metrics, zeta):
+    """xgcm metrics by axes: dx, dy and dA (when ``pm``/``pn`` exist), dz only if asked."""
+    out = {}
+    if "pm" in grid.variables and "pn" in grid.variables:
+        out[("X",)] = [metrics.dx(grid, h) for h in HCOORDS]
+        out[("Y",)] = [metrics.dy(grid, h) for h in HCOORDS]
+        out[("X", "Y")] = [metrics.dA(grid, h) for h in HCOORDS]
+    if vertical_metrics:
+        out[("Z",)] = [vertical.dz(grid, hcoord=h, scoord=s, zeta=zeta) for s in ("s_rho", "s_w") for h in HCOORDS]
+    return out
+
+
+def _alias_like(out, like):
+    """``out`` in Rutgers alias dims if ``like`` uses them, else as computed (canonical)."""
+    pos = hposition(out)
+    if convention(like) != "rutgers" or pos in (None, "rho"):
+        return out
+    rename = {c: r for c, r in zip(CANONICAL[pos], RUTGERS[pos], strict=True) if c != r and c in out.dims}
+    return out.rename(rename) if rename else out
 
 
 @xr.register_dataset_accessor("xroms")
@@ -36,7 +165,12 @@ class xromsDatasetAccessor:
     # --- plumbing -------------------------------------------------------------------
 
     def _grid(self, grid=None):
-        return self._obj if grid is None else grid
+        """Where grid variables are read from: this Dataset, or ``grid`` completed from it."""
+        if grid is None:
+            return self._obj
+        if not isinstance(grid, xr.Dataset):
+            return grid  # the function it reaches raises the guided error (xgcm Grid, wrong type)
+        return _effective_grid(self._obj, grid)
 
     def _var(self, var):
         if isinstance(var, str):
@@ -115,26 +249,63 @@ class xromsDatasetAccessor:
         """Cell volume (m³) at (``hcoord``, ``scoord``)."""
         return self._out(metrics.dV(self._grid(grid), hcoord, scoord, zeta=zeta))
 
-    def assign_z(self, *, zeta=None, hcoord="rho"):
+    def assign_z(self, *, zeta=None, hcoord="rho", grid=None):
         """A **new** Dataset with lazy ``z_rho``/``z_w`` coordinates attached.
 
         This is an explicit snapshot: recompute after changing ``zeta`` or ``h``.
-        On numpy-backed data the depths are computed immediately.
+        On numpy-backed data the depths are computed immediately. ``h`` comes from
+        ``grid`` if given (completed from this Dataset, as in :meth:`z`).
         """
-        z_rho = self.z(hcoord, "s_rho", zeta=zeta)
-        z_w = self.z(hcoord, "s_w", zeta=zeta)
+        z_rho = self.z(hcoord, "s_rho", zeta=zeta, grid=grid)
+        z_w = self.z(hcoord, "s_w", zeta=zeta, grid=grid)
         return self._obj.assign_coords({z_rho.name: z_rho.variable, z_w.name: z_w.variable})
 
-    def xgcm_grid(self, padding="extend"):
-        """A fresh xgcm Grid for this Dataset's canonical dims (``xroms.canonicalize(ds)``)."""
-        return _xgcm.grid_for(canonicalize(self._obj), padding=padding)
+    def xgcm_grid(self, padding="extend", *, vertical_metrics=False, zeta=None, grid=None):
+        """A fresh xgcm Grid for this Dataset's canonical dims (``xroms.canonicalize(ds)``).
+
+        The grid has X, Y and Z axes (UCLA output, which has no ``s_w`` dim, gets a
+        synthesized one) and the horizontal metrics ``dx`` (key ``("X",)``), ``dy``
+        (``("Y",)``) and the cell area ``dA`` (``("X", "Y")``) at rho, u, v and psi
+        points, from :func:`xroms.dx`, :func:`xroms.dy` and :func:`xroms.dA`. So
+        ``g.derivative(da, "X")`` and ``g.average(da, ["X", "Y"])`` work. The metrics
+        need ``pm`` and ``pn`` (here or in ``grid``); without them the grid has none.
+
+        Parameters
+        ----------
+        padding : str, optional
+            xgcm padding for all axes (``"extend"``, ``"fill"``, ...).
+        vertical_metrics : bool, optional
+            Also attach the layer thickness ``dz`` (key ``("Z",)``) at s_rho and s_w
+            for each horizontal position, for ``g.integrate(da, "Z")`` and vertical
+            averages. They are 4-D (they follow ``zeta`` in time), so they match only
+            arrays with the same dims: subset the Dataset first, then build the grid.
+            They are computed now, eagerly for numpy-backed data and lazily under dask.
+        zeta : None, float, "mean" or DataArray, optional
+            Free surface for those thicknesses, as in :meth:`z`.
+        grid : Dataset, optional
+            Grid kept apart from this Dataset, completed from it as in :meth:`z`.
+
+        Examples
+        --------
+        Arrays passed to the grid use the canonical dims:
+
+        >>> g = ds.xroms.xgcm_grid(vertical_metrics=True)
+        >>> c = xroms.canonicalize(ds)
+        >>> g.average(c.temp, ["X", "Y"])
+        >>> g.integrate(c.temp, "Z")
+        """
+        ds = canonicalize(self._obj)
+        if grid is not None:
+            if not isinstance(grid, xr.Dataset):
+                raise TypeError(f"grid must be an xarray Dataset holding pm and pn, not {type(grid).__name__}")
+            _check_footprint(ds, canonicalize(grid), "this Dataset")
+        arrays = _grid_metrics(self._grid(grid), vertical_metrics, zeta)
+        return _xgcm.grid_for(_with_w_levels(ds), padding=padding, metrics=arrays)
 
     set_grid = _removed("ds.xroms.set_grid", "xroms no longer stores an xgcm grid; just call the methods, or use ds.xroms.xgcm_grid() for your own xgcm work.")
-
-    @property
-    def xgrid(self):
-        """Removed in xroms 1.0; see :meth:`xgcm_grid`."""
-        raise AttributeError("xroms 1.0 removed ds.xroms.xgrid; use ds.xroms.xgcm_grid() for a fresh xgcm Grid.")
+    xgrid = _removed_property("ds.xroms.xgrid", "Use ds.xroms.xgcm_grid() for a fresh xgcm Grid.")
+    w = _removed_property("ds.xroms.w", "In 0.6.2 it was an unfinished placeholder that returned nothing. If your output has a 'w' variable, read ds['w'] directly.")
+    omega = _removed_property("ds.xroms.omega", "In 0.6.2 it was an unfinished placeholder that returned nothing. If your output has an 'omega' variable, read ds['omega'] directly.")
 
     # --- grid moves and calculus -------------------------------------------------------
 
@@ -142,16 +313,19 @@ class xromsDatasetAccessor:
         """Move ``var`` (name or DataArray) to ``hcoord``/``scoord``."""
         return self._out(utilities.to_grid(self._var(var), hcoord, scoord, **kwargs))
 
-    def ddxi(self, var, *, grid=None, **kwargs):
+    def ddxi(self, var, *args, grid=None, **kwargs):
         """d/dxi at constant depth; see :func:`xroms.ddxi`."""
+        _keyword_only(args, "ddxi")
         return self._out(utilities.ddxi(self._var(var), self._grid(grid), **kwargs))
 
-    def ddeta(self, var, *, grid=None, **kwargs):
+    def ddeta(self, var, *args, grid=None, **kwargs):
         """d/deta at constant depth; see :func:`xroms.ddeta`."""
+        _keyword_only(args, "ddeta")
         return self._out(utilities.ddeta(self._var(var), self._grid(grid), **kwargs))
 
-    def ddz(self, var, *, grid=None, **kwargs):
+    def ddz(self, var, *args, grid=None, **kwargs):
         """d/dz; see :func:`xroms.ddz`."""
+        _keyword_only(args, "ddz")
         return self._out(utilities.ddz(self._var(var), self._grid(grid), **kwargs))
 
     def hgrad(self, var, *, grid=None, **kwargs):
@@ -262,12 +436,14 @@ class xromsDatasetAccessor:
             return self._obj["v"]
         return self._grid_uv_from_earth()[1]
 
-    def east_rotated(self, angle, *, reference="xaxis", isradians=True, name=None):
+    def east_rotated(self, angle, *, reference="xaxis", isradians=True, name=None, **removed):
         """x component of (east, north) rotated by ``angle`` (e.g. along-channel)."""
+        _reject_kwargs(removed, "east_rotated")
         return self._rotated(angle, reference, isradians, name, 0)
 
-    def north_rotated(self, angle, *, reference="xaxis", isradians=True, name=None):
+    def north_rotated(self, angle, *, reference="xaxis", isradians=True, name=None, **removed):
         """y component of (east, north) rotated by ``angle`` (e.g. across-channel)."""
+        _reject_kwargs(removed, "north_rotated")
         return self._rotated(angle, reference, isradians, name, 1)
 
     def _rotated(self, angle, reference, isradians, name, which):
@@ -392,38 +568,57 @@ class xromsDatasetAccessor:
 
 @xr.register_dataarray_accessor("xroms")
 class xromsDataArrayAccessor:
-    """Operations that need nothing but the DataArray (no grid variables)."""
+    """Operations that need nothing but the DataArray (no grid variables).
+
+    Results use the Rutgers alias dims (``eta_u``, ``xi_v``, ``eta_psi``, ``xi_psi``)
+    when this DataArray has any of them, and canonical dims (``xroms.canonicalize``)
+    otherwise. A rho-point DataArray has no way to tell which naming its Dataset
+    uses, so moving it to u, v or psi points gives canonical names, e.g.
+    ``(eta_rho, xi_u)``; on a Rutgers Dataset that does not line up with ``ds.u``
+    (``(eta_u, xi_u)``). To get the Dataset's own naming use
+    ``ds.xroms.to_grid("temp", "u")``, or work on ``xroms.canonicalize(ds)``.
+    """
 
     def __init__(self, da):
         self._obj = da
 
+    def _named(self, out):
+        """``out`` with alias dims if this DataArray has them, else canonical."""
+        return _alias_like(out, self._obj)
+
     def to_grid(self, hcoord=None, scoord=None, **kwargs):
         """Move to ``hcoord``/``scoord`` by averaging neighbours; see :func:`xroms.to_grid`."""
-        return utilities.to_grid(self._obj, hcoord, scoord, **kwargs)
+        if _is_xgcm_grid(hcoord) or _is_xgcm_grid(kwargs.get("xgrid")):
+            raise TypeError(
+                "xroms 1.0: da.xroms.to_grid no longer takes an xgcm Grid; moving between grid positions needs "
+                "no grid, e.g. da.xroms.to_grid('u') or da.xroms.to_grid(hcoord='u', scoord='w'). "
+                "xroms no longer builds or stores xgcm grids."
+            )
+        return self._named(utilities.to_grid(self._obj, hcoord, scoord, **kwargs))
 
     def to_rho(self, **kwargs):
         """Move to rho points horizontally."""
-        return utilities.to_rho(self._obj, **kwargs)
+        return self._named(utilities.to_rho(self._obj, **kwargs))
 
     def to_u(self, **kwargs):
         """Move to u points horizontally."""
-        return utilities.to_u(self._obj, **kwargs)
+        return self._named(utilities.to_u(self._obj, **kwargs))
 
     def to_v(self, **kwargs):
         """Move to v points horizontally."""
-        return utilities.to_v(self._obj, **kwargs)
+        return self._named(utilities.to_v(self._obj, **kwargs))
 
     def to_psi(self, **kwargs):
         """Move to psi points horizontally."""
-        return utilities.to_psi(self._obj, **kwargs)
+        return self._named(utilities.to_psi(self._obj, **kwargs))
 
     def to_s_rho(self, **kwargs):
         """Move to rho (layer-centre) levels."""
-        return utilities.to_s_rho(self._obj, **kwargs)
+        return self._named(utilities.to_s_rho(self._obj, **kwargs))
 
     def to_s_w(self, **kwargs):
         """Move to w (interface) levels."""
-        return utilities.to_s_w(self._obj, **kwargs)
+        return self._named(utilities.to_s_w(self._obj, **kwargs))
 
     def order(self):
         """Transpose to (time, vertical, eta, xi, ...)."""
@@ -452,7 +647,7 @@ class xromsDataArrayAccessor:
 
     def isoslice(self, iso_values, iso_array, **kwargs):
         """Interpolate onto values of ``iso_array``; see :func:`xroms.isoslice`."""
-        return interp.isoslice(self._obj, iso_values, iso_array, **kwargs)
+        return self._named(interp.isoslice(self._obj, iso_values, iso_array, **kwargs))
 
     def interpll(self, lons, lats, **kwargs):
         """Interpolate to lon/lat points with xESMF; see :func:`xroms.interpll`."""
