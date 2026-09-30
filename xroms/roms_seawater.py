@@ -341,6 +341,7 @@ def M2(
     hfill_value=np.nan,
     sboundary="fill",
     sfill_value=np.nan,
+    along_s=False,
 ):
     """Calculate the horizontal buoyancy gradient.
 
@@ -372,6 +373,9 @@ def M2(
         ``sfill_value``, "extend" uses one-sided second-order differences there.
     sfill_value : float, optional
         Value used at the vertical edges with ``sboundary="fill"``.
+    along_s : bool, optional
+        For a single selected s-level only: accept derivatives along the
+        s-surface instead of at constant depth (see :func:`xroms.ddxi`).
 
     Returns
     -------
@@ -404,6 +408,7 @@ def M2(
         hfill_value=hfill_value,
         sboundary=sboundary,
         sfill_value=sfill_value,
+        along_s=along_s,
     )
     drhodxi = ddxi(rho, grid, **kwargs)
     drhodeta = ddeta(rho, grid, **kwargs)
@@ -482,7 +487,7 @@ def mld(sig0, grid, *, thresh=0.03, z=None, zeta=None):
     require(grid, "h", purpose="the depth of mixed layers that reach the bottom")
 
     zz = z_like(sig0, grid, zeta=zeta, z=z)
-    surface = sig0.isel({vdim: -1})
+    surface = sig0.isel({vdim: -1}, drop=True)
 
     # the mixed layer depth is the isosurface of depth where the potential density equals the surface + a threshold
     depth = isoslice(zz, [0.0], sig0 - surface - thresh, dim=vdim, new_dim="iso")

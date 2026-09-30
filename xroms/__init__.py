@@ -57,7 +57,7 @@ from .utilities import (
     trim,
     xisoslice,
 )
-from .vector import rotate_vectors
+from .vector import earth_to_grid, grid_to_earth, rotate_vectors
 from .vertical import bottom, compute_depth, depth_average, depth_band_weights, dz, surface, z
 from .xroms import grid_interp, open_mfnetcdf, open_netcdf, open_zarr, roms_dataset
 

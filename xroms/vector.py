@@ -222,6 +222,8 @@ def earth_to_grid(east, north, angle, *, hcoord="native"):
     --------
     >>> u, v = xroms.vector.earth_to_grid(east, north, ds.angle)
     """
+    if not isinstance(east, xr.DataArray) or not isinstance(north, xr.DataArray):
+        raise TypeError("east and north must be DataArrays")
     if hcoord not in ("native", "rho", "u", "v", "psi"):
         raise ValueError(f"hcoord must be 'native', 'rho', 'u', 'v' or 'psi', not {hcoord!r}")
 

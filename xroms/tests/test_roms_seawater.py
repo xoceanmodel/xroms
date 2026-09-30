@@ -408,7 +408,13 @@ class TestM2:
         xr.testing.assert_identical(xroms.M2(rho, rutgers, z=xroms.z(rutgers)), default)
         static = xroms.M2(rho, rutgers, zeta=0)
         xr.testing.assert_identical(static, xroms.M2(rho, rutgers, z=xroms.z(rutgers, zeta=0)))
-        assert not np.allclose(static.values, default.values, rtol=1e-3, equal_nan=True)
+        # For a density linear in x and z the constant-depth gradient does not depend on
+        # which depths are used. One that depends only on the (moving) depth has no
+        # horizontal gradient at constant depth; static depths miss the moving surface
+        # and find one.
+        rho_z = (1e-3 * xroms.z(rutgers) ** 2).rename("rho")
+        assert np.nanmax(np.abs(xroms.M2(rho_z, rutgers).values)) < 1e-15
+        assert np.nanmax(np.abs(xroms.M2(rho_z, rutgers, zeta=0).values)) > 1e-9
 
     def test_lands_on_rho_points_from_other_points(self, rutgers):
         # density on u points: the result is moved to rho horizontally, levels are kept
