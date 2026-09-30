@@ -1,0 +1,8 @@
+# The 62 MB example file is downloaded on demand (xroms.datasets); keep it out of the sdist.
+prune xroms/data
+# zarr copies of the test inputs, used only by the pre-1.0 open_zarr tests
+prune xroms/tests/input/ocean_his_0001
+prune xroms/tests/input/ocean_his_0002
+prune docs
+prune .github
+global-exclude *.py[cod] __pycache__ .DS_Store

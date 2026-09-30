@@ -1,8 +1,80 @@
 [build-system]
-requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=3.4"]
+requires = ["setuptools>=77", "setuptools_scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "xroms"
+description = "Stateless analysis of ROMS-family ocean model output (Rutgers and UCLA ROMS, CROCO, REMORA) with xarray"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Rob Hetland" },
+    { name = "Kristen Thyng", email = "kthyng@gmail.com" },
+    { name = "Veronica Ruiz Xomchuk" },
+]
+requires-python = ">=3.11"
+dynamic = ["version"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
+# xgcm brings dask; numba is needed by xgcm's transform (isoslice/zslice) but
+# xgcm does not declare it.
+dependencies = [
+    "numpy>=1.24",
+    "xarray>=2024.6",
+    "xgcm>=0.10",
+    "numba>=0.57",
+]
+
+[project.optional-dependencies]
+# regridding to lon/lat points or grids (xesmf needs esmpy: easiest from conda-forge)
+interp = ["xesmf>=0.8"]
+# WGS84 geodesic nearest-point search: argsel2d(method="geodesic")
+geodesic = ["pyproj>=3.4"]
+# TEOS-10 equation of state: density(..., eos="teos10")
+teos10 = ["gsw>=3.6"]
+# xroms.datasets example data
+examples = ["pooch>=1.6", "netCDF4"]
+all = ["xroms[interp,geodesic,teos10,examples]"]
+test = [
+    "pytest>=7",
+    "pytest-cov",
+    "netCDF4",
+    "pandas",
+]
+dev = ["xroms[test,geodesic,teos10,examples]", "pre-commit"]
+
+[project.urls]
+Homepage = "https://github.com/xoceanmodel/xroms"
+Documentation = "https://xroms.readthedocs.io"
+Changelog = "https://xroms.readthedocs.io/en/latest/whats_new.html"
+
+[tool.setuptools.packages.find]
+include = ["xroms*"]
+namespaces = false  # data directories (xroms/data, test fixtures) are not packages
+
+# Keep data out of the wheel: the 62 MB example file is downloaded on demand by
+# xroms.datasets, and the test fixtures/golden files are only needed from a checkout.
+[tool.setuptools.exclude-package-data]
+"*" = ["*.nc"]
+
 [tool.setuptools_scm]
+tag_regex = "^(?P<prefix>v)?(?P<version>[^\\+]+)(?P<suffix>.*)?$"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["xroms/tests"]
+markers = [
+    "web: tests that need a network connection (deselect with '-m \"not web\"')",
+]
 
 [tool.interrogate]
 ignore-init-method = true
@@ -13,18 +85,10 @@ ignore-private = true
 ignore-property-decorators = true
 ignore-module = false
 fail-under = 95
-exclude = ["setup.py", "docs", "tests"]
+exclude = ["docs", "xroms/tests"]
 verbose = 1
 quiet = false
 color = true
 
 [tool.isort]
-known_third_party = ["cf-xarray", "dask", "netcdf4", "numba", "numpy", "pooch", "xarray", "xgcm", "pytest", "setuptools"]
-
-[tool.pytest.ini_options]
-minversion = "6.0"
-addopts = "-v"
-# only test the root level, otherwise it picks up the tests of the project template
-testpaths = [
-    "tests",
-]
+known_third_party = ["numba", "numpy", "pandas", "pooch", "pyproj", "pytest", "setuptools", "xarray", "xesmf", "xgcm"]

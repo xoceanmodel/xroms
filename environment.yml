@@ -1,28 +1,26 @@
+# Development environment: mamba env create -f environment.yml
 name: xroms
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
-  # Required for full project functionality (dont remove)
-  - pytest
-  - pytest-benchmark
-  # Examples (remove and add as needed)
-  - cf_xarray
-  - cmocean
-  - dask
-  # # https://github.com/h5py/h5py/issues/1880
-  # # https://github.com/conda-forge/h5py-feedstock/issues/92
-  # - h5py < 3.2
-  - esmpy>=8.5.0  # https://github.com/esmf-org/esmf/issues/140
-  - matplotlib-base
-  - netcdf4
-  - numpy #<1.24  # https://github.com/numba/numba/issues/8615#issuecomment-1360792615
-  - numba >= 0.49 # required by xgcm
-  - pip
-  - pooch
-  - requests
+  - python>=3.11
+  # required
+  - numpy
   - xarray
-  - xcmocean
-  - xgcm=0.8.1
-  - xesmf  # don't install if on windows
-  # - pip:  # install from github to get recent PRs I contributed
-  #   - git@github.com:xarray-contrib/cf-xarray.git
+  - xgcm>=0.10
+  - numba
+  - dask
+  # optional features
+  - gsw          # density(..., eos="teos10")
+  - pyproj       # argsel2d(method="geodesic")
+  - pooch        # xroms.datasets example data
+  - netcdf4
+  - xesmf        # interpll / make_regridder (not available on Windows)
+  - matplotlib-base
+  - cmocean
+  # development
+  - pytest
+  - pytest-cov
+  - pre-commit
+  - pip
