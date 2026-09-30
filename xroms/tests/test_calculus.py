@@ -242,3 +242,43 @@ class TestSlices:
         can = C.canonicalize(rutgers)
         out = xroms.xisoslice(xroms.z(rutgers), -10.0, can.temp, "s_rho")
         np.testing.assert_allclose(out.values, xroms.zslice(rutgers.temp, [-10.0], rutgers).isel(z=0).values, atol=1e-9)
+
+
+class TestInputsAreMatchedToTheGrid:
+    """Regression tests for the input-matching gaps found while porting (2026-09-30)."""
+
+    @pytest.mark.parametrize("times", [[0], slice(1, 2), [1, 0]])
+    def test_time_subsets_that_keep_the_time_dim(self, rutgers, times):
+        can = C.canonicalize(rutgers)
+        full = xroms.ddxi(can.temp, rutgers)
+        part = xroms.ddxi(can.temp.isel(ocean_time=times), rutgers)
+        xr.testing.assert_allclose(part, full.isel(ocean_time=times))
+
+    def test_time_subsets_without_time_labels_need_decoding(self):
+        ds = merged("ucla")
+        with pytest.raises(xroms._align.GridMismatchError, match="decode_time"):
+            xroms.ddxi(ds.temp.isel(time=[0]), ds)
+        decoded = xroms.decode_time(ds)
+        part = xroms.ddxi(decoded.temp.isel(time=[0]), decoded)
+        np.testing.assert_allclose(part.values, xroms.ddxi(decoded.temp, decoded).isel(time=[0]).values)
+
+    def test_z_at_rho_points_is_averaged_onto_the_variable(self, rutgers):
+        can = C.canonicalize(rutgers)
+        xr.testing.assert_allclose(xroms.ddeta(can.u, rutgers, z=xroms.z(rutgers)), xroms.ddeta(can.u, rutgers))
+
+    def test_z_at_the_wrong_position_or_levels_is_explained(self, rutgers):
+        can = C.canonicalize(rutgers)
+        with pytest.raises(ValueError, match="v points but 'u' is at u points"):
+            xroms.ddeta(can.u, rutgers, z=xroms.z(rutgers, hcoord="v"))
+        with pytest.raises(ValueError, match="s_w levels"):
+            xroms.ddz(can.temp, rutgers, z=xroms.z(rutgers, scoord="s_w"))
+
+    def test_isoslice_broadcasts_the_variable_over_the_iso_arrays_dims(self, rutgers):
+        # static depths (no time) sliced on a time-varying field
+        can = C.canonicalize(rutgers)
+        z0 = xroms.z(rutgers, zeta=0)
+        out = xroms.isoslice(z0, [can.temp.mean().item()], can.temp, new_dim="temp")
+        assert out.dims[0] == "ocean_time" and "ocean_time" in out.coords
+        for t in range(can.sizes["ocean_time"]):
+            one = xroms.isoslice(z0, [can.temp.mean().item()], can.temp.isel(ocean_time=t), new_dim="temp")
+            np.testing.assert_allclose(out.isel(ocean_time=t).values, one.values)

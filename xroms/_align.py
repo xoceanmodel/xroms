@@ -76,6 +76,28 @@ def select_like(field, like, *, name=None):
                 f"index coordinates), so {fname!r} cannot be matched; subset the Dataset instead."
             )
 
+    # shared non-horizontal dims (typically time after isel/sel with a list or slice)
+    for dim in field.dims:
+        if dim not in like.dims or dim.startswith(("xi_", "eta_")):
+            continue
+        if dim in like.indexes and dim in field.indexes:
+            labels = like.indexes[dim]
+            if not field.indexes[dim].equals(labels):
+                missing = labels.difference(field.indexes[dim])
+                if missing.size:
+                    raise GridMismatchError(
+                        f"{fname!r} lacks {dim!r} labels {list(missing[:5])} of {vname!r}; the grid "
+                        "data does not cover the variable."
+                    )
+                field = field.sel({dim: labels})
+        elif field.sizes[dim] != like.sizes[dim]:
+            raise GridMismatchError(
+                f"{vname!r} and {fname!r} have different lengths along {dim!r} "
+                f"({like.sizes[dim]} vs {field.sizes[dim]}) and no index coordinates to align them. "
+                "Subset the Dataset rather than a single variable"
+                + (", or run xroms.decode_time(ds) first for UCLA ROMS output." if _is_time_dim(field, dim) else ".")
+            )
+
     # horizontal footprint per axis
     for axis, (center, stag) in HAXES.items():
         vdim = center if center in like.dims else stag if stag in like.dims else None

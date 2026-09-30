@@ -230,13 +230,29 @@ _z = z  # z_like's ``z=`` argument shadows the function name
 def z_like(var, grid, *, zeta=None, z=None, reference="mean_sea_level", positive="up", method="average"):
     """z at the grid position of ``var``, restricted to its footprint and times.
 
-    If ``z`` is given it is returned (canonicalized) unchanged.
+    A given ``z`` must be on ``var``'s vertical levels, and at its horizontal
+    points or at rho points (then averaged onto ``var``'s points, as `z` does).
     """
-    if z is not None:
-        return canonicalize(z)
     from .conventions import hposition, vposition
 
     var = canonicalize(var)
+    if z is not None:
+        z = canonicalize(z)
+        have, want = hposition(z), hposition(var)
+        if have is not None and want is not None and have != want:
+            if have != "rho":
+                raise ValueError(
+                    f"z is at {have} points but {var.name!r} is at {want} points. Pass z at rho "
+                    "points (it is averaged onto the variable's points) or at the variable's own points."
+                )
+            if want in ("u", "psi"):
+                z = _xgcm.interp(z, "X")
+            if want in ("v", "psi"):
+                z = _xgcm.interp(z, "Y")
+        zlev, vlev = vposition(z), vposition(var)
+        if zlev is not None and vlev is not None and zlev != vlev:
+            raise ValueError(f"z is on {zlev} levels but {var.name!r} is on {vlev} levels; pass z on the variable's own levels.")
+        return z
     hcoord = hposition(var) or "rho"
     scoord = vposition(var)
     if scoord is None:

@@ -122,8 +122,8 @@ def _apply(func, da, axis, padding, fill_value):
 def interp(da, axis, boundary="extend", fill_value=np.nan):
     """Average neighbours along ``axis`` onto the other stagger position.
 
-    ``boundary`` applies only where padding is needed (inner/outer -> center is
-    interior-only; center -> outer and inner -> center are padded):
+    ``boundary`` applies only where padding is needed (center -> inner and
+    outer -> center are interior-only; inner -> center and center -> outer are padded):
     ``"extend"`` repeats the edge value, ``"fill"`` pads with ``fill_value``.
     """
     return _apply("interp", da, axis, _padding(boundary), fill_value)
@@ -193,6 +193,11 @@ def transform(da, iso_values, iso_array, dim, *, new_dim="z", method="linear", m
         raise ValueError(f"both the variable and the iso array need dim {dim!r}")
     work = xr.DataArray(da.variable, name=da.name or "var")
     target_data = xr.DataArray(iso_array.variable, name="iso_array")
+    # xgcm needs the variable to carry every dim of the iso array (static depths
+    # sliced on a time-varying density, say): broadcast it, lazily
+    extra = {d: target_data.sizes[d] for d in target_data.dims if d not in work.dims}
+    if extra:
+        work = work.expand_dims(extra)
     if work.chunks is not None:
         work = work.chunk({dim: -1})
     if target_data.chunks is not None:
@@ -224,6 +229,10 @@ def transform(da, iso_values, iso_array, dim, *, new_dim="z", method="linear", m
     if values is not None:
         out = out.assign_coords({new_dim: values})
     keep = {k: v for k, v in da.coords.items() if dim not in v.dims and k != dim}
+    keep.update({
+        k: v for k, v in iso_array.coords.items()
+        if k not in keep and k != dim and dim not in v.dims and set(v.dims) <= set(out.dims)
+    })
     out = out.assign_coords(keep)
     out.attrs = dict(da.attrs)
     out.name = da.name
