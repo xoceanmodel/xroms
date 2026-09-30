@@ -1,621 +1,167 @@
-"""Test accessor functions by ensuring accessor and xroms
-functions return same values."""
+"""The stateless ``ds.xroms`` / ``da.xroms`` accessors."""
 
 import numpy as np
 import pytest
 import xarray as xr
 
-# from xgcm import grid as xgrid
-import xgcm.grid
-
 import xroms
-
-
-grid1 = xr.open_dataset("xroms/tests/input/grid.nc")
-# ds = xroms.open_netcdf('xroms/tests/input/ocean_his_0001.nc')
-ds = xr.open_dataset("xroms/tests/input/ocean_his_0001.nc")
-# combine the two:
-ds = ds.merge(grid1, overwrite_vars=True, compat="override")
-ds, grid = xroms.roms_dataset(ds)
-
-axesTZYX = ["T", "Z", "Y", "X"]
-axesTYX = ["T", "Y", "X"]
-coordnamesTZYX = ["time", "vertical", "latitude", "longitude"]
-coordnamesTYX = ["time", "latitude", "longitude"]
-
-dim_dict = {
-    "rho": {
-        "s_rho": ["ocean_time", "s_rho", "eta_rho", "xi_rho"],
-        "s_w": ["ocean_time", "s_w", "eta_rho", "xi_rho"],
-        None: ["ocean_time", "eta_rho", "xi_rho"],
-    },
-    "u": {
-        "s_rho": ["ocean_time", "s_rho", "eta_rho", "xi_u"],
-        "s_w": ["ocean_time", "s_w", "eta_rho", "xi_u"],
-        None: ["ocean_time", "eta_rho", "xi_u"],
-    },
-    "v": {
-        "s_rho": ["ocean_time", "s_rho", "eta_v", "xi_rho"],
-        "s_w": ["ocean_time", "s_w", "eta_v", "xi_rho"],
-        None: ["ocean_time", "eta_v", "xi_rho"],
-    },
-    "psi": {
-        "s_rho": ["ocean_time", "s_rho", "eta_v", "xi_u"],
-        "s_w": ["ocean_time", "s_w", "eta_v", "xi_u"],
-        None: ["ocean_time", "eta_v", "xi_u"],
-    },
-}
-
-coord_dict = {
-    "rho": {
-        "s_rho": ["ocean_time", "z_rho", "lat_rho", "lon_rho"],
-        "s_w": ["ocean_time", "z_w", "lat_rho", "lon_rho"],
-        None: ["ocean_time", "lat_rho", "lon_rho"],
-    },
-    "u": {
-        "s_rho": ["ocean_time", "z_rho_u", "lat_u", "lon_u"],
-        "s_w": ["ocean_time", "z_w_u", "lat_u", "lon_u"],
-        None: ["ocean_time", "lat_u", "lon_u"],
-    },
-    "v": {
-        "s_rho": ["ocean_time", "z_rho_v", "lat_v", "lon_v"],
-        "s_w": ["ocean_time", "z_w_v", "lat_v", "lon_v"],
-        None: ["ocean_time", "lat_v", "lon_v"],
-    },
-    "psi": {
-        "s_rho": ["ocean_time", "z_rho_psi", "lat_psi", "lon_psi"],
-        "s_w": ["ocean_time", "z_w_psi", "lat_psi", "lon_psi"],
-        None: ["ocean_time", "lat_psi", "lon_psi"],
-    },
-}
-
-
-def test_grid():
-    assert isinstance(ds.xroms.xgrid, xgcm.grid.Grid)
-
-
-def test_speed():
-
-    acc = ds.xroms.speed
-
-    assert np.allclose(acc, xroms.speed(ds.u, ds.v, grid))
-
-    # also check attributes
-    assert acc.name == acc.attrs["name"]
-    # cf-xarray: make sure all Axes and Coordinates available in output
-    hcoord = "rho"
-    scoord = "s_rho"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_KE():
-
-    s = xroms.speed(ds.u, ds.v, grid)
-    acc = ds.xroms.KE
-
-    assert np.allclose(acc, xroms.KE(ds.rho0, s))
-
-    # also check attributes
-    assert acc.name == acc.attrs["name"]
-    # cf-xarray: make sure all Axes and Coordinates available in output
-    hcoord = "rho"
-    scoord = "s_rho"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_uv_geostrophic():
-
-    acc = ds.xroms.ug
-    assert np.allclose(acc, xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="xi"))
-    # also check attributes
-    assert (
-        acc.name == acc.attrs["name"]
-    )  # cf-xarray: make sure all Axes and Coordinates available in output
-    hcoord = "u"
-    scoord = None
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-    acc = ds.xroms.vg
-    assert np.allclose(acc, xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="eta"))
-    assert acc.name == acc.attrs["name"]
-    hcoord = "v"
-    scoord = None
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_EKE():
-
-    acc = ds.xroms.EKE
-    xug, xvg = xroms.uv_geostrophic(ds.zeta, ds.f, grid, which="both")
-    assert np.allclose(acc, xroms.EKE(xug, xvg, grid))
-    assert acc.name == acc.attrs["name"]
-    hcoord = "rho"
-    scoord = None
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_dudz():
-    acc = ds.xroms.dudz
-    assert np.allclose(acc, xroms.dudz(ds.u, grid))
-    assert acc.name == acc.attrs["name"]
-    hcoord = "u"
-    scoord = "s_w"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_dvdz():
-    acc = ds.xroms.dvdz
-    assert np.allclose(acc, xroms.dvdz(ds.v, grid))
-    assert acc.name == acc.attrs["name"]
-    hcoord = "v"
-    scoord = "s_w"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_vertical_shear():
-    xdudz = ds.xroms.dudz
-    xdvdz = ds.xroms.dvdz
-    acc = ds.xroms.vertical_shear
-    assert np.allclose(acc, xroms.vertical_shear(xdudz, xdvdz, grid))
-    assert acc.name == acc.attrs["name"]
-    hcoord = "rho"
-    scoord = "s_w"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_relative_vorticity():
-    acc = ds.xroms.vort
-    assert np.allclose(acc, 0)
-    assert acc.name == acc.attrs["name"]
-    hcoord = "psi"
-    scoord = "s_w"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_convergence():
-    acc = ds.xroms.convergence
-    assert np.allclose(acc, xroms.convergence(ds["u"], ds["v"], grid))
-
-
-def test_convergence_norm():
-    acc = ds.xroms.convergence_norm
-    assert np.allclose(
-        acc, xroms.convergence(ds["u"], ds["v"], grid).cf.isel(Z=-1) / ds["f"]
-    )
-
-
-def test_ertel():
-    acc = ds.xroms.ertel
-    xsig0 = xroms.potential_density(ds.temp, ds.salt)
-    xbuoy = xroms.buoyancy(xsig0)
-    assert np.allclose(acc, xroms.ertel(xbuoy, ds.u, ds.v, ds.f, grid))
-    assert acc.name == acc.attrs["name"]
-    hcoord = "rho"
-    scoord = "s_rho"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_w():
-    # VRX
-    pass
-
-
-#     acc = ds.xroms.w
-#     assert np.allclose(acc, xroms.w(ds.u, ds.v, grid))
-#     acc.name == acc.attrs['name']
-#     acc.attrs['grid'] == ds.xroms.grid
-#     items = ['T','X','Y','Z','longitude','latitude','vertical','time']
-#     assert set(items).issubset(acc.cf.get_valid_keys())
-
-
-def test_omega():
-    # VRX
-    pass
-
-
-#     acc = ds.xroms.omega
-#     assert np.allclose(acc, xroms.omega(ds.u, ds.v, grid))
-#     acc.name == acc.attrs['name']
-#     acc.attrs['grid'] == ds.xroms.grid
-#     items = ['T','X','Y','Z','longitude','latitude','vertical','time']
-#     assert set(items).issubset(acc.cf.get_valid_keys())
-
-
-def test_rho():
-    acc = ds.xroms.rho
-    assert np.allclose(acc, xroms.density(ds.temp, ds.salt, ds.z_rho))
-    assert acc.name == acc.attrs["name"]
-    hcoord = "rho"
-    scoord = "s_rho"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_sig0():
-    acc = ds.xroms.sig0
-    assert np.allclose(acc, xroms.potential_density(ds.temp, ds.salt, 0))
-    assert acc.name == acc.attrs["name"]
-    hcoord = "rho"
-    scoord = "s_rho"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_buoyancy():
-    acc = ds.xroms.buoyancy
-    xsig0 = xroms.potential_density(ds.temp, ds.salt)
-    assert np.allclose(acc, xroms.buoyancy(xsig0))
-    assert acc.name == acc.attrs["name"]
-    hcoord = "rho"
-    scoord = "s_rho"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_N2():
-    acc = ds.xroms.N2
-    xrho = xroms.density(ds.temp, ds.salt, ds.z_rho)
-    assert np.allclose(acc, xroms.N2(xrho, grid), equal_nan=True)
-    assert acc.name == acc.attrs["name"]
-    hcoord = "rho"
-    scoord = "s_w"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_M2():
-    acc = ds.xroms.M2
-    xrho = xroms.density(ds.temp, ds.salt, ds.z_rho)
-    assert np.allclose(acc, xroms.M2(xrho, grid), equal_nan=True)
-    assert acc.name == acc.attrs["name"]
-    hcoord = "rho"
-    scoord = "s_w"
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTZYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTZYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_mld():
-    acc = ds.xroms.mld(thresh=0.03)
-    sig0 = xroms.potential_density(ds.temp, ds.salt, 0)
-    assert np.allclose(acc, xroms.mld(sig0, grid, ds.h, ds.mask_rho), equal_nan=True)
-    assert acc.name == acc.attrs["name"]
-    hcoord = "rho"
-    scoord = None
-    dims = dim_dict[hcoord][scoord]
-    axes = axesTYX
-    coords = coord_dict[hcoord][scoord]
-    coordnames = coordnamesTYX
-    for ax, dim in zip(axes, dims):
-        assert acc.cf[ax].name == dim
-    for coordname, coord in zip(coordnames, coords):
-        assert acc.cf[coordname].name == coord
-
-
-def test_ddxi():
-    testvars = ["salt", "u", "v"]
-    for testvar in testvars:
-        with pytest.raises(KeyError):
-            acc = ds[testvar].xroms.ddxi(grid)
-
-        if testvar == "salt":
-            hcoord = "u"
-            scoord = "s_w"
-        elif testvar == "u":
-            hcoord = "rho"
-            scoord = "s_w"
-        elif testvar == "v":
-            hcoord = "psi"
-            scoord = "s_w"
-        dims = dim_dict[hcoord][scoord]
-        axes = axesTZYX
-        coords = coord_dict[hcoord][scoord]
-        coordnames = coordnamesTZYX
-
-        acc = ds.xroms.ddxi(testvar)
-        assert np.allclose(acc, xroms.ddxi(ds[testvar], grid))
-        assert acc.name == acc.attrs["name"]
-        for ax, dim in zip(axes, dims):
-            assert acc.cf[ax].name == dim
-        for coordname, coord in zip(coordnames, coords):
-            assert acc.cf[coordname].name == coord
-
-
-def test_ddeta():
-    testvars = ["salt", "u", "v"]
-    for testvar in testvars:
-        with pytest.raises(KeyError):
-            acc = ds[testvar].xroms.ddeta(grid)
-
-        if testvar == "salt":
-            hcoord = "v"
-            scoord = "s_w"
-        elif testvar == "u":
-            hcoord = "psi"
-            scoord = "s_w"
-        elif testvar == "v":
-            hcoord = "rho"
-            scoord = "s_w"
-        dims = dim_dict[hcoord][scoord]
-        axes = axesTZYX
-        coords = coord_dict[hcoord][scoord]
-        coordnames = coordnamesTZYX
-
-        acc = ds.xroms.ddeta(testvar)
-        assert np.allclose(acc, xroms.ddeta(ds[testvar], grid))
-        assert acc.name == acc.attrs["name"]
-        for ax, dim in zip(axes, dims):
-            assert acc.cf[ax].name == dim
-        for coordname, coord in zip(coordnames, coords):
-            assert acc.cf[coordname].name == coord
-
-
-def test_ddz():
-    testvars = ["salt", "u", "v"]
-    for testvar in testvars:
-        with pytest.raises(KeyError):
-            acc = ds[testvar].xroms.ddz(grid)
-        dims = list(ds[testvar].dims)
-        axes = axesTZYX
-        coords = [ds[testvar].cf[coordname].name for coordname in coordnamesTZYX]
-        coordnames = coordnamesTZYX
-        # correct dim and coord in derivative direction
-        # import pdb; pdb.set_trace()
-        if grid._get_dims_from_axis(ds[testvar], "Z")[0] == "s_rho":
-            # if grid.axes["Z"]._get_axis_coord(ds[testvar])[1] == "s_rho":
-            dims[1] = "s_w"
-            coords[1] = coords[1].replace("rho", "w")
-        else:
-            dims[1] = "s_rho"
-            coords[1] = coords[1].replace("w", "rho")
-
-        acc = ds.xroms.ddz(testvar)
-        assert np.allclose(acc, xroms.ddz(ds[testvar], grid))
-        assert acc.name == acc.attrs["name"]
-        for ax, dim in zip(axes, dims):
-            assert acc.cf[ax].name == dim
-        for coordname, coord in zip(coordnames, coords):
-            assert acc.cf[coordname].name == coord
-
-
-def test_to_grid():
-
-    testvars = ["salt", "u", "v"]
-    for testvar in testvars:
-        for scoord in ["s_w", "s_rho"]:
-            for hcoord in ["rho", "u", "v", "psi"]:
-                acc = ds.xroms.to_grid(testvar, hcoord=hcoord, scoord=scoord)
-                # acc = ds[testvar].xroms.to_grid(grid, hcoord=hcoord, scoord=scoord)
-                assert np.allclose(
-                    acc, xroms.to_grid(ds[testvar], grid, hcoord=hcoord, scoord=scoord)
-                )
-                assert acc.name == acc.attrs["name"]
-                dims = dim_dict[hcoord][scoord]
-                axes = axesTZYX
-                coords = coord_dict[hcoord][scoord]
-                coordnames = coordnamesTZYX
-                for ax, dim in zip(axes, dims):
-                    assert acc.cf[ax].name == dim
-                for coordname, coord in zip(coordnames, coords):
-                    assert acc.cf[coordname].name == coord
-
-                acc = ds.xroms.to_grid(testvar, hcoord=hcoord, scoord=scoord)
-                assert np.allclose(
-                    acc, xroms.to_grid(ds[testvar], grid, hcoord=hcoord, scoord=scoord)
-                )
-                assert acc.name == acc.attrs["name"]
-                for ax, dim in zip(axes, dims):
-                    assert acc.cf[ax].name == dim
-                for coordname, coord in zip(coordnames, coords):
-                    assert acc.cf[coordname].name == coord
-
-
-# can't figure out what is wrong here, will have to come back
-# def test_sel2d():
-#     lon0, lat0 = -94.8, 28.0
-#     testvars = ["salt", "u", "v"]
-#     for testvar in testvars:
-#         acc = ds[testvar].xroms.sel2d(lon0, lat0)
-#         out = xroms.sel2d(
-#             ds[testvar],
-#             ds[testvar].cf["longitude"],
-#             ds[testvar].cf["latitude"],
-#             lon0,
-#             lat0,
-#         )
-#         assert np.allclose(acc, out)
-#         assert acc.name == testvar
-#         dims = ds[testvar].dims
-#         axes = axesTZYX
-#         coords = [ds[testvar].cf[coordname].name for coordname in coordnamesTZYX]
-#         coordnames = coordnamesTZYX
-#         # import pdb; pdb.set_trace()
-#         for ax, dim in zip(axes, dims):
-#             assert acc.cf[ax].name == dim
-#         for coordname, coord in zip(coordnames, coords):
-#             assert acc.cf[coordname].name == coord
-
-
-def test_argsel2d():
-    lon0, lat0 = -94.8, 28.0
-    testvars = ["salt", "u", "v"]
-    for testvar in testvars:
-        inds = ds[testvar].xroms.argsel2d(lon0, lat0)
-        outinds = xroms.argsel2d(
-            ds[testvar].cf["longitude"], ds[testvar].cf["latitude"], lon0, lat0
-        )
-        assert np.allclose(inds, outinds)
-
-
-def test_gridmean():
-    testvars = ["salt", "u", "v"]
-    for testvar in testvars:
-        for axis in ["Z", "Y", "X"]:
-            var1 = ds[testvar].xroms.gridmean(grid, axis)
-            var2 = xroms.gridmean(ds[testvar], grid, axis)
-            assert np.allclose(var1, var2)
-
-
-def test_gridsum():
-    testvars = ["salt", "u", "v"]
-    for testvar in testvars:
-        for axis in ["Z", "Y", "X"]:
-            var1 = ds[testvar].xroms.gridsum(grid, axis)
-            var2 = xroms.gridsum(ds[testvar], grid, axis)
-            assert np.allclose(var1, var2)
-
-
-def test_interpll():
-    XESMF_AVAILABLE = xroms.XESMF_AVAILABLE
-    xroms.XESMF_AVAILABLE = False
-
-    with pytest.raises(ModuleNotFoundError):
-        ie, ix = 2, 3
-        indexer = {"eta_rho": [ie], "xi_rho": [ix]}
-        testvars = ["salt", "u", "v"]
-        for testvar in testvars:
-            var1 = xroms.interpll(
-                ds[testvar], ds.lon_rho.isel(indexer), ds.lat_rho.isel(indexer)
-            )
-            var2 = ds[testvar].xroms.interpll(
-                ds.lon_rho.isel(indexer), ds.lat_rho.isel(indexer)
-            )
-            assert np.allclose(var1, var2)
-
-    # put back the way it was for testing
-    xroms.XESMF_AVAILABLE = XESMF_AVAILABLE
-
-
-def test_zslice():
-    testvars = ["salt", "u", "v"]
-    for testvar in testvars:
-        varin = ds[testvar]
-        depths = np.asarray(ds[testvar].cf["vertical"][0, :, 0, 0].values)
-        varout = xroms.isoslice(varin, depths, grid, axis="Z")
-        varcomp = ds[testvar].xroms.zslice(grid, depths)
-        # varcomp = ds[testvar].xroms.isoslice(grid, depths, axis="Z")
-        assert np.allclose(
-            varout.cf.isel(T=0, Y=0, X=0), varcomp.cf.isel(T=0, Y=0, X=0)
-        )
-
-        varcompds = ds.xroms.zslice(testvar, depths)
-        # varcomp = ds[testvar].xroms.isoslice(grid, depths, axis="Z")
-        assert np.allclose(
-            varout.cf.isel(T=0, Y=0, X=0), varcompds.cf.isel(T=0, Y=0, X=0)
-        )
-
-
-def test_find_horizontal_velocities():
-    uname, vname = ds.xroms.find_horizontal_velocities()
-    assert uname == "u"
-    assert vname == "v"
-
-    # have to delete variables in the xroms accessor for this
-    # test to work
-    ds.xroms.ds["u_eastward"] = ds.xroms.ds["u"].copy()
-    del ds.xroms.ds["u"]
-    ds.xroms.ds["v_northward"] = ds.xroms.ds["v"].copy()
-    del ds.xroms.ds["v"]
-
-    uname, vname = ds.xroms.find_horizontal_velocities()
-    assert uname == "u_eastward"
-    assert vname == "v_northward"
+from xroms import conventions as C
+from xroms.tests import _synthetic as syn
+from xroms.tests.conftest import chunked, merged
+
+
+class TestStateless:
+    def test_holds_only_a_reference(self, rutgers):
+        assert rutgers.xroms._obj is rutgers
+        assert set(vars(rutgers.xroms)) == {"_obj"}
+
+    def test_never_writes_into_the_dataset(self, rutgers):
+        before = rutgers.copy(deep=True)
+        rutgers.xroms.speed, rutgers.xroms.ddxi("temp"), rutgers.xroms.z_rho, rutgers.xroms.vort
+        xr.testing.assert_identical(rutgers, before)
+
+    def test_sees_in_place_edits(self, rutgers):
+        s1 = rutgers.xroms.speed.values.copy()
+        rutgers["u"] = rutgers.u * 10
+        rutgers["v"] = rutgers.v * 10
+        np.testing.assert_allclose(rutgers.xroms.speed.values, 10 * s1)
+
+
+class TestNamingAndCoords:
+    def test_results_use_dataset_naming(self, rutgers):
+        u_like = rutgers.xroms.to_grid("temp", hcoord="u")
+        assert u_like.dims == rutgers.u.dims
+        assert (rutgers.u + u_like).dims == rutgers.u.dims
+        assert rutgers.xroms.ddxi("temp").dims == rutgers.u.dims
+        assert rutgers.xroms.vort.dims == ("ocean_time", "s_rho", "eta_psi", "xi_psi")
+
+    def test_pure_functions_are_canonical(self, rutgers):
+        assert xroms.to_u(rutgers.temp).dims == ("ocean_time", "s_rho", "eta_rho", "xi_u")
+        can = xroms.canonicalize(rutgers)
+        assert (can.u + xroms.to_u(can.temp)).dims == can.u.dims
+
+    def test_position_coords_attached(self, rutgers):
+        out = rutgers.xroms.ddxi("temp")
+        assert {"lon_u", "lat_u", "ocean_time", "s_rho"} <= set(out.coords)
+        assert "lon_rho" not in out.coords
+
+    def test_ucla_lonlat_data_vars_become_coords(self, ucla):
+        out, grid = ucla
+        ds = xr.merge([out, grid.drop_vars("spherical")])
+        assert {"lon_rho", "lat_rho"} <= set(ds.xroms.speed.coords)
+
+
+class TestGridFacts:
+    def test_z_and_metrics(self, rutgers):
+        np.testing.assert_allclose(rutgers.xroms.z_rho.values, xroms.z(rutgers).values)
+        assert rutgers.xroms.z_w.dims == ("ocean_time", "s_w", "eta_rho", "xi_rho")
+        assert rutgers.xroms.z(hcoord="u").dims == rutgers.u.dims
+        assert rutgers.xroms.dz(scoord="w").dims[1] == "s_w"
+        assert rutgers.xroms.dx("u").dims == ("eta_u", "xi_u")
+        assert rutgers.xroms.dA("psi").dims == ("eta_psi", "xi_psi")
+        assert rutgers.xroms.dV().dims == ("ocean_time", "s_rho", "eta_rho", "xi_rho")
+        assert rutgers.xroms.vertical_params.Vtransform == 2
+
+    def test_assign_z_is_a_new_dataset(self, rutgers):
+        withz = rutgers.xroms.assign_z()
+        assert {"z_rho", "z_w"} <= set(withz.coords) and "z_rho" not in rutgers.coords
+        assert "z_rho" in withz.temp.coords
+
+    def test_xgcm_grid(self, rutgers):
+        import xgcm
+
+        assert isinstance(rutgers.xroms.xgcm_grid(), xgcm.Grid)
+
+
+class TestCalculations:
+    def test_methods_accept_names_or_arrays(self, rutgers):
+        xr.testing.assert_allclose(rutgers.xroms.ddxi("temp"), rutgers.xroms.ddxi(rutgers.temp))
+
+    def test_zslice_gridmean_depth_average(self, rutgers):
+        assert rutgers.xroms.zslice("temp", [-5.0]).dims == ("ocean_time", "z", "eta_rho", "xi_rho")
+        assert rutgers.xroms.gridmean("temp", ("X", "Y")).dims == ("ocean_time", "s_rho")
+        assert rutgers.xroms.depth_average("temp").dims == ("ocean_time", "eta_rho", "xi_rho")
+        assert rutgers.xroms.surface("temp").dims == ("ocean_time", "eta_rho", "xi_rho")
+
+    def test_separate_grid(self, ucla):
+        out, grid = ucla
+        merged_grid = xr.merge([out, grid.drop_vars("spherical")])
+        a = out.xroms.ddxi("temp", grid=merged_grid)
+        np.testing.assert_allclose(a.values, syn.TEMP_A, rtol=1e-9)
+
+    def test_subset_and_selection(self, rutgers, remora):
+        sub = rutgers.xroms.subset(X=slice(2, 8), halo=1)
+        assert sub.attrs["xroms_halo"] == [1, 1, 0, 0]
+        lon, lat = float(rutgers.lon_rho[3, 4]), float(rutgers.lat_rho[3, 4])
+        assert rutgers.xroms.argsel2d(lon, lat) == (3, 4)
+        assert rutgers.xroms.sel2d("temp", lon, lat).dims == ("ocean_time", "s_rho")
+        x0, y0 = float(remora.x_rho[2, 5]), float(remora.y_rho[2, 5])
+        assert remora.xroms.argsel2d(x0, y0) == (2, 5)
+
+    def test_every_layout(self, layout):
+        ds = merged(layout)
+        np.testing.assert_allclose(ds.xroms.ddxi("temp").values, syn.TEMP_A, rtol=1e-9)
+        assert ds.xroms.speed.dims[-2:] == ("eta_rho", "xi_rho")
+
+    def test_chunked(self, rutgers):
+        c = chunked(rutgers)
+        out = c.xroms.convergence
+        assert out.chunks is not None
+        np.testing.assert_allclose(out.values, rutgers.xroms.convergence.values)
+
+
+class TestPhysics:
+    def test_speed_ke_eke(self, rutgers):
+        s = rutgers.xroms.speed
+        np.testing.assert_allclose(s.values, xroms.speed(rutgers.u, rutgers.v).values)
+        np.testing.assert_allclose(rutgers.xroms.KE.values, 0.5 * 1025.0 * s.values**2)
+        assert rutgers.xroms.ug.dims == ("ocean_time", "eta_u", "xi_u")
+        assert rutgers.xroms.vg.dims == ("ocean_time", "eta_v", "xi_v")
+        assert rutgers.xroms.EKE.dims == ("ocean_time", "eta_rho", "xi_rho")
+
+    def test_rotation(self):
+        ds = syn.make_dataset("rutgers", angle=np.pi / 2)
+        east, north = ds.xroms.eastnorth
+        np.testing.assert_allclose(north.values, xroms.to_rho(ds.u.fillna(0)).values, atol=1e-12)
+        np.testing.assert_allclose(east.values, -xroms.to_rho(ds.v.fillna(0)).values, atol=1e-12)
+        rot = ds.xroms.east_rotated(90, reference="compass", isradians=False, name="along")
+        assert rot.name == "along"
+
+    def test_u_v_from_earth_components(self, rutgers):
+        east, north = rutgers.xroms.eastnorth
+        only_earth = rutgers.drop_vars(["u", "v"]).assign(u_eastward=east, v_northward=north)
+        assert only_earth.xroms.u.dims == rutgers.u.dims
+        assert only_earth.xroms.find_horizontal_velocities() == ("u_eastward", "v_northward")
+
+    def test_shear_vorticity_convergence(self, uniform):
+        assert uniform.xroms.dudz.dims == ("ocean_time", "s_w", "eta_u", "xi_u")
+        assert uniform.xroms.vertical_shear.dims == ("ocean_time", "s_w", "eta_rho", "xi_rho")
+        np.testing.assert_allclose(uniform.xroms.vort.values, 0.0, atol=1e-12)
+        np.testing.assert_allclose(uniform.xroms.convergence.values, syn.U_A + syn.V_A, rtol=1e-9)
+        assert uniform.xroms.convergence_norm.dims == ("ocean_time", "eta_rho", "xi_rho")
+
+    def test_density_family(self, rutgers):
+        assert rutgers.xroms.rho.dims == rutgers.temp.dims
+        assert rutgers.xroms.sig0.dims == rutgers.temp.dims
+        assert rutgers.xroms.N2.dims == ("ocean_time", "s_w", "eta_rho", "xi_rho")
+        assert rutgers.xroms.M2.dims == rutgers.temp.dims
+        assert rutgers.xroms.ertel.dims == rutgers.temp.dims
+        mld = rutgers.xroms.mld()
+        assert mld.dims == ("ocean_time", "eta_rho", "xi_rho") and (mld >= 0).all()
+
+
+class TestDataArrayAccessor:
+    def test_grid_free_operations(self, rutgers):
+        assert rutgers.u.xroms.to_rho().dims == ("ocean_time", "s_rho", "eta_rho", "xi_rho")
+        assert rutgers.temp.xroms.to_grid("psi", "w").dims == ("ocean_time", "s_w", "eta_v", "xi_u")
+        assert rutgers.temp.transpose("xi_rho", ...).xroms.order().dims[0] == "ocean_time"
+
+    def test_selection_uses_own_coords(self, rutgers):
+        lon, lat = float(rutgers.lon_u[2, 3]), float(rutgers.lat_u[2, 3])
+        assert rutgers.u.xroms.argsel2d(lon, lat) == (2, 3)
+        assert rutgers.u.xroms.sel2d(lon, lat).dims == ("ocean_time", "s_rho")
+
+    def test_isoslice(self, rutgers):
+        z = xroms.z(rutgers)
+        out = C.canonicalize(rutgers).temp.xroms.isoslice([-5.0], z)
+        assert "z_rho" in out.dims

@@ -37,6 +37,16 @@ class TestHorizontalDerivatives:
         along_s = xroms.ddeta(rutgers.temp.isel(s_rho=3), rutgers, along_s=True)
         assert np.abs(along_s.values).max() > 1e-6
 
+    @pytest.mark.parametrize("vt", [1, 2])
+    def test_exact_for_fields_quadratic_in_depth(self, vt):
+        # salt = S0 + C z**2 has no horizontal dependence at constant depth, while its
+        # along-s gradient does not vanish; the second-order vertical stencil removes
+        # it exactly (v0.6.2's w-level scheme did not)
+        ds = syn.make_dataset("rutgers", vtransform=vt)
+        assert float(abs(xroms.ddxi(ds.salt.isel(s_rho=2), ds, along_s=True)).max()) > 1e-6
+        np.testing.assert_allclose(xroms.ddxi(ds.salt, ds).values, 0.0, atol=1e-15)
+        np.testing.assert_allclose(xroms.ddeta(ds.salt, ds).values, 0.0, atol=1e-15)
+
     def test_top_and_bottom_layers_not_halved(self, rutgers):
         rho = xroms.ddxi(rutgers.temp, rutgers, hcoord="rho")
         np.testing.assert_allclose(rho.values, syn.TEMP_A, rtol=1e-9)
