@@ -1,342 +1,177 @@
-"""
-Interpolation functions.
-"""
-
-import sys
-import warnings
+"""Interpolation: onto iso-surfaces or depths (vertical), and to lon/lat points."""
 
 import numpy as np
 import xarray as xr
-import xgcm
 
-import xroms
-
-
-# try:
-#     import xesmf as xe
-# except ModuleNotFoundError:
-#     warnings.warn("xESMF is not installed, so `interpll` will not run.")
+from . import _xgcm
+from .conventions import canonicalize, hposition, horizontal_coords, vposition
+from .utilities import order
+from .vertical import infer_reference, label, z_like
 
 
-def interpll(var, lons, lats, which="pairs", **kwargs):
-    """Interpolate var to lons/lats positions.
+_AXIS_DIMS = {"Z": ("s_rho", "s_w"), "X": ("xi_rho", "xi_u"), "Y": ("eta_rho", "eta_v")}
 
-    Wraps xESMF to perform proper horizontal interpolation on non-flat Earth.
+
+def _resolve_dim(var, dim):
+    if dim is None:
+        dim = "Z"
+    if dim in _AXIS_DIMS:
+        found = [d for d in _AXIS_DIMS[dim] if d in var.dims]
+        if not found:
+            raise ValueError(f"{var.name!r} has no {dim!r} dimension")
+        return found[0]
+    if dim not in var.dims:
+        raise ValueError(f"{var.name!r} has no dimension {dim!r}")
+    return dim
+
+
+def _nearest(var, iso_values, iso_array, dim, new_dim, mask_edges):
+    values = iso_values if isinstance(iso_values, xr.DataArray) else xr.DataArray(
+        np.atleast_1d(np.asarray(iso_values, dtype=float)), dims=[new_dim]
+    )
+    if new_dim not in values.dims:
+        values = values.expand_dims(new_dim)
+    arr = iso_array.reset_coords(drop=True)
+    work_var = var.chunk({dim: -1}) if var.chunks is not None else var
+    arr = arr.chunk({dim: -1}) if arr.chunks is not None else arr
+    dist = abs(arr - values)
+    idx = dist.fillna(np.inf).argmin(dim)
+    out = work_var.isel({dim: idx})
+    if mask_edges:
+        inside = (values >= arr.min(dim)) & (values <= arr.max(dim))
+        out = out.where(inside)
+    return out.drop_vars(dim, errors="ignore")
+
+
+def isoslice(var, iso_values, iso_array, *, dim=None, new_dim=None, method="linear", mask_edges=True):
+    """Values of ``var`` where ``iso_array`` equals each of ``iso_values``.
 
     Parameters
     ----------
-    var: DataArray
-        Variable to operate on.
-    lons: list, ndarray
-        Longitudes to interpolate to. Will be flattened upon input.
-    lats: list, ndarray
-        Latitudes to interpolate to. Will be flattened upon input.
-    which: str, optional
-        Which type of interpolation to do:
-
-        * "pairs": lons/lats as unstructured coordinate pairs
-          (in xESMF language, LocStream).
-        * "grid": 2D array of points with 1 dimension the lons and
-          the other dimension the lats.
-
-    **kwargs:
-        passed on to xESMF Regridder class
-
-    Returns
-    -------
-    DataArray of var interpolated to lons/lats. Dimensionality will be the
-    same as var except the Y and X dimensions will be 1 dimension called
-    "locations" that lons.size if which=='pairs', or 2 dimensions called
-    "lat" and "lon" if which=='grid' that are of lats.size and lons.size,
-    respectively.
-
-    Notes
-    -----
-    var cannot have chunks in the Y or X dimensions.
-
-    cf-xarray should still be usable after calling this function.
-
-    Examples
-    --------
-
-    To return 1D pairs of points, in this case 3 points:
-
-    >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='pairs')
-
-    To return 2D pairs of points, in this case a 3x3 array of points:
-
-    >>> xroms.interpll(var, [-96, -97, -96.5], [26.5, 27, 26.5], which='grid')
+    var, iso_array : DataArray
+        Share the dimension ``dim`` along which to interpolate (default: the
+        vertical; ``"X"``/``"Y"``/``"Z"`` or a dim name).
+    iso_values : sequence or DataArray
+        Target values; a DataArray may vary in space (N-D targets, e.g. another
+        grid's depths), with extra dim ``new_dim``.
+    new_dim : str, optional
+        Name of the new dimension (default: ``iso_array``'s name, else ``"iso"``).
+    method : ``"linear"`` or ``"nearest"``
+        Linear interpolation (xgcm ``transform``) or the nearest native level.
+    mask_edges : bool
+        NaN where a target lies outside the column's range (True), or hold the
+        edge value (False).
     """
-
-    # make sure that xesmf was read in for this function to run
-    if not xroms.XESMF_AVAILABLE:
-        raise ModuleNotFoundError("xESMF is not installed, so `interpll` will not run.")
+    var, iso_array = canonicalize(var), canonicalize(iso_array)
+    dim = _resolve_dim(var, dim)
+    new_dim = new_dim or (iso_array.name if isinstance(iso_array.name, str) and iso_array.name not in var.dims else "iso")
+    if method == "linear":
+        out = _xgcm.transform(var, iso_values, iso_array, dim, new_dim=new_dim, mask_edges=mask_edges)
+    elif method == "nearest":
+        out = _nearest(var, iso_values, iso_array, dim, new_dim, mask_edges)
+        out.attrs = dict(var.attrs)
     else:
+        raise ValueError(f"method must be 'linear' or 'nearest', not {method!r}")
+    if not isinstance(iso_values, xr.DataArray):
+        out = out.assign_coords({new_dim: np.atleast_1d(np.asarray(iso_values, dtype=float))})
+    elif new_dim in iso_values.coords:
+        out = out.assign_coords({new_dim: iso_values[new_dim]})
+    if isinstance(iso_array, xr.DataArray) and new_dim in out.coords:
+        out[new_dim].attrs.update({k: v for k, v in iso_array.attrs.items() if k in ("units", "standard_name", "positive", "vertical_reference", "long_name")})
+    return _order_with(out, new_dim, dim)
+
+
+def _order_with(out, new_dim, replaced):
+    """Put ``new_dim`` where the replaced dim would be in (T, Z, Y, X) order."""
+    ordered = order(out)
+    if replaced in ("s_rho", "s_w") and new_dim in ordered.dims:
+        dims = list(ordered.dims)
+        dims.remove(new_dim)
+        tpos = 1 if dims and dims[0] in ("ocean_time", "time", "scrum_time") else 0
+        dims.insert(tpos, new_dim)
+        ordered = ordered.transpose(*dims)
+    return ordered
+
+
+def zslice(
+    var,
+    depths,
+    grid=None,
+    *,
+    z=None,
+    zeta=None,
+    reference=None,
+    positive=None,
+    method="linear",
+    mask_edges=True,
+    new_dim="z",
+):
+    """Interpolate ``var`` to fixed vertical positions ``depths``.
+
+    ``depths`` are measured relative to ``reference`` (``"mean_sea_level"``,
+    ``"surface"`` or ``"bottom"``) with sign ``positive`` (``"up"``/``"down"``).
+    If not given they are inferred from CF metadata on ``depths`` (when it is a
+    DataArray: ``standard_name``/``positive``), else default to heights relative
+    to mean sea level (ROMS z, negative below). E.g. ``zslice(temp, [10],
+    ds, reference="surface", positive="down")`` is 10 m below the moving surface.
+    """
+    var = canonicalize(var)
+    attrs = depths.attrs if isinstance(depths, xr.DataArray) else {}
+    ref0, pos0 = infer_reference(attrs)
+    reference = reference or ref0
+    positive = positive or pos0
+    if z is None and grid is None:
+        raise ValueError("zslice needs grid= (to compute depths) or z=")
+    zz = z_like(var, grid, zeta=zeta, z=z, reference=reference, positive=positive)
+    if z is not None:
+        zz = label(zz, reference, positive) if "vertical_reference" not in zz.attrs else zz
+    out = isoslice(var, depths, zz.rename(new_dim), dim=vposition(var), new_dim=new_dim, method=method, mask_edges=mask_edges)
+    out[new_dim] = label(out[new_dim], reference, positive)
+    return out
+
+
+def interpll(var, lons, lats, which="pairs", regridder=None, **kwargs):
+    """Interpolate ``var`` horizontally to lon/lat points with xESMF.
+
+    ``which="pairs"`` treats ``lons``/``lats`` as point pairs (dim
+    ``locations``); ``"grid"`` builds the lat x lon grid. Pass a previously
+    returned ``regridder`` (``out.attrs`` is not used for this; keep the object
+    from :func:`make_regridder`) to reuse weights across variables and times.
+    Extra ``kwargs`` go to ``xesmf.Regridder``.
+    """
+    var = canonicalize(var)
+    if regridder is None:
+        regridder = make_regridder(var, lons, lats, which=which, **kwargs)
+    src = _xesmf_input(var)
+    out = regridder(src, keep_attrs=True)
+    if which == "pairs":
+        out = out.assign_coords(locations=("locations", np.arange(out.sizes["locations"]), {"axis": "X"}))
+    return out
+
+
+def _xesmf_input(var):
+    pos = hposition(var) or "rho"
+    xname, yname = horizontal_coords(var, pos)
+    if xname is None or not xname.startswith("lon"):
+        raise ValueError(f"{var.name!r} needs lon_{pos}/lat_{pos} coordinates for xESMF interpolation")
+    return var.rename({xname: "lon", yname: "lat"})
+
+
+def make_regridder(var, lons, lats, which="pairs", method="bilinear", **kwargs):
+    """Build (and return, for reuse) the xESMF regridder used by :func:`interpll`."""
+    try:
         import xesmf as xe
-    # try:
-    #     xe
-    # except NameError:
-    #     print("xESMF is not installed, so `interpll` will not run.")
-    #     return None
-
-    # rename coords for use with xESMF
-    lonkey = [coord for coord in var.coords if "lon_" in coord][0]
-    latkey = [coord for coord in var.coords if "lat_" in coord][0]
-    var = var.rename({lonkey: "lon", latkey: "lat"})
-
-    # make sure dimensions are in typical cf ordering (T, Z, Y, X)
-    var = xroms.order(var)
-
-    # force lons/lats to be 1D arrays
+    except ImportError:  # pragma: no cover - optional dependency
+        raise ModuleNotFoundError("interpll needs xESMF (conda install -c conda-forge xesmf)") from None
+    var = canonicalize(var)
     lats = np.asarray(lats).flatten()
     lons = np.asarray(lons).flatten()
-
-    # whether inputs are
     if which == "pairs":
+        target = xr.Dataset({"lat": (["locations"], lats), "lon": (["locations"], lons)})
         locstream_out = True
-        # set up for output
-        varint = xr.Dataset(
-            {"lat": (["locations"], lats), "lon": (["locations"], lons)}
-        )
-
     elif which == "grid":
+        target = xr.Dataset({"lat": (["lat"], lats), "lon": (["lon"], lons)})
         locstream_out = False
-        # set up for output
-        varint = xr.Dataset({"lat": (["lat"], lats), "lon": (["lon"], lons)})
-
-    # Calculate weights.
-    regridder = xe.Regridder(
-        var, varint, "bilinear", locstream_out=locstream_out, **kwargs
-    )
-
-    # Perform interpolation
-    varint = regridder(var, keep_attrs=True)
-
-    # the following commented code was supposed to add the z coordinate if it was missing
-    # but was incorrect. A variation of it may need to be added back in. Oct 2022 KMT
-    # # check for presence of z coord with interpolated output
-    # zkey_varint = [
-    #     coord for coord in varint.coords if "z_" in coord and "0" not in coord
-    # ]
-    # get z coordinates to go with interpolated output if not available
-    zkeys = [coord for coord in var.coords if "z_" in coord and "0" not in coord]
-    if len(zkeys) > 0:
-        zkey = zkeys[0]  # str
-
-        zint = regridder(var[zkey], keep_attrs=True)
-
-        # add coords
-        varint = varint.assign_coords({zkey: zint})
-
-    # add attributes for cf-xarray
-    if which == "pairs":
-        varint["locations"] = (
-            "locations",
-            np.arange(varint.sizes["locations"]),
-            {"axis": "X"},
-        )
-    elif which == "grid":
-        varint["lon"].attrs["axis"] = "X"
-        varint["lat"].attrs["axis"] = "Y"
-        varint["lon"].attrs["standard_name"] = "longitude"
-        varint["lat"].attrs["standard_name"] = "latitude"
-
-    return varint
-
-
-def isoslice(var, iso_values, xgrid, iso_array=None, axis="Z"):
-    """Interpolate var to iso_values.
-
-    This wraps `xgcm` `transform` function for slice interpolation,
-    though `transform` has additional functionality.
-
-    Parameters
-    ----------
-    var: DataArray
-        Variable to operate on.
-    iso_values: list, ndarray
-        Values to interpolate to. If calculating var at fixed depths,
-        iso_values are the fixed depths, which should be negative if
-        below mean sea level. If input as array, should be 1D.
-    xgrid: xgcm.grid, optional
-        Grid object associated with var.
-    iso_array: DataArray, optional
-        Array that var is interpolated onto (e.g., z coordinates or
-        density). If calculating var on fixed depth slices, iso_array
-        contains the depths [m] associated with var. In that case and
-        if None, will use z coordinate attached to var. Also use this
-        option if you want to interpolate with z depths constant in
-        time and input the appropriate z coordinate.
-    dim: str, optional
-        Dimension over which to calculate isoslice. If calculating var
-        onto fixed depths, `dim='Z'`. Options are 'Z', 'Y', and 'X'.
-
-    Returns
-    -------
-    DataArray of var interpolated to iso_values. Dimensionality will be the
-    same as var except with dim dimension of size of iso_values.
-
-    Notes
-    -----
-    var cannot have chunks in the dimension dim.
-
-    cf-xarray should still be usable after calling this function.
-
-    Examples
-    --------
-
-    To calculate temperature onto fixed depths:
-
-    >>> xroms.isoslice(ds.temp, np.linspace(0, -30, 50))
-
-    To calculate temperature onto salinity:
-
-    >>> xroms.isoslice(ds.temp, np.arange(0, 36), iso_array=ds.salt, axis='Z')
-
-    Calculate lat-z slice of salinity along a constant longitude value (-91.5):
-
-    >>> xroms.isoslice(ds.salt, -91.5, iso_array=ds.lon_rho, axis='X')
-
-    Calculate slice of salt at 28 deg latitude
-
-    >>> xroms.isoslice(ds.salt, 28, iso_array=ds.lat_rho, axis='Y')
-
-    Interpolate temp to salinity values between 0 and 36 in the X direction
-
-    >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='X')
-
-    Interpolate temp to salinity values between 0 and 36 in the Z direction
-
-    >>> xroms.isoslice(ds.temp, np.linspace(0, 36, 50), iso_array=ds.salt, axis='Z')
-
-    Calculate the depth of a specific isohaline (33):
-
-    >>> xroms.isoslice(ds.salt, 33, iso_array=ds.z_rho, axis='Z')
-
-    Calculate dye 10 meters above seabed. Either do this on the vertical
-    rho grid, or first change to the w grid and then use `isoslice`. You may prefer
-    to do the latter if there is a possibility that the distance above the seabed you are
-    interpolating to (10 m) could be below the deepest rho grid depth.
-
-    * on rho grid directly:
-
-    >>> height_from_seabed = ds.z_rho + ds.h
-    >>> height_from_seabed.name = 'z_rho'
-    >>> xroms.isoslice(ds.dye_01, 10, iso_array=height_from_seabed, axis='Z')
-
-    * on w grid:
-
-    >>> var_w = ds.dye_01.xroms.to_grid(scoord='w').chunk({'s_w': -1})
-    >>> ds['dye_01_w'] = var_w  # currently this is the easiest way to reattached coords xgcm variables
-    >>> height_from_seabed = ds.z_w + ds.h
-    >>> height_from_seabed.name = 'z_w'
-    >>> xroms.isoslice(ds['dye_01_w'], 10, iso_array=height_from_seabed, axis='Z')
-
-    """
-
-    words = "Grid should be input."
-    assert xgrid is not None, words
-
-    assert isinstance(xgrid, xgcm.Grid), "xgrid must be `xgcm` grid object."
-
-    attrs = var.attrs  # save to reinstitute at end
-
-    # make sure iso_values are array-like
-    if isinstance(iso_values, (int, float)):
-        iso_values = [iso_values]
-
-    # interpolate to the z coordinates associated with var
-    if iso_array is None:
-        key = [coord for coord in var.coords if "z_" in coord and "0" not in coord][
-            0
-        ]  # str
-        assert (
-            len(key) > 0
-        ), "z coordinates associated with var could not be identified."
-        iso_array = var[key]
     else:
-        if isinstance(iso_array, xr.DataArray) and iso_array.name is not None:
-            key = iso_array.name
-        else:
-            key = "z"
-
-    # perform interpolation
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        transformed = xgrid.transform(var, axis, iso_values, target_data=iso_array)
-
-    if key not in transformed.coords:
-        transformed = transformed.assign_coords({key: iso_array})
-
-    # bring along attributes for cf-xarray
-    transformed[key].attrs["axis"] = axis
-    # add original attributes back in
-    transformed.attrs = {**attrs, **transformed.attrs}
-
-    # save key names for later
-    # perform interpolation for other coordinates if needed
-    if "longitude" in var.cf.coordinates:
-        lonkey = var.cf["longitude"].name
-
-        if lonkey not in transformed.coords:
-            # this interpolation won't work for certain combinations of var[latkey] and iso_array
-            # without the following step
-            if "T" in iso_array.reset_coords(drop=True).cf.axes:
-                iso_array = iso_array.cf.isel(T=0).drop_vars(
-                    iso_array.cf["T"].name, errors="ignore"
-                )
-            if "Z" in iso_array.reset_coords(drop=True).cf.axes:
-                iso_array = iso_array.cf.isel(Z=0).drop_vars(
-                    iso_array.cf["Z"].name, errors="ignore"
-                )
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                transformedlon = xgrid.transform(
-                    var[lonkey], axis, iso_values, target_data=iso_array
-                )
-            transformed = transformed.assign_coords({lonkey: transformedlon})
-
-        transformed[lonkey].attrs["standard_name"] = "longitude"
-
-    if "latitude" in var.cf.coordinates:
-        latkey = var.cf["latitude"].name
-
-        if latkey not in transformed.coords:
-            # this interpolation won't work for certain combinations of var[latkey] and iso_array
-            # without the following step
-            if "T" in iso_array.reset_coords(drop=True).cf.axes:
-                iso_array = iso_array.cf.isel(T=0).drop_vars(
-                    iso_array.cf["T"].name, errors="ignore"
-                )
-            if "Z" in iso_array.reset_coords(drop=True).cf.axes:
-                iso_array = iso_array.cf.isel(Z=0).drop_vars(
-                    iso_array.cf["Z"].name, errors="ignore"
-                )
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                transformedlat = xgrid.transform(
-                    var[latkey], axis, iso_values, target_data=iso_array
-                )
-            transformed = transformed.assign_coords({latkey: transformedlat})
-
-        transformed[latkey].attrs["standard_name"] = "latitude"
-
-    if "vertical" in var.cf.coordinates:
-        zkey = var.cf["vertical"].name
-
-        if zkey not in transformed.coords:
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                transformedZ = xgrid.transform(
-                    var[zkey], axis, iso_values, target_data=iso_array
-                )
-            transformed = transformed.assign_coords({zkey: transformedZ})
-
-        transformed[zkey].attrs["positive"] = "up"
-
-    transformed = transformed.squeeze().cf.guess_coord_axis()
-
-    # reorder back to normal ordering in case changed
-    transformed = xroms.order(transformed)
-
-    return transformed
+        raise ValueError(f"which must be 'pairs' or 'grid', not {which!r}")
+    return xe.Regridder(_xesmf_input(var), target, method, locstream_out=locstream_out, **kwargs)
