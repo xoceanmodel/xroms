@@ -1,0 +1,23 @@
+name: test-env-xroms
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.13
+  # required
+  - numpy
+  - xarray
+  - xgcm>=0.10
+  - numba
+  - dask
+  # every optional feature (xesmf is conda-forge only)
+  - xesmf
+  - gsw
+  - pyproj
+  - pooch
+  # tests
+  - netcdf4
+  - pandas
+  - pytest
+  - pytest-cov
+  - pip

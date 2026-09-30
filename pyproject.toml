@@ -35,7 +35,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# regridding to lon/lat points or grids (xesmf needs esmpy: easiest from conda-forge)
+# regridding to lon/lat points or grids. xesmf needs ESMF (esmpy), which pip can't
+# install: use conda-forge (`conda install -c conda-forge xesmf`). Left out of
+# "all" for that reason.
 interp = ["xesmf>=0.8"]
 # WGS84 geodesic nearest-point search: argsel2d(method="geodesic")
 geodesic = ["pyproj>=3.4"]
@@ -43,7 +45,7 @@ geodesic = ["pyproj>=3.4"]
 teos10 = ["gsw>=3.6"]
 # xroms.datasets example data
 examples = ["pooch>=1.6", "netCDF4"]
-all = ["xroms[interp,geodesic,teos10,examples]"]
+all = ["xroms[geodesic,teos10,examples]"]
 test = [
     "pytest>=7",
     "pytest-cov",
@@ -61,10 +63,12 @@ Changelog = "https://xroms.readthedocs.io/en/latest/whats_new.html"
 include = ["xroms*"]
 namespaces = false  # data directories (xroms/data, test fixtures) are not packages
 
-# Keep data out of the wheel: the 62 MB example file is downloaded on demand by
-# xroms.datasets, and the test fixtures/golden files are only needed from a checkout.
+# Keep data and tests out of the wheel: the 62 MB example file is downloaded on
+# demand by xroms.datasets, and the tests (with their fixtures and golden files)
+# run from a checkout or the sdist.
 [tool.setuptools.exclude-package-data]
 "*" = ["*.nc"]
+"xroms" = ["tests/*"]
 
 [tool.setuptools_scm]
 tag_regex = "^(?P<prefix>v)?(?P<version>[^\\+]+)(?P<suffix>.*)?$"
@@ -72,6 +76,11 @@ tag_regex = "^(?P<prefix>v)?(?P<version>[^\\+]+)(?P<suffix>.*)?$"
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["xroms/tests"]
+# deprecations raised by xroms' own calls into its dependencies fail the run
+filterwarnings = [
+    "error::DeprecationWarning:xroms",
+    "error::FutureWarning:xroms",
+]
 markers = [
     "web: tests that need a network connection (deselect with '-m \"not web\"')",
 ]

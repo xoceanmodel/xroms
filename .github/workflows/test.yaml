@@ -43,6 +43,27 @@ jobs:
           name: codecov-umbrella
           fail_ci_if_error: false
 
+  full:
+    # every optional dependency, including xesmf (conda-forge only)
+    name: conda full (3.13 | ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: "3.13"
+          miniforge-variant: Miniforge3
+          environment-file: ci/environment-full.yml
+          activate-environment: test-env-xroms
+      - name: Install xroms
+        shell: bash -l {0}
+        run: python -m pip install -e . --no-deps --force-reinstall
+      - name: Run tests
+        shell: bash -l {0}
+        run: pytest
+
   pip:
     # pip-installed variants: the bare minimum, the oldest supported xgcm, and
     # the dependency caps roms-tools runs with (so both can be installed together)
@@ -61,6 +82,11 @@ jobs:
           - name: roms-tools-caps
             python-version: "3.12"
             extra: '"xarray==2025.7.*" "numpy==2.2.*" "xgcm==0.10.*"'
+          - name: with-roms-tools
+            # installed side by side with the released roms-tools: pip resolves
+            # both packages' pins and pip check must pass
+            python-version: "3.12"
+            extra: '"roms-tools"'
     steps:
       - uses: actions/checkout@v5
         with:
