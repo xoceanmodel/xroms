@@ -84,6 +84,19 @@ def _linear_sig0(ds, slope=0.01):
     return sig0.rename("sig0")
 
 
+def _flipped(da):
+    """``da`` with its dimensions in the reverse order."""
+    return da.transpose(*da.dims[::-1])
+
+
+def _with_member(da):
+    """``da`` repeated along a new ``member`` dimension, which is put second."""
+    return da.expand_dims(member=2, axis=1)
+
+
+ORDERED = ("ocean_time", "s_rho", "eta_rho", "xi_rho")
+
+
 # --- density ------------------------------------------------------------------------
 
 
@@ -157,6 +170,29 @@ class TestDensity:
         with pytest.raises(ValueError, match="z="):
             xroms.density(stale, rutgers.salt)
 
+    def test_output_is_ordered(self, rutgers):
+        # (time, vertical, eta, xi) whatever the order of the inputs' dims, as ddxi does it
+        expected = xroms.density(rutgers.temp, rutgers.salt, grid=rutgers)
+        assert expected.dims == ORDERED
+        rho = xroms.density(_flipped(rutgers.temp), _flipped(rutgers.salt), grid=rutgers)
+        assert rho.dims == ORDERED
+        xr.testing.assert_identical(rho, expected)
+        assert xroms.density(_flipped(rutgers.temp), rutgers.salt, xroms.z(rutgers)).dims == ORDERED
+        # other dimensions follow the four, wherever they came in
+        rho = xroms.density(_with_member(rutgers.temp), _with_member(rutgers.salt), grid=rutgers)
+        assert rho.dims == ORDERED + ("member",)
+        assert xroms.ddxi(_with_member(rutgers.temp), rutgers).dims[-1] == "member"
+        np.testing.assert_allclose(rho.isel(member=1).values, expected.values)
+
+    def test_ordering_keeps_the_coordinates_and_leaves_the_inputs_alone(self, rutgers):
+        temp = _flipped(rutgers.temp)
+        before = temp.copy(deep=True)
+        rho = xroms.density(temp, _flipped(rutgers.salt), grid=rutgers)
+        assert rho.lon_rho.dims == ("eta_rho", "xi_rho")
+        assert rho.lon_rho.attrs["standard_name"] == "longitude"
+        assert "standard_name" not in temp.lon_rho.attrs
+        xr.testing.assert_identical(temp, before)
+
     def test_attrs_and_name(self, rutgers):
         rho = xroms.density(rutgers.temp, rutgers.salt, grid=rutgers)
         assert rho.name == "rho"
@@ -221,6 +257,19 @@ class TestPotentialDensityAndBuoyancy:
 
     def test_buoyancy_rho0_and_numpy(self):
         np.testing.assert_allclose(xroms.buoyancy(np.array([1000.0, 1030.0]), rho0=1000.0), [-G, -G * 1.03])
+
+    def test_outputs_are_ordered(self, rutgers):
+        expected = xroms.potential_density(rutgers.temp, rutgers.salt)
+        sig0 = xroms.potential_density(_flipped(rutgers.temp), _flipped(rutgers.salt))
+        assert sig0.dims == ORDERED
+        xr.testing.assert_identical(sig0, expected)
+        sig0 = xroms.potential_density(_with_member(rutgers.temp), _with_member(rutgers.salt))
+        assert sig0.dims == ORDERED + ("member",)
+        # buoyancy follows whatever order it is given
+        buoy = xroms.buoyancy(_flipped(expected))
+        assert buoy.dims == ORDERED
+        xr.testing.assert_identical(buoy, xroms.buoyancy(expected))
+        assert xroms.buoyancy(_with_member(expected)).dims == ORDERED + ("member",)
 
 
 # --- N2 -----------------------------------------------------------------------------
@@ -313,6 +362,15 @@ class TestN2:
         n2 = xroms.N2(rho_w, rutgers)
         assert n2.dims == ("ocean_time", "s_rho", "eta_rho", "xi_rho")
 
+    def test_output_is_ordered_with_a_dataarray_rho0(self, rutgers):
+        # a reference density with a dimension of its own (time, here) must not put it first
+        rho = _linear_rho(rutgers, b=-0.02).mean("ocean_time")
+        rho0 = xr.DataArray([1020.0, 1030.0], dims="ocean_time")
+        n2 = xroms.N2(rho, rutgers, rho0=rho0, zeta="mean")
+        assert n2.dims == ("ocean_time", "s_w", "eta_rho", "xi_rho")
+        expected = xroms.N2(rho, rutgers, rho0=1030.0, zeta="mean")
+        np.testing.assert_allclose(n2.isel(ocean_time=1).values, expected.values)
+
     def test_attrs_and_name(self, rutgers):
         n2 = xroms.N2(_linear_rho(rutgers, b=-0.02), rutgers)
         assert n2.name == "N2"
@@ -355,9 +413,16 @@ class TestM2:
         rho = _linear_rho(ds, ax=a)
         m2 = xroms.M2(rho, ds)
         assert m2.dims == rho.dims
-        np.testing.assert_allclose(m2.isel(s_rho=slice(1, -1)).values, G * a / _rho0(layout), rtol=1e-8)
-        # with the default fill the top and bottom levels of the depth correction are missing
-        assert m2.isel(s_rho=[0, -1]).isnull().all()
+        # every level, the surface and bottom layers included
+        np.testing.assert_allclose(m2.values, G * a / _rho0(layout), rtol=1e-8)
+
+    def test_default_leaves_no_level_empty(self, layout):
+        # the surface and bottom layers used to come out NaN: M2 stays on the levels of rho, and
+        # the vertical derivative of the depth correction has no neighbours beyond them
+        ds = merged(layout)
+        m2 = xroms.M2(xroms.density(ds.temp, ds.salt, grid=ds), ds)
+        assert m2.notnull().all()
+        assert (m2 > 0).all()
 
     def test_gradient_is_at_constant_depth(self, rutgers):
         # rho also depends on z, and the s-surfaces slope (h and zeta vary): the along-s
@@ -383,8 +448,19 @@ class TestM2:
 
     def test_sboundary_extend_reaches_every_level_and_point(self, rutgers):
         a = 2e-3
-        m2 = xroms.M2(_linear_rho(rutgers, b=-0.02, ax=a), rutgers, sboundary="extend")
+        rho = _linear_rho(rutgers, b=-0.02, ax=a)
+        m2 = xroms.M2(rho, rutgers, sboundary="extend")
         np.testing.assert_allclose(m2.values, G * a / RHO0, rtol=1e-7)
+        xr.testing.assert_identical(xroms.M2(rho, rutgers), m2)  # it is the default
+
+    def test_sboundary_fill_leaves_the_top_and_bottom_levels_empty(self, rutgers):
+        a = 2e-3
+        rho = _linear_rho(rutgers, b=-0.02, ax=a)
+        m2 = xroms.M2(rho, rutgers, sboundary="fill")
+        assert m2.isel(s_rho=[0, -1]).isnull().all()
+        assert m2.isel(s_rho=slice(1, -1)).notnull().all()
+        np.testing.assert_allclose(m2.isel(s_rho=slice(1, -1)).values, G * a / RHO0, rtol=1e-7)
+        assert np.isfinite(xroms.M2(rho, rutgers, sboundary="fill", sfill_value=0.0).values).all()
 
     def test_hboundary_fill_leaves_the_domain_edges_empty(self, rutgers):
         a = 2e-3
@@ -426,6 +502,15 @@ class TestM2:
         m2 = xroms.M2(xroms.to_s_w(_linear_rho(rutgers, ax=2e-3)), rutgers)
         assert m2.dims == ("ocean_time", "s_w", "eta_rho", "xi_rho")
         np.testing.assert_allclose(m2.isel(s_w=slice(1, -1)).values, G * 2e-3 / RHO0, rtol=1e-7)
+
+    def test_output_is_ordered_with_a_dataarray_rho0(self, rutgers):
+        # a reference density with dimensions of its own (an ensemble of them, here) must not put them first
+        rho = _linear_rho(rutgers, ax=2e-3)
+        rho0 = xr.DataArray([1020.0, 1030.0], dims="member")
+        m2 = xroms.M2(rho, rutgers, rho0=rho0)
+        assert m2.dims == rho.dims + ("member",)
+        np.testing.assert_allclose(m2.isel(member=1).values, xroms.M2(rho, rutgers, rho0=1030.0).values)
+        assert xroms.M2(_flipped(rho), rutgers).dims == rho.dims
 
     def test_attrs_and_name(self, rutgers):
         m2 = xroms.M2(_linear_rho(rutgers, ax=2e-3), rutgers)
@@ -570,5 +655,22 @@ class TestMLD:
         with pytest.raises(ValueError, match="vertical"):
             xroms.mld(rutgers.zeta, rutgers)
         # the pre-1.0 signature took h and mask as arguments
-        with pytest.raises(TypeError):
+        with pytest.raises(TypeError, match="h and mask now come from grid"):
             xroms.mld(sig0, rutgers, rutgers.h, rutgers.mask_rho)
+
+    def test_pre_1_0_call_with_h_and_mask_says_what_to_do(self, rutgers):
+        sig0 = _linear_sig0(rutgers)
+        # the v0.6.2 call, then forms with a Dataset, and with z and thresh given positionally as well
+        for call in (
+            lambda: xroms.mld(sig0, FakeXgcmGrid(), rutgers.h, rutgers.mask_rho),
+            lambda: xroms.mld(sig0, rutgers, rutgers.h, rutgers.mask_rho),
+            lambda: xroms.mld(sig0, rutgers, rutgers.h, rutgers.mask_rho, None, 0.03),
+        ):
+            with pytest.raises(TypeError, match="xroms 1.0") as err:
+                call()
+            msg = str(err.value)
+            assert "h and mask now come from grid (the Dataset that holds them)" in msg
+            assert "xroms.mld(sig0, ds)" in msg
+        # the keywords are not affected
+        keywords = xroms.mld(sig0, rutgers, thresh=0.03, z=None, zeta=None)
+        xr.testing.assert_identical(keywords, xroms.mld(sig0, rutgers))

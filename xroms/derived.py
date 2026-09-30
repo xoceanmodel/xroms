@@ -12,18 +12,24 @@ names. Results land where the calculation naturally puts them:
 * `ertel` on ``hcoord``/``scoord`` (rho/s_rho by default).
 
 Horizontal derivatives keep the vertical levels of their inputs.
+
+`relative_vorticity`, `convergence` and `ertel` difference u along eta and v along
+xi, which only means something at their own points, so they need u on u points and
+v on v points and raise a ValueError otherwise (see :func:`xroms.to_u` and
+:func:`xroms.to_v` to move velocities that are elsewhere).
 """
 
 import numpy as np
 import xarray as xr
 
-from .conventions import normalize_hcoord, normalize_scoord
+from .conventions import hposition, normalize_hcoord, normalize_scoord
 from .utilities import (
     _check_grid,
     _reject_legacy,
     ddeta,
     ddxi,
     ddz,
+    order,
     to_grid,
     to_rho,
     to_u,
@@ -39,6 +45,28 @@ def _check_dataarrays(**arrays):
     for name, value in arrays.items():
         if not isinstance(value, xr.DataArray):
             raise TypeError(f"{name} must be a DataArray, not {type(value).__name__}")
+
+
+def _check_uv_positions(u, v, func):
+    """Raise a ValueError unless ``u`` is on u points and ``v`` on v points.
+
+    ``func`` differences u along eta and v along xi. With the two swapped, or moved
+    to other points, the derivatives land on different points and the result is
+    silently wrong (or broadcasts to extra dimensions). A position that cannot be
+    told from the dims (None) is left to the derivative that needs it, which says so.
+    """
+    found = hposition(u), hposition(v)
+    if found[0] in (None, "u") and found[1] in (None, "v"):
+        return
+    where = [
+        f"{name} is on {pos} points" if pos else f"{name} has dims {da.dims}, which do not give its points"
+        for name, pos, da in (("u", found[0], u), ("v", found[1], v))
+    ]
+    raise ValueError(
+        f"{func} needs u on u points and v on v points, but {where[0]} and {where[1]}. Check that u "
+        "(the xi component) and v (the eta component) are not swapped; velocities on other points "
+        "can be moved with xroms.to_u and xroms.to_v."
+    )
 
 
 def _label(var, name, long_name, units):
@@ -136,7 +164,8 @@ def KE(rho0, speed):
 
     var = 0.5 * rho0 * speed**2
 
-    return _label(var, "KE", "kinetic energy", "kg/(m*s^2)")
+    # speed is whatever DataArray was passed in, and rho0 may have dimensions of its own
+    return _label(order(var), "KE", "kinetic energy", "kg/(m*s^2)")
 
 
 def uv_geostrophic(
@@ -450,9 +479,9 @@ def relative_vorticity(
     Parameters
     ----------
     u: DataArray
-        xi component of velocity [m/s]
+        xi component of velocity [m/s], on u points
     v: DataArray
-        eta component of velocity [m/s]
+        eta component of velocity [m/s], on v points
     grid: Dataset
         Dataset holding the grid variables (``pm`` and ``pn``, and for 3D inputs
         ``h`` and the s-coordinate parameters) associated with u, v.
@@ -484,6 +513,12 @@ def relative_vorticity(
     vertical levels of u and v.
     Output is `[T,Z,Y,X]`.
 
+    Raises
+    ------
+    ValueError
+        If u is not on u points or v is not on v points (for example, if they are
+        swapped).
+
     Notes
     -----
     relative_vorticity = v_x - u_y
@@ -497,6 +532,7 @@ def relative_vorticity(
 
     grid = _check_grid(grid, "relative_vorticity")
     _check_dataarrays(u=u, v=v)
+    _check_uv_positions(u, v, "relative_vorticity")
     opts = dict(
         zeta=zeta,
         hboundary=hboundary,
@@ -532,9 +568,9 @@ def convergence(
     Parameters
     ----------
     u: DataArray
-        xi component of velocity [m/s]
+        xi component of velocity [m/s], on u points
     v: DataArray
-        eta component of velocity [m/s]
+        eta component of velocity [m/s], on v points
     grid: Dataset
         Dataset holding the grid variables (``pm`` and ``pn``, and for 3D inputs
         ``h`` and the s-coordinate parameters) associated with u, v.
@@ -566,6 +602,11 @@ def convergence(
     vertical levels of u and v.
     Output is `[T,Z,Y,X]`.
 
+    Raises
+    ------
+    ValueError
+        If u is not on u points or v is not on v points (for example, if they are
+        swapped).
 
     Notes
     -----
@@ -582,6 +623,7 @@ def convergence(
 
     grid = _check_grid(grid, "convergence")
     _check_dataarrays(u=u, v=v)
+    _check_uv_positions(u, v, "convergence")
     opts = dict(
         zeta=zeta,
         hboundary=hboundary,
@@ -622,12 +664,12 @@ def ertel(
         Conservative tracer. Usually this would be the buoyancy but
         could be another approximately conservative tracer. The
         buoyancy can be calculated as:
-        >>> xroms.buoyancy(temp, salt, 0)
+        >>> xroms.buoyancy(xroms.potential_density(temp, salt))
         and then input as `phi`.
     u: DataArray
-        xi component of velocity [m/s]
+        xi component of velocity [m/s], on u points
     v: DataArray
-        eta component of velocity [m/s]
+        eta component of velocity [m/s], on v points
     f: DataArray
         Coriolis parameter [1/s], at any horizontal grid position (it is moved
         to ``hcoord``).
@@ -661,6 +703,12 @@ def ertel(
     DataArray of the Ertel potential vorticity for the input tracer.
     Output is `[T,Z,Y,X]`.
 
+    Raises
+    ------
+    ValueError
+        If u is not on u points or v is not on v points (for example, if they are
+        swapped), or ``hcoord`` or ``scoord`` is None.
+
     Notes
     -----
     epv = -v_z * phi_x + u_z * phi_y + (f + v_x - u_y) * phi_z
@@ -676,6 +724,7 @@ def ertel(
 
     grid = _check_grid(grid, "ertel")
     _check_dataarrays(phi=phi, u=u, v=v, f=f)
+    _check_uv_positions(u, v, "ertel")
     hcoord, scoord = normalize_hcoord(hcoord), normalize_scoord(scoord)
     if hcoord is None or scoord is None:
         raise ValueError(

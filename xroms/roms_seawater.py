@@ -8,17 +8,19 @@ Dataset holding ``h``, ``zeta`` and the s-coordinate parameters (see
 
 Output lands where the calculation puts it: ``N2`` of a rho-level density is on
 the ``s_w`` levels, ``M2`` is on rho points and the input's own levels, and
-``mld`` is on rho points with no vertical dimension.
+``mld`` is on rho points with no vertical dimension. DataArray results are
+ordered (time, vertical, eta, xi, then any other dimensions), whatever the order
+of the inputs' dimensions.
 """
 
 import numpy as np
 import xarray as xr
 
 from . import conventions
-from ._align import require, select_like
+from ._align import _reject_legacy, require, select_like
 from .conventions import canonicalize, vposition
 from .interp import isoslice
-from .utilities import _check_grid, ddeta, ddxi, ddz
+from .utilities import _check_grid, ddeta, ddxi, ddz, order
 from .vertical import z_like
 
 
@@ -75,7 +77,8 @@ def density(temp, salt, z=None, *, grid=None, zeta=None):
     Returns
     -------
     DataArray or ndarray of calculated density, on the points of the inputs
-    (rho/rho by default).
+    (rho/rho by default). A DataArray is ordered (time, vertical, eta, xi, then
+    any other dimensions), whatever the order of the inputs' dimensions.
 
     Raises
     ------
@@ -205,7 +208,7 @@ def density(temp, salt, z=None, *, grid=None, zeta=None):
     var = (den1 * bulk) / (bulk + 0.1 * z)
 
     if isinstance(var, xr.DataArray):
-        var = _with_cf_standard_names(var)
+        var = _with_cf_standard_names(order(var))
         _label(var, "rho", "density", "kg/m^3")
 
     return var
@@ -226,7 +229,8 @@ def potential_density(temp, salt, z=0):
     Returns
     -------
     DataArray or ndarray of calculated potential density, on the points of the
-    inputs (rho/rho by default).
+    inputs (rho/rho by default). A DataArray is ordered (time, vertical, eta, xi,
+    then any other dimensions), whatever the order of the inputs' dimensions.
 
     Notes
     -----
@@ -256,7 +260,8 @@ def buoyancy(sig0, rho0=1025.0):
 
     Returns
     -------
-    DataArray or ndarray of calculated buoyancy, on the points of ``sig0``.
+    DataArray or ndarray of calculated buoyancy, on the points of ``sig0``. A
+    DataArray is ordered (time, vertical, eta, xi, then any other dimensions).
 
     Notes
     -----
@@ -271,7 +276,7 @@ def buoyancy(sig0, rho0=1025.0):
     var = -g * sig0 / rho0
 
     if isinstance(var, xr.DataArray):
-        _label(var, "buoyancy", "buoyancy", "m/s^2")
+        var = _label(order(var), "buoyancy", "buoyancy", "m/s^2")
 
     return var
 
@@ -327,7 +332,8 @@ def N2(rho, grid, rho0=None, *, z=None, zeta=None, sboundary="fill", sfill_value
     drhodz = ddz(rho, grid, z=z, zeta=zeta, sboundary=sboundary, sfill_value=sfill_value)
     var = -g * drhodz / rho0
 
-    return _label(var, "N2", "buoyancy frequency squared, or vertical buoyancy gradient", "1/s^2")
+    # rho0 may be a DataArray with dimensions of its own
+    return _label(order(var), "N2", "buoyancy frequency squared, or vertical buoyancy gradient", "1/s^2")
 
 
 def M2(
@@ -339,7 +345,7 @@ def M2(
     zeta=None,
     hboundary="extend",
     hfill_value=np.nan,
-    sboundary="fill",
+    sboundary="extend",
     sfill_value=np.nan,
     along_s=False,
 ):
@@ -369,8 +375,11 @@ def M2(
         Value used at the horizontal edges with ``hboundary="fill"``.
     sboundary : string, optional
         Vertical boundary treatment of the z derivative in the correction to a
-        constant-depth gradient: "fill" sets the two edge levels to
-        ``sfill_value``, "extend" uses one-sided second-order differences there.
+        constant-depth gradient: "extend" (default) uses one-sided second-order
+        differences at the top and bottom levels, so every level has a value;
+        "fill" sets those two edge levels of the derivative to ``sfill_value``,
+        which leaves the whole surface and bottom layers of M2 NaN (M2 stays on
+        the levels of ``rho``).
     sfill_value : float, optional
         Value used at the vertical edges with ``sboundary="fill"``.
     along_s : bool, optional
@@ -380,8 +389,8 @@ def M2(
     Returns
     -------
     DataArray of the horizontal buoyancy gradient, on rho points and on the
-    vertical levels of ``rho``. With the default ``sboundary="fill"`` the top
-    and bottom levels are NaN.
+    vertical levels of ``rho``. With ``sboundary="fill"`` the top and bottom
+    levels are NaN.
 
     Notes
     -----
@@ -414,10 +423,11 @@ def M2(
     drhodeta = ddeta(rho, grid, **kwargs)
     var = g / rho0 * np.sqrt(drhodxi**2 + drhodeta**2)
 
-    return _label(var, "M2", "horizontal buoyancy gradient", "1/s^2")
+    # rho0 may be a DataArray with dimensions of its own
+    return _label(order(var), "M2", "horizontal buoyancy gradient", "1/s^2")
 
 
-def mld(sig0, grid, *, thresh=0.03, z=None, zeta=None):
+def mld(sig0, grid, *args, thresh=0.03, z=None, zeta=None):
     """Calculate the mixed layer depth [m], positive, and the water depth if none is found.
 
     Parameters
@@ -457,6 +467,10 @@ def mld(sig0, grid, *, thresh=0.03, z=None, zeta=None):
     with density inversions the depth found is not guaranteed to be the
     shallowest crossing.
 
+    Before xroms 1.0 the call was ``mld(sig0, xgrid, h, mask)``; ``h`` and the
+    mask are read from ``grid`` now, and passing them (or anything else
+    positionally after ``grid``) raises a `TypeError`.
+
     Converted to xroms by K. Thyng Aug 2020 from:
 
     Update history:
@@ -475,6 +489,12 @@ def mld(sig0, grid, *, thresh=0.03, z=None, zeta=None):
     --------
     >>> xroms.mld(xroms.potential_density(ds.temp, ds.salt), ds)
     """
+    _reject_legacy(
+        args,
+        "mld",
+        "h and mask now come from grid (the Dataset that holds them): use xroms.mld(sig0, ds). "
+        "thresh, z and zeta are keyword arguments.",
+    )
     if not isinstance(sig0, xr.DataArray):
         raise TypeError("sig0 must be a DataArray")
     if grid is None:

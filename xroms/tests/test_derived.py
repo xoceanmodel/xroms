@@ -216,6 +216,17 @@ class TestKE:
         out = xroms.KE(xr.full_like(sp, 1030.0), sp)
         np.testing.assert_allclose(out.values, 0.5 * 1030.0 * sp.values**2, rtol=1e-12)
 
+    def test_output_is_ordered(self, rutgers):
+        # the speed can be any DataArray, and rho0 may bring dimensions of its own
+        sp = xroms.speed(rutgers.u, rutgers.v)
+        out = xroms.KE(1025.0, sp.transpose(*sp.dims[::-1]))
+        assert out.dims == sp.dims
+        np.testing.assert_allclose(out.values, xroms.KE(1025.0, sp).values)
+        ensemble = xr.DataArray([1020.0, 1030.0], dims="member")
+        out = xroms.KE(ensemble, sp)
+        assert out.dims == sp.dims + ("member",)
+        np.testing.assert_allclose(out.isel(member=1).values, xroms.KE(1030.0, sp).values)
+
 
 class TestGeostrophic:
     def test_dims_and_values_against_numpy_finite_differences(self, uniform):
@@ -580,6 +591,57 @@ class TestErtel:
             xroms.ertel(*args, scoord=None)
         with pytest.raises(ValueError, match="hcoord"):
             xroms.ertel(*args, hcoord="north")
+
+
+UV_FUNCTIONS = {
+    "relative_vorticity": lambda u, v, ds: xroms.relative_vorticity(u, v, ds),
+    "convergence": lambda u, v, ds: xroms.convergence(u, v, ds),
+    "ertel": lambda u, v, ds: xroms.ertel(ds.temp, u, v, ds.f, ds),
+}
+EACH_UV_FUNCTION = pytest.mark.parametrize("name", list(UV_FUNCTIONS))
+
+
+class TestVelocityPositions:
+    """u is differenced along eta and v along xi: they have to be on u and v points.
+
+    With the two swapped, or both averaged onto rho points, the derivatives used to land on
+    different points and come out silently wrong (or broadcast to extra dimensions).
+    """
+
+    @EACH_UV_FUNCTION
+    def test_swapped_components_raise_naming_the_positions(self, layout, name):
+        ds = merged(layout)
+        with pytest.raises(ValueError, match="u is on v points and v is on u points") as err:
+            UV_FUNCTIONS[name](ds.v, ds.u, ds)
+        assert str(err.value).startswith(f"{name} needs u on u points and v on v points")
+
+    @EACH_UV_FUNCTION
+    def test_velocities_on_rho_points_raise(self, uniform, name):
+        u, v = xroms.to_rho(uniform.u), xroms.to_rho(uniform.v)
+        with pytest.raises(ValueError, match="u is on rho points and v is on rho points"):
+            UV_FUNCTIONS[name](u, v, uniform)
+
+    @EACH_UV_FUNCTION
+    def test_each_component_is_checked(self, uniform, name):
+        with pytest.raises(ValueError, match="u is on u points and v is on rho points"):
+            UV_FUNCTIONS[name](uniform.u, xroms.to_rho(uniform.v), uniform)
+        with pytest.raises(ValueError, match="u is on rho points and v is on v points"):
+            UV_FUNCTIONS[name](xroms.to_rho(uniform.u), uniform.v, uniform)
+
+    @EACH_UV_FUNCTION
+    def test_the_message_says_what_to_do(self, uniform, name):
+        with pytest.raises(ValueError, match="not swapped") as err:
+            UV_FUNCTIONS[name](uniform.v, uniform.u, uniform)
+        assert "xroms.to_u" in str(err.value) and "xroms.to_v" in str(err.value)
+
+    @EACH_UV_FUNCTION
+    def test_a_position_the_dims_do_not_give_is_not_called_wrong(self, uniform, name):
+        # a section at one xi has no xi dim to place u with; whatever the calculation makes of
+        # that, it is not reported as u being on the wrong points
+        u = C.canonicalize(uniform).u.isel(xi_u=3)
+        with pytest.raises(ValueError) as err:
+            UV_FUNCTIONS[name](u, uniform.v, uniform)
+        assert "needs u on u points" not in str(err.value)
 
 
 class FakeXgcmGrid:

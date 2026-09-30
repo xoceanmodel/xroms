@@ -7,7 +7,7 @@ import xarray as xr
 import xroms
 from xroms import conventions as C
 from xroms.tests import _synthetic as syn
-from xroms.tests.conftest import chunked
+from xroms.tests.conftest import chunked, merged
 
 
 RHO = ("ocean_time", "s_rho", "eta_rho", "xi_rho")
@@ -71,6 +71,54 @@ class TestRotateVectors:
     def test_xgrid_is_rejected(self, rutgers):
         with pytest.raises(TypeError, match="xgrid"):
             xroms.rotate_vectors(rutgers.u, rutgers.v, 0.0, xgrid=object())
+        # for numbers too, which never need a grid
+        with pytest.raises(TypeError, match="rotate_vectors no longer needs xgrid; remove it"):
+            xroms.rotate_vectors(1.0, 0.0, 0.3, xgrid=object())
+
+    @pytest.mark.parametrize("keyword", ["isradian", "hbounary", "hcoords", "sboundary", "reference_frame"])
+    def test_unknown_keywords_raise(self, rutgers, keyword):
+        # they used to be swallowed (for numbers and arrays, which never reach to_grid):
+        # rotate_vectors(1., 0., 90, isradian=False) rotated by 90 radians
+        can = C.canonicalize(rutgers)
+        for x, y, angle in (
+            (1.0, 0.0, 90),
+            (np.ones(3), np.zeros(3), np.full(3, 90.0)),
+            (can.temp, can.salt, 90),
+        ):
+            with pytest.raises(TypeError, match=keyword):
+                xroms.rotate_vectors(x, y, angle, **{keyword: False})
+
+    def test_typo_does_not_rotate_by_the_wrong_unit(self):
+        with pytest.raises(TypeError, match="isradian"):
+            xroms.rotate_vectors(1.0, 0.0, 90, isradian=False)
+        np.testing.assert_allclose(xroms.rotate_vectors(1.0, 0.0, 90, isradians=False), (0, 1), atol=1e-15)
+
+    def test_boundary_keywords_go_to_the_move(self, rutgers):
+        can = C.canonicalize(rutgers)
+        extend = xroms.rotate_vectors(can.u, can.v, 0.0)[0]
+        np.testing.assert_allclose(extend.values, xroms.to_rho(can.u).values)
+        # u is averaged along xi and v along eta, and both feed each rotated component
+        nan = xroms.rotate_vectors(can.u, can.v, 0.0, hboundary="fill")[0]
+        for edge in ({"xi_rho": 0}, {"xi_rho": -1}, {"eta_rho": 0}, {"eta_rho": -1}):
+            assert np.isnan(nan.isel(edge).values).all()
+        assert np.isfinite(nan.isel(eta_rho=slice(1, -1), xi_rho=slice(1, -1)).values).all()
+        zero = xroms.rotate_vectors(can.u, can.v, 0.0, hboundary="fill", hfill_value=0.0)[0]
+        np.testing.assert_allclose(zero.values, xroms.to_rho(can.u, hboundary="fill", hfill_value=0.0).values)
+        with pytest.raises(ValueError, match="boundary"):
+            xroms.rotate_vectors(can.u, can.v, 0.0, hboundary="wrap")
+
+    def test_results_are_ordered(self):
+        # a mean flow rotated by an angle that varies in time: the time dimension comes from the angle
+        x = xr.DataArray(np.ones((9, 12)), dims=("eta_rho", "xi_rho"))
+        y = xr.DataArray(np.zeros((9, 12)), dims=("eta_rho", "xi_rho"))
+        angle = xr.DataArray([0.0, np.pi / 2], dims="ocean_time")
+        xrot, yrot = xroms.rotate_vectors(x, y, angle)
+        assert xrot.dims == yrot.dims == ("ocean_time", "eta_rho", "xi_rho")
+        np.testing.assert_allclose(xrot.isel(ocean_time=1).values, 0.0, atol=1e-15)
+        np.testing.assert_allclose(yrot.isel(ocean_time=1).values, 1.0)
+        # other dimensions follow the four
+        member = xr.DataArray([0.0, 1.0], dims="member")
+        assert xroms.rotate_vectors(x, y, member)[0].dims == ("eta_rho", "xi_rho", "member")
 
 
 class TestGridToEarth:
@@ -101,6 +149,37 @@ class TestGridToEarth:
     def test_requires_dataarrays(self):
         with pytest.raises(TypeError):
             xroms.grid_to_earth(1.0, 0.0, 0.0)
+
+    def test_swapped_components_raise_naming_the_positions(self, layout):
+        # u on v points and v on u points: rotated and averaged to rho without a word before
+        ds = merged(layout)
+        with pytest.raises(ValueError, match="u is on v points and v is on u points") as err:
+            xroms.grid_to_earth(ds.v, ds.u, ds.angle)
+        assert "not swapped" in str(err.value)
+
+    def test_each_component_is_checked(self, rutgers):
+        with pytest.raises(ValueError, match="u is on v points and v is on v points"):
+            xroms.grid_to_earth(rutgers.v, rutgers.v, rutgers.angle)
+        with pytest.raises(ValueError, match="u is on u points and v is on u points"):
+            xroms.grid_to_earth(rutgers.u, rutgers.u, rutgers.angle)
+        with pytest.raises(ValueError, match="u is on v points and v is on rho points"):
+            xroms.grid_to_earth(rutgers.v, xroms.to_rho(rutgers.v), rutgers.angle)
+        with pytest.raises(ValueError, match="u is on rho points and v is on u points"):
+            xroms.grid_to_earth(xroms.to_rho(rutgers.u), rutgers.u, rutgers.angle)
+
+    @pytest.mark.parametrize("angle", [0.0, 0.4])
+    def test_velocities_already_on_rho_points_are_accepted(self, angle):
+        ds = syn.make_dataset("rutgers", angle=angle)
+        east, north = xroms.grid_to_earth(ds.u, ds.v, ds.angle)
+        east_rho, north_rho = xroms.grid_to_earth(xroms.to_rho(ds.u), xroms.to_rho(ds.v), ds.angle)
+        np.testing.assert_allclose(east_rho.values, east.values, atol=1e-14)
+        np.testing.assert_allclose(north_rho.values, north.values, atol=1e-14)
+
+    def test_a_position_the_dims_do_not_give_is_accepted(self, rutgers):
+        # a section at one xi has no xi dim to place u with
+        can = C.canonicalize(rutgers)
+        east, _ = xroms.grid_to_earth(can.u.isel(xi_u=3), can.v.isel(xi_rho=3), rutgers.angle.isel(xi_rho=3))
+        assert np.isfinite(east.values).all()
 
     def test_chunked_stays_lazy(self, rutgers):
         c = chunked(rutgers)

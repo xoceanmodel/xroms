@@ -12,7 +12,8 @@ from typing import Optional, Tuple, Union
 import numpy as np
 import xarray as xr
 
-from .utilities import to_grid, to_u, to_v
+from .conventions import hposition
+from .utilities import order, to_grid, to_u, to_v
 
 
 def _rotated_attrs(src, axis):
@@ -26,6 +27,26 @@ def _rotated_attrs(src, axis):
     }
 
 
+def _check_uv_points(u, v):
+    """Raise a ValueError if ``u`` is on v points or ``v`` is on u points.
+
+    That is what passing the two the wrong way round looks like. Both on rho points
+    is fine (velocities that have already been averaged there), and so is any
+    position that cannot be told from the dims.
+    """
+    found = hposition(u), hposition(v)
+    if found[0] == "v" or found[1] == "u":
+        where = [
+            f"{name} is on {pos} points" if pos else f"{name} has dims {da.dims}, which do not give its points"
+            for name, pos, da in (("u", found[0], u), ("v", found[1], v))
+        ]
+        raise ValueError(
+            f"grid_to_earth needs u on u points (or rho points) and v on v points (or rho points), but "
+            f"{where[0]} and {where[1]}. Check that u (the xi component) and v (the eta component) are "
+            "not swapped."
+        )
+
+
 def rotate_vectors(
     x: Union[float, np.ndarray, xr.DataArray],
     y: Union[float, np.ndarray, xr.DataArray],
@@ -34,8 +55,10 @@ def rotate_vectors(
     reference: str = "xaxis",
     *,
     hcoord="rho",
+    hboundary="extend",
+    hfill_value=np.nan,
     attrs: Optional[dict] = None,
-    **kwargs,
+    xgrid=None,
 ) -> Tuple[xr.DataArray, xr.DataArray]:
     """Rotate vectors according to reference.
 
@@ -56,25 +79,33 @@ def rotate_vectors(
         that the components and the angle are at the same points.
         Options are 'rho', 'psi', 'u', 'v', or None to leave them where they are.
         Default 'rho'. Numbers and arrays are not moved.
+    hboundary : {"extend", "fill"}, optional
+        Horizontal boundary treatment when moving DataArray inputs to ``hcoord``
+        (see `xroms.to_grid`): "extend" (default) repeats the nearest value at the
+        domain edge, "fill" uses ``hfill_value`` there.
+    hfill_value : float, optional
+        Edge value used with ``hboundary="fill"``. Default NaN.
     attrs : Optional[dict], optional
         Dict containing two keys, "x" and "y", each a dict of attributes, by default None. Attributes should include "name", "standard_name", "long_name", "units", if possible. "name" is required.
         Only applied when the results are DataArrays. If None and both
         components are DataArrays, the results are named from them
         (``<name>_rot``).
-    kwargs :
-        will be passed on to `xroms.to_grid()`, e.g. ``hboundary="fill"``.
+    xgrid : None
+        Removed in xroms 1.0, which needs no grid object: passing one raises a
+        `TypeError`.
 
     Returns
     -------
     Tuple[xr.DataArray]
-        x and y, rotated by angle. Nothing passed in is modified.
+        x and y, rotated by angle. Nothing passed in is modified. DataArrays are
+        ordered (time, vertical, eta, xi, then any other dimensions).
 
     Examples
     --------
     >>> xroms.rotate_vectors(1, 0, 90, isradians=False)
     >>> xroms.rotate_vectors(ds.u, ds.v, ds.angle)  # u and v are moved to rho points first
     """
-    if "xgrid" in kwargs:
+    if xgrid is not None:
         raise TypeError("xroms 1.0: rotate_vectors no longer needs xgrid; remove it")
     if reference not in (None, "xaxis", "compass"):
         raise ValueError(f"reference must be 'xaxis' or 'compass', not {reference!r}")
@@ -82,12 +113,13 @@ def rotate_vectors(
         raise KeyError("if you input attributes, make a dict for each of x and y attributes.")
 
     # make sure components are on the same grid
+    moves = dict(hcoord=hcoord, hboundary=hboundary, hfill_value=hfill_value)
     if isinstance(x, xr.DataArray):
-        x = to_grid(x, hcoord=hcoord, **kwargs)
+        x = to_grid(x, **moves)
     if isinstance(y, xr.DataArray):
-        y = to_grid(y, hcoord=hcoord, **kwargs)
+        y = to_grid(y, **moves)
     if isinstance(angle, xr.DataArray):
-        angle = to_grid(angle, hcoord=hcoord, **kwargs)
+        angle = to_grid(angle, **moves)
 
     # everything is in radians after this
     if not isradians:
@@ -100,6 +132,9 @@ def rotate_vectors(
     # perform rotation
     xrot = x * np.cos(angle) - y * np.sin(angle)
     yrot = x * np.sin(angle) + y * np.cos(angle)
+    if isinstance(xrot, xr.DataArray):
+        # the angle may bring dimensions of its own
+        xrot, yrot = order(xrot), order(yrot)
 
     if attrs is not None:
         if isinstance(xrot, xr.DataArray) and isinstance(yrot, xr.DataArray):
@@ -122,9 +157,9 @@ def grid_to_earth(u, v, angle, *, hcoord="rho", hboundary="extend"):
     Parameters
     ----------
     u : DataArray
-        Velocity along xi (on u points).
+        Velocity along xi (on u points, or on rho points if already averaged there).
     v : DataArray
-        Velocity along eta (on v points).
+        Velocity along eta (on v points, or on rho points if already averaged there).
     angle : DataArray, float
         Angle [radians] between the xi axis and east, as in the ROMS grid
         variable ``angle`` (positive counterclockwise).
@@ -141,6 +176,11 @@ def grid_to_earth(u, v, angle, *, hcoord="rho", hboundary="extend"):
         ``east`` and ``north``). Land points, where u and v are masked, come out
         as zero (see Notes): mask them with ``mask_rho`` if needed.
 
+    Raises
+    ------
+    ValueError
+        If u is on v points or v is on u points (for example, if they are swapped).
+
     Notes
     -----
     Masked (NaN) u and v are set to zero before they are averaged onto
@@ -153,6 +193,7 @@ def grid_to_earth(u, v, angle, *, hcoord="rho", hboundary="extend"):
     """
     if not isinstance(u, xr.DataArray) or not isinstance(v, xr.DataArray):
         raise TypeError("u and v must be DataArrays")
+    _check_uv_points(u, v)
 
     east_attrs = {
         "name": "east",
