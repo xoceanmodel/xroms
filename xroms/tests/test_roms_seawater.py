@@ -286,6 +286,7 @@ class TestTEOS10:
         return gsw.rho(sa, ct, p if z_ref is None else gsw.p_from_z(z_ref, lat))
 
     def test_density_is_the_gsw_chain(self, rutgers):
+        pytest.importorskip("gsw")
         rho = xroms.density(rutgers.temp, rutgers.salt, grid=rutgers, eos="teos10")
         np.testing.assert_allclose(rho.transpose(*rutgers.temp.dims).values, self._by_hand(rutgers), rtol=1e-14)
         assert rho.dims == ("ocean_time", "s_rho", "eta_rho", "xi_rho")
