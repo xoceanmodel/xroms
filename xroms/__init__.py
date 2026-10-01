@@ -35,6 +35,7 @@ from .derived import (
     vertical_shear,
 )
 from .interp import interpll, isoslice, make_regridder, zslice
+from .longitude import lonlat_at, straddles, wrap_longitude
 from .metrics import dA, dV, dx, dy, mask_at, nominal_resolution
 from .roms_seawater import M2, N2, buoyancy, density, mld, potential_density
 from .utilities import (
