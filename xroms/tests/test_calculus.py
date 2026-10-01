@@ -195,6 +195,14 @@ class TestSelection:
         many = xroms.argsel2d(rutgers.lon_rho, rutgers.lat_rho, [lon, float(rutgers.lon_rho[1, 1])], [lat, float(rutgers.lat_rho[1, 1])])
         assert list(many[0]) == [4, 1] and list(many[1]) == [7, 1]
 
+    def test_argsel2d_either_longitude_convention(self, rutgers):
+        # great-circle distance is periodic in longitude: a target in the other convention
+        # (a -144 station against a 0-360 grid, ocean-skill's _nearest_indices case) finds the same cell
+        lon, lat = float(rutgers.lon_rho[4, 7]), float(rutgers.lat_rho[4, 7])
+        for shift in (360.0, -360.0):
+            assert xroms.argsel2d(rutgers.lon_rho + shift, rutgers.lat_rho, lon, lat) == (4, 7)
+            assert xroms.argsel2d(rutgers.lon_rho, rutgers.lat_rho, lon + shift, lat) == (4, 7)
+
     def test_argsel2d_geodesic(self, rutgers):
         pytest.importorskip("pyproj")  # optional: pip install "xroms[geodesic]"
         lon, lat = float(rutgers.lon_rho[4, 7]), float(rutgers.lat_rho[4, 7])
