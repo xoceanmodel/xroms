@@ -96,6 +96,7 @@ Physical quantities
    vertical_shear
    relative_vorticity
    convergence
+   divergence
    ertel
    density
    potential_density

@@ -143,8 +143,11 @@ class TestPhysics:
         assert uniform.xroms.dudz.dims == ("ocean_time", "s_w", "eta_u", "xi_u")
         assert uniform.xroms.vertical_shear.dims == ("ocean_time", "s_w", "eta_rho", "xi_rho")
         np.testing.assert_allclose(uniform.xroms.vort.values, 0.0, atol=1e-12)
-        np.testing.assert_allclose(uniform.xroms.convergence.values, syn.U_A + syn.V_A, rtol=1e-9)
+        np.testing.assert_allclose(uniform.xroms.convergence.values, -(syn.U_A + syn.V_A), rtol=1e-9)
+        np.testing.assert_allclose(uniform.xroms.divergence.values, syn.U_A + syn.V_A, rtol=1e-9)
         assert uniform.xroms.convergence_norm.dims == ("ocean_time", "eta_rho", "xi_rho")
+        xr.testing.assert_allclose(uniform.xroms.convergence_norm, -uniform.xroms.divergence_norm)
+        assert uniform.xroms.divergence_norm.attrs["long_name"] == "normalized surface horizontal divergence"
 
     def test_density_family(self, rutgers):
         assert rutgers.xroms.rho.dims == rutgers.temp.dims

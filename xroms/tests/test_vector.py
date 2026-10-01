@@ -140,11 +140,13 @@ class TestGridToEarth:
         east_psi, _ = xroms.grid_to_earth(rutgers.u, rutgers.v, rutgers.angle, hcoord="psi")
         assert east_psi.dims == ("ocean_time", "s_rho", "eta_v", "xi_u")
 
-    def test_land_is_zero_not_spread(self, with_land):
-        east, _ = xroms.grid_to_earth(with_land.u, with_land.v, with_land.angle)
-        assert np.isfinite(east.values).all()
+    def test_land_is_nan_and_not_spread(self, with_land):
+        """Masked u and v count as 0 next to land, so the water keeps its values; land itself is NaN."""
+        east, north = xroms.grid_to_earth(with_land.u, with_land.v, with_land.angle)
         land = C.canonicalize(with_land).mask_rho == 0
-        assert (east.where(land) .fillna(0) == 0).all()
+        for comp in (east, north):
+            assert bool(comp.notnull().where(~land, True).all())  # every water point has a value
+            assert bool(comp.isnull().where(land, True).all())  # and no land point does
 
     def test_requires_dataarrays(self):
         with pytest.raises(TypeError):

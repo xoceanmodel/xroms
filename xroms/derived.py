@@ -27,6 +27,7 @@ from .conventions import hposition, normalize_hcoord, normalize_scoord
 from .utilities import (
     _check_grid,
     _reject_legacy,
+    _where_data,
     ddeta,
     ddxi,
     ddz,
@@ -108,7 +109,8 @@ def speed(u, v, *args, hboundary="extend", hfill_value=np.nan):
     speed = np.sqrt(u^2 + v^2)
 
     Masked (NaN) velocities are set to 0 before moving to rho points so that land
-    does not spread into neighboring water points.
+    does not spread into neighboring water points. Rho points without any velocity
+    data around them (land) are NaN.
 
     Before xroms 1.0 the xgcm grid was passed here as a third, positional argument;
     it is no longer needed and passing it raises a `TypeError`.
@@ -129,9 +131,9 @@ def speed(u, v, *args, hboundary="extend", hfill_value=np.nan):
     # would supersede the neighboring cells and they would be masked in mask_rho.
     # this needs to be done anytime the velocities are moved from their native
     # grids to the rho or other grids to preserve their locations around masked cells.
-    u = to_rho(u.fillna(0), hboundary=hboundary, hfill_value=hfill_value)
-    v = to_rho(v.fillna(0), hboundary=hboundary, hfill_value=hfill_value)
-    var = np.sqrt(u**2 + v**2)
+    moves = dict(hcoord="rho", hboundary=hboundary, hfill_value=hfill_value)
+    var = np.sqrt(to_grid(u.fillna(0), **moves) ** 2 + to_grid(v.fillna(0), **moves) ** 2)
+    var = _where_data(var, u, v, **moves)  # land stays NaN
 
     return _label(var, "speed", "horizontal speed", "m/s")
 
@@ -556,8 +558,16 @@ def relative_vorticity(
     return _label(var, "vort", "vertical component of vorticity", "1/s")
 
 
+def _horizontal_divergence(u, v, grid, func, *, z, **opts):
+    """``u_x + v_y`` at constant depth on rho points, checked as ``func`` (divergence or convergence)."""
+    grid = _check_grid(grid, func)
+    _check_dataarrays(u=u, v=v)
+    _check_uv_positions(u, v, func)
+    return ddxi(u, grid, z=z, **opts) + ddeta(v, grid, z=z, **opts)
+
+
 @with_grid_coords
-def convergence(
+def divergence(
     u: xr.DataArray,
     v: xr.DataArray,
     grid,
@@ -570,7 +580,7 @@ def convergence(
     sfill_value=np.nan,
     along_s=False,
 ) -> xr.DataArray:
-    """Calculate 2D convergence from u and v [1/s].
+    """Calculate 2D divergence from u and v [1/s]: ``u_x + v_y``, positive where the flow spreads apart.
 
     Parameters
     ----------
@@ -606,7 +616,7 @@ def convergence(
 
     Returns
     -------
-    DataArray of 2D convergence of horizontal currents on rho grid, on the
+    DataArray of 2D divergence of horizontal currents on rho grid, on the
     vertical levels of u and v.
     Output is `[T,Z,Y,X]`.
 
@@ -618,7 +628,8 @@ def convergence(
 
     Notes
     -----
-    2D convergence = u_x + v_y
+    2D divergence = u_x + v_y, positive where the flow spreads apart. Its negative is
+    the convergence, :func:`convergence`.
 
     Derivatives are taken at constant depth.
 
@@ -626,26 +637,43 @@ def convergence(
 
     Examples
     --------
-    >>> xroms.convergence(ds.u, ds.v, ds)
+    >>> xroms.divergence(ds.u, ds.v, ds)
     """
 
-    grid = _check_grid(grid, "convergence")
-    _check_dataarrays(u=u, v=v)
-    _check_uv_positions(u, v, "convergence")
-    opts = dict(
-        zeta=zeta,
-        hboundary=hboundary,
-        hfill_value=hfill_value,
-        sboundary=sboundary,
-        sfill_value=sfill_value,
-        along_s=along_s,
-    )
+    opts = dict(z=z, zeta=zeta, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value, along_s=along_s)
+    var = _horizontal_divergence(u, v, grid, "divergence", **opts)
+    return _label(var, "divergence", "horizontal divergence", "1/s")
 
-    dudxi = ddxi(u, grid, z=z, **opts)
-    dvdeta = ddeta(v, grid, z=z, **opts)
 
-    var = dudxi + dvdeta
+@with_grid_coords
+def convergence(
+    u: xr.DataArray,
+    v: xr.DataArray,
+    grid,
+    *,
+    z=None,
+    zeta=None,
+    hboundary="extend",
+    hfill_value=np.nan,
+    sboundary="extend",
+    sfill_value=np.nan,
+    along_s=False,
+) -> xr.DataArray:
+    """Calculate 2D convergence from u and v [1/s]: ``-(u_x + v_y)``, positive where the flow converges.
 
+    The negative of :func:`divergence`, which describes the parameters; the result
+    is on rho points, on the vertical levels of u and v.
+
+    Before xroms 1.0 this function returned ``u_x + v_y``, which is the divergence
+    (the name had changed from divergence to convergence in 0.5.1 without the sign):
+    use :func:`divergence` for those values.
+
+    Examples
+    --------
+    >>> xroms.convergence(ds.u, ds.v, ds)
+    """
+    opts = dict(z=z, zeta=zeta, hboundary=hboundary, hfill_value=hfill_value, sboundary=sboundary, sfill_value=sfill_value, along_s=along_s)
+    var = -_horizontal_divergence(u, v, grid, "convergence", **opts)
     return _label(var, "convergence", "horizontal convergence", "1/s")
 
 

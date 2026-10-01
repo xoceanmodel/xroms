@@ -417,9 +417,10 @@ def test_romstools_nothing_is_wrong_over_land(romstools):
     assert int((ds.mask_rho == 1).sum()) == 42 and ds.mask_rho.dtype == np.int32
     land = ds.mask_rho == 0
     assert bool(ds.temp.where(land).isnull().where(land, True).all())
-    # masked velocities count as 0 in speed (documented), so speed is zero over land, never NaN
+    # masked velocities count as 0 in speed (documented), so the water next to land keeps a speed;
+    # land itself, with no velocity around it, is NaN
     speed = xroms.speed(ds.u, ds.v)
-    assert bool(np.isfinite(speed).all())
+    assert bool(speed.notnull().where(~land, True).all()) and bool(speed.isnull().where(land, True).all())
     # N2 follows its definition: -g / rho0 times the vertical density gradient
     rho = xroms.density(ds.temp, ds.salt, grid=ds)
     n2, drho = xroms.N2(rho, ds, 1025.0), xroms.ddz(rho, ds)

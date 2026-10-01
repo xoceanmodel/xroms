@@ -59,6 +59,14 @@ Calls that keep their 0.6 form include the accessor's properties and methods (`d
 
 ## Results that change
 
+- **`convergence` changes sign.** It is now `-(du/dx + dv/dy)`, positive where the flow converges. 0.5.1 renamed
+  `divergence` to `convergence` without changing the sign, so 0.5.1 to 0.6.2 returned `du/dx + dv/dy`, the divergence.
+  The new `divergence` (and `ds.xroms.divergence`, `ds.xroms.divergence_norm`) gives those values; `convergence_norm`
+  changes sign with `convergence`.
+- **Land is NaN** in `speed`, `KE` and the earth components (`grid_to_earth`, `ds.xroms.east`/`north` and the rotated
+  ones). Masked u and v still count as 0 when averaged to rho points, so the water next to land keeps its values, but
+  land points, with no velocity around them, are NaN instead of 0. `gridsum` is NaN where every point summed over is
+  missing (land) instead of 0.
 - **Horizontal derivatives** (`ddxi`, `ddeta`, `hgrad`, and the calculations built on them) stay on the input's own
   vertical levels; 0.6 moved them to w levels. Pass `scoord="s_w"` for the old placement.
 - **No zeros at the top and bottom.** 0.6 padded the vertical edges so that derivatives there came out exactly 0,

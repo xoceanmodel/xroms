@@ -1,4 +1,4 @@
-"""Derived variables (speed, KE, geostrophy, EKE, shear, vorticity, convergence, Ertel PV).
+"""Derived variables (speed, KE, geostrophy, EKE, shear, vorticity, divergence/convergence, Ertel PV).
 
 Expected values are analytic or computed in plain numpy, independently of xgcm.
 The ``uniform`` fixture has constant grid spacing and ``u = U_0 + U_A * x_u``,
@@ -92,6 +92,10 @@ CASES = [
         "convergence", "horizontal convergence", "1/s", ("s_rho",) + RHO,
     ),
     Case(
+        lambda d: xroms.divergence(d.u, d.v, d),
+        "divergence", "horizontal divergence", "1/s", ("s_rho",) + RHO,
+    ),
+    Case(
         lambda d: xroms.ertel(d.temp, d.u, d.v, d.f, d),
         "ertel", "ertel potential vorticity", "tracer/(m*s)", ("s_rho",) + RHO,
     ),
@@ -178,7 +182,9 @@ class TestSpeed:
         assert out.values[0, 0, 0, 3] == pytest.approx(np.hypot(0.5 * u03, v03), rel=1e-12)
         u_rho = to_center(can.u.fillna(0).values, -1)
         v_rho = to_center(can.v.fillna(0).values, -2)
-        np.testing.assert_allclose(out.values, np.sqrt(u_rho**2 + v_rho**2), rtol=1e-12)
+        np.testing.assert_allclose(out.values[..., water], np.sqrt(u_rho**2 + v_rho**2)[..., water], rtol=1e-12)
+        # land, with no velocity around it at all, is NaN rather than the 0 of the fill
+        assert np.isnan(out.values[..., ~water]).all()
 
     def test_boundary_options(self, rutgers):
         can = C.canonicalize(rutgers)
@@ -434,9 +440,9 @@ class TestRelativeVorticity:
             xroms.relative_vorticity(u, v, uniform, z=xroms.z(uniform, hcoord="psi"))
 
 
-class TestConvergence:
+class TestDivergence:
     def test_uniform_grid_gives_ua_plus_va(self, uniform):
-        out = xroms.convergence(uniform.u, uniform.v, uniform)
+        out = xroms.divergence(uniform.u, uniform.v, uniform)
         assert out.dims == ("ocean_time", "s_rho", "eta_rho", "xi_rho")  # rho points
         np.testing.assert_allclose(out.values, syn.U_A + syn.V_A, rtol=1e-12, atol=0)  # edges too
 
@@ -444,41 +450,51 @@ class TestConvergence:
         can = C.canonicalize(uniform)
         zero_v = xr.zeros_like(can.v)
         zero_u = xr.zeros_like(can.u)
-        np.testing.assert_allclose(xroms.convergence(uniform.u, zero_v, uniform).values, syn.U_A, rtol=1e-12)
-        np.testing.assert_allclose(xroms.convergence(zero_u, uniform.v, uniform).values, syn.V_A, rtol=1e-12)
+        np.testing.assert_allclose(xroms.divergence(uniform.u, zero_v, uniform).values, syn.U_A, rtol=1e-12)
+        np.testing.assert_allclose(xroms.divergence(zero_u, uniform.v, uniform).values, syn.V_A, rtol=1e-12)
 
-    def test_flow_that_only_changes_with_depth_has_no_convergence(self, uniform):
+    def test_flow_that_only_changes_with_depth_has_no_divergence(self, uniform):
         u, v = depth_only_flow(uniform, 1e-2, -2e-2)
-        np.testing.assert_allclose(xroms.convergence(u, v, uniform).values, 0.0, atol=1e-15)
+        np.testing.assert_allclose(xroms.divergence(u, v, uniform).values, 0.0, atol=1e-15)
 
     def test_keeps_the_vertical_levels_of_the_inputs(self, uniform):
         u_w, v_w = (xroms.to_s_w(a) for a in (uniform.u, uniform.v))
-        out = xroms.convergence(u_w, v_w, uniform)
+        out = xroms.divergence(u_w, v_w, uniform)
         assert out.dims == ("ocean_time", "s_w", "eta_rho", "xi_rho")
         np.testing.assert_allclose(out.values, syn.U_A + syn.V_A, rtol=1e-12)
 
     def test_boundary_options(self, uniform):
-        nan = xroms.convergence(uniform.u, uniform.v, uniform, hboundary="fill")
+        nan = xroms.divergence(uniform.u, uniform.v, uniform, hboundary="fill")
         interior = nan.isel(eta_rho=slice(1, -1), xi_rho=slice(1, -1))
         np.testing.assert_allclose(interior.values, syn.U_A + syn.V_A, rtol=1e-12)
         assert np.isnan(nan.isel(xi_rho=0)).all() and np.isnan(nan.isel(eta_rho=-1)).all()
-        zero = xroms.convergence(uniform.u, uniform.v, uniform, hboundary="fill", hfill_value=0.0)
+        zero = xroms.divergence(uniform.u, uniform.v, uniform, hboundary="fill", hfill_value=0.0)
         # no u_x on the western edge, so only v_y is left (and at its corners, neither term)
         np.testing.assert_allclose(zero.isel(xi_rho=0, eta_rho=slice(1, -1)).values, syn.V_A, rtol=1e-12)
         assert (zero.isel(xi_rho=0, eta_rho=[0, -1]) == 0).all()
 
     def test_z_argument(self, uniform):
         u, v = depth_only_flow(uniform, 1e-2, -2e-2)
-        out = xroms.convergence(u, v, uniform, z=xroms.z(uniform))
+        out = xroms.divergence(u, v, uniform, z=xroms.z(uniform))
         np.testing.assert_allclose(out.values, 0.0, atol=1e-15)
 
     def test_chunked_equals_numpy(self, rutgers, uniform):
-        out = xroms.convergence(*(getattr(chunked(rutgers), n) for n in ("u", "v")), chunked(rutgers))
-        expected = xroms.convergence(rutgers.u, rutgers.v, rutgers)
+        out = xroms.divergence(*(getattr(chunked(rutgers), n) for n in ("u", "v")), chunked(rutgers))
+        expected = xroms.divergence(rutgers.u, rutgers.v, rutgers)
         assert out.chunks is not None
         np.testing.assert_allclose(out.values, expected.values, rtol=1e-12, atol=1e-18)
         c = chunked(uniform)
-        np.testing.assert_allclose(xroms.convergence(c.u, c.v, c).values, syn.U_A + syn.V_A, rtol=1e-12)
+        np.testing.assert_allclose(xroms.divergence(c.u, c.v, c).values, syn.U_A + syn.V_A, rtol=1e-12)
+
+    def test_convergence_is_minus_the_divergence(self, uniform, rutgers):
+        """u = U_0 + U_A x spreads apart for U_A > 0 (positive divergence): it does not converge."""
+        out = xroms.convergence(uniform.u, uniform.v, uniform)
+        np.testing.assert_allclose(out.values, -(syn.U_A + syn.V_A), rtol=1e-12, atol=0)
+        assert out.attrs == {"name": "convergence", "long_name": "horizontal convergence", "units": "1/s"}
+        for ds, kw in ((uniform, {}), (rutgers, {}), (uniform, dict(hboundary="fill", hfill_value=0.0)), (rutgers, dict(zeta=0))):
+            np.testing.assert_array_equal(
+                xroms.convergence(ds.u, ds.v, ds, **kw).values, -xroms.divergence(ds.u, ds.v, ds, **kw).values
+            )
 
 
 def analytic_inputs(ds, phi_scoord="s_rho"):
@@ -596,6 +612,7 @@ class TestErtel:
 UV_FUNCTIONS = {
     "relative_vorticity": lambda u, v, ds: xroms.relative_vorticity(u, v, ds),
     "convergence": lambda u, v, ds: xroms.convergence(u, v, ds),
+    "divergence": lambda u, v, ds: xroms.divergence(u, v, ds),
     "ertel": lambda u, v, ds: xroms.ertel(ds.temp, u, v, ds.f, ds),
 }
 EACH_UV_FUNCTION = pytest.mark.parametrize("name", list(UV_FUNCTIONS))

@@ -27,6 +27,7 @@ from .derived import (
     EKE,
     KE,
     convergence,
+    divergence,
     dudz,
     dvdz,
     ertel,

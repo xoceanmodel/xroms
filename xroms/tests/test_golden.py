@@ -186,4 +186,6 @@ def test_horizontal_derivatives_close_to_v062(pair):
     interior = ("s_rho", "s_w", "xi_rho", "xi_u", "eta_rho", "eta_v")
     _close(xroms.ddxi(can.temp, ds, hcoord="rho", scoord="s_rho"), gold["ddxi_temp_rho"], interior)
     _close(xroms.ddeta(can.temp, ds, hcoord="rho", scoord="s_rho"), gold["ddeta_temp_rho"], interior)
-    _close(xroms.convergence(can.u, can.v, ds), gold["convergence"], interior)
+    # 0.6 called u_x + v_y "convergence"; 1.0 calls it divergence, and convergence is its negative
+    _close(xroms.divergence(can.u, can.v, ds), gold["convergence"], interior)
+    _close(-xroms.convergence(can.u, can.v, ds), gold["convergence"], interior)

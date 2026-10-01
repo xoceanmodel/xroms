@@ -13,7 +13,7 @@ import numpy as np
 import xarray as xr
 
 from .conventions import hposition
-from .utilities import order, to_grid, to_u, to_v
+from .utilities import _where_data, order, to_grid, to_u, to_v
 
 
 def _rotated_attrs(src, axis):
@@ -173,8 +173,8 @@ def grid_to_earth(u, v, angle, *, hcoord="rho", hboundary="extend"):
     -------
     east, north : DataArray
         Eastward and northward velocity [m/s] on ``hcoord`` points (named
-        ``east`` and ``north``). Land points, where u and v are masked, come out
-        as zero (see Notes): mask them with ``mask_rho`` if needed.
+        ``east`` and ``north``). Points without any u or v data around them
+        (land) are NaN.
 
     Raises
     ------
@@ -216,7 +216,7 @@ def grid_to_earth(u, v, angle, *, hcoord="rho", hboundary="extend"):
     # would supersede the neighboring cells and they would be masked in mask_rho.
     # this needs to be done anytime the velocities are moved from their native
     # grids to the rho or other grids to preserve their locations around masked cells.
-    return rotate_vectors(
+    east, north = rotate_vectors(
         u.fillna(0),
         v.fillna(0),
         angle,
@@ -226,6 +226,8 @@ def grid_to_earth(u, v, angle, *, hcoord="rho", hboundary="extend"):
         hboundary=hboundary,
         attrs={"x": east_attrs, "y": north_attrs},
     )
+    # points without any u or v data around them (land) are NaN, not the 0 of the fill
+    return tuple(_where_data(c, u, v, hcoord=hcoord, hboundary=hboundary) for c in (east, north))
 
 
 def earth_to_grid(east, north, angle, *, hcoord="native"):

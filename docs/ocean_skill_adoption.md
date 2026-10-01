@@ -109,7 +109,7 @@ In the wave 2 rows:
   - Ties: on a domain that is contiguous in both frames, `wrap_longitude(obj)` leaves the values as stored, while
     ocean-skill moves them to -180..180.
 - **Velocities next to land.** `grid_to_earth` counts masked u/v as 0 when averaging to rho points, as xroms always
-  has. Rho points beside land therefore keep a value, and land itself is 0. ocean-skill spreads NaN there instead.
+  has. Rho points beside land therefore keep a value, and land itself is NaN. ocean-skill spreads NaN there instead.
   Wherever ocean-skill has a value, the two agree.
 - **Nearest levels over time.** With `ref_time`, ocean-skill keeps the levels it picked at that step for every step.
   `zslice(method="nearest")` follows zeta at each step, unless it is given that step's `zeta=`.

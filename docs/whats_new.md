@@ -43,6 +43,10 @@ update code written for 0.6.
 
 ### Changed results
 {doc}`migration` has the details.
+* `convergence` is `-(du/dx + dv/dy)`, positive where the flow converges: since 0.5.1 it had returned the divergence.
+  `divergence` (and the accessor's `divergence`, `divergence_norm`) is new.
+* Land is NaN in `speed`, `KE` and the east/north components (they were 0 there), and in a `gridsum` with nothing to
+  sum.
 * Horizontal derivatives at constant depth stay on the input's vertical levels, and their slope term uses a
   second-order `ddz`.
 * There are no more artificial zeros at the top and bottom of vertical derivatives.

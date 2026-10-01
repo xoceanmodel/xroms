@@ -403,6 +403,16 @@ def hgrad(var, grid=None, which="both", **kwargs):
     raise ValueError(f"which must be 'both', 'xi' or 'eta', not {which!r}")
 
 
+def _where_data(out, u, v, **moves):
+    """``out``, computed from u and v with their masked points set to 0, NaN where none of
+    the u and v points that ``moves`` averages into it had data (land).
+
+    The 0-fill keeps water next to land from being masked by it; this keeps land itself NaN.
+    """
+    has = to_grid(u.notnull().astype(float), **moves) + to_grid(v.notnull().astype(float), **moves)
+    return out.where(has.reset_coords(drop=True) > 0)
+
+
 # --- grid-weighted sums and means ----------------------------------------------------
 
 
@@ -446,11 +456,13 @@ def gridsum(var, grid, dims, *, zeta=None):
     """Grid-weighted sum over ``dims`` (axis letters ``X``/``Y``/``Z`` or dim names).
 
     Multiplies by the grid spacing at ``var``'s position (``dx``, ``dy``, ``dz``)
-    before summing: e.g. ``gridsum(u, ds, "Z")`` is depth-integrated u.
+    before summing: e.g. ``gridsum(u, ds, "Z")`` is depth-integrated u. Missing
+    (NaN) points are left out of the sum, and where all of them are missing (land)
+    the sum is NaN.
     """
     grid = _check_grid(grid, "gridsum")
     var, weight, reduce = _grid_weights(var, grid, dims, zeta)
-    out = (var * weight).sum(reduce)
+    out = (var * weight).sum(reduce, min_count=1)  # NaN where nothing was summed (land), not 0
     out.attrs = dict(var.attrs)
     out.attrs["long_name"] = f"{var.attrs.get('long_name', var.name)}, grid sum over {', '.join(reduce)}"
     if out.attrs.get("units"):  # times metres for each dim summed over

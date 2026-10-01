@@ -240,7 +240,7 @@ ds.salt.mean(dim=("xi_rho", "eta_rho")).dims
 
 ### `xroms` grid-based metrics
 
-Spatial metrics that account for the variable grid cell sizing in ROMS (both curvilinear horizontal and s vertical) are available as `gridsum` and `gridmean`. They multiply by the grid spacing at the position of the variable (`dx`, `dy` and/or `dz`) before summing, and for the mean, points without data (NaN, as on land) carry no weight. The result keeps the attributes of the variable, with a `long_name` that says what was summed or averaged; for a sum, the `units` gain a metre for each dimension summed over. The available functions are:
+Spatial metrics that account for the variable grid cell sizing in ROMS (both curvilinear horizontal and s vertical) are available as `gridsum` and `gridmean`. They multiply by the grid spacing at the position of the variable (`dx`, `dy` and/or `dz`) before summing, and for the mean, points without data (NaN, as on land) carry no weight. The result keeps the attributes of the variable, with a `long_name` that says what was summed or averaged; for a sum, the `units` gain a metre for each dimension summed over. Where every point summed over is missing, as in a column over land, the sum is NaN. The available functions are:
 
 * gridsum
 * gridmean
@@ -412,7 +412,7 @@ These are all properties of the accessor, so should be called without (), except
 
 ### Horizontal speed
 
-The magnitude of the velocity on rho points [m/s]. Velocities that are masked (NaN) count as 0 when they are moved to the rho points, so that land does not spread into the neighboring water.
+The magnitude of the velocity on rho points [m/s]. Velocities that are masked (NaN) count as 0 when they are moved to the rho points, so that land does not spread into the neighboring water; land itself, with no velocity around it, is NaN.
 
     ds.xroms.speed  # accessor
 
@@ -512,24 +512,28 @@ print("accessor:", ds.xroms.vort.dims)
 print("function:", xroms.relative_vorticity(ds.u, ds.v, ds).dims)
 ```
 
-### Horizontal convergence
+### Horizontal convergence and divergence
 
-Horizontal component of the currents convergence, `du/dx + dv/dy` at constant depth, on rho points [1/s].
+The horizontal divergence of the currents, `du/dx + dv/dy` at constant depth, is positive where the flow spreads apart. The convergence is its negative, `-(du/dx + dv/dy)`, positive where the flow comes together. Both are on rho points [1/s]. (Before xroms 1.0, the function called `convergence` returned `du/dx + dv/dy`, which is the divergence.)
 
     ds.xroms.convergence
+    ds.xroms.divergence
 
     xroms.convergence(ds.u, ds.v, ds)
+    xroms.divergence(ds.u, ds.v, ds)
 
 ```{code-cell} ipython3
 print("accessor:", ds.xroms.convergence.dims)
 print("function:", xroms.convergence(ds.u, ds.v, ds).dims)
+print(bool(np.allclose(ds.xroms.convergence, -ds.xroms.divergence, equal_nan=True)))  # one is minus the other
 ```
 
-### Normalized surface convergence
+### Normalized surface convergence and divergence
 
-Horizontal component of the currents convergence at the surface, normalized by `f`. It does not have a vertical dimension, and it is dimensionless. This is only available through the accessor.
+The convergence or divergence at the surface, normalized by `f`. They do not have a vertical dimension, and they are dimensionless. These are only available through the accessor.
 
     ds.xroms.convergence_norm
+    ds.xroms.divergence_norm
 
 ```{code-cell} ipython3
 ds.xroms.convergence_norm.dims

@@ -740,7 +740,7 @@ class TestVelocity:
 
     def test_geographic_velocity_next_to_land(self):
         # Intended difference: grid_to_earth sets masked u and v to zero before averaging them, so a rho point next to
-        # land keeps part of its neighbour's value (and land itself is 0); ocean-skill's NaN spreads to every rho point
+        # land keeps part of its neighbour's value (land itself is NaN); ocean-skill's NaN spreads to every rho point
         # beside a masked u or v and standardize then masks land. Everywhere ocean-skill has a value, the two are equal,
         # and the whole difference is that fill.
         ds, meta = osk_inputs(land=True, angle=0.3)
@@ -748,12 +748,14 @@ class TestVelocity:
         std = roms.standardize(ds, meta)
         derived = roms._add_geographic_velocity(std)["eastward_sea_water_velocity"]
         east, north = xroms.grid_to_earth(ds.u, ds.v, ds.angle)
-        found = derived.notnull()
-        assert 0 < int(found.sum()) < found.size and east.notnull().all()
+        found, land = derived.notnull(), ds.mask_rho == 0
+        assert 0 < int(found.sum()) < found.size
+        assert bool(east.notnull().where(~land, True).all()) and bool(east.isnull().where(land, True).all())
         same(east.where(found), derived.where(found))
         filled = std.assign({U: std[U].fillna(0.0), V: std[V].fillna(0.0)})
-        same(roms._add_geographic_velocity(filled)["eastward_sea_water_velocity"], east)
-        same(roms._add_geographic_velocity(filled)["northward_sea_water_velocity"], north)
+        # ocean-skill on zero-filled velocities: the same over water (its land is the 0 of the fill)
+        same(roms._add_geographic_velocity(filled)["eastward_sea_water_velocity"].where(~land), east)
+        same(roms._add_geographic_velocity(filled)["northward_sea_water_velocity"].where(~land), north)
 
     def test_rotate_and_assign_is_rotate_vectors(self):
         ds, meta = osk_inputs(angle=0.3)

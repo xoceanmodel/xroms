@@ -61,6 +61,7 @@ OPERATIONS = [
     ("speed", lambda ds: ds.xroms.speed, "temp"),
     ("vort", lambda ds: ds.xroms.vort, None),
     ("convergence", lambda ds: ds.xroms.convergence, "temp"),
+    ("divergence", lambda ds: ds.xroms.divergence, "temp"),
     ("N2", lambda ds: ds.xroms.N2, None),
 ]
 

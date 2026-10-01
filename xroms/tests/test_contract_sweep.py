@@ -189,7 +189,7 @@ def test_variants_agree_with_the_full_computation(layout, variant, op):
 NEEDS_NEIGHBOURS = r"horizontal grid position|has no '[XY]' dimension|lacks a dimension for axes"
 COLUMN_RAISES = {
     "ddxi", "ddeta", "ddxi_along_s", "ddeta_along_s", "hgrad", "relative_vorticity", "convergence",
-    "convergence_along_s", "uv_geostrophic", "EKE", "ertel", "M2", "z_w_u", "dz_w_v", "dy_u", "dA_psi", "gridmean_XY",
+    "convergence_along_s", "divergence", "uv_geostrophic", "EKE", "ertel", "M2", "z_w_u", "dz_w_v", "dy_u", "dA_psi", "gridmean_XY",
 }
 #: at the column's rho point these equal the full-domain result there (the others average over
 #: neighbours that a column does not have, or are no-ops)
@@ -228,7 +228,7 @@ SINGLE_LEVEL = r"single selected s-level"
 NO_VERTICAL = r"no vertical dimension"
 SURFACE_RAISES = {
     "ddxi": SINGLE_LEVEL, "ddeta": SINGLE_LEVEL, "hgrad": SINGLE_LEVEL, "relative_vorticity": SINGLE_LEVEL,
-    "convergence": SINGLE_LEVEL, "ertel": SINGLE_LEVEL, "M2": f"{SINGLE_LEVEL}|{NO_VERTICAL}",
+    "convergence": SINGLE_LEVEL, "divergence": SINGLE_LEVEL, "ertel": SINGLE_LEVEL, "M2": f"{SINGLE_LEVEL}|{NO_VERTICAL}",
     "ddz": NO_VERTICAL, "dudz": NO_VERTICAL, "dvdz": NO_VERTICAL, "vertical_shear": NO_VERTICAL,
     "surface": NO_VERTICAL, "bottom": NO_VERTICAL, "gridsum_Z": NO_VERTICAL, "N2": NO_VERTICAL,
     "mld": r"has no vertical dimension; mld needs profiles", "depth_average": r"needs a variable on s_rho levels",

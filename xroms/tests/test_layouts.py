@@ -125,7 +125,8 @@ def test_gradients_and_vorticity_of_the_analytic_fields(uniform_layout):
     np.testing.assert_allclose(ds.xroms.ddeta("temp").values, 0.0, atol=1e-12)
     np.testing.assert_allclose(ds.xroms.ddz("temp").values, syn.TEMP_B, rtol=1e-9)
     np.testing.assert_allclose(ds.xroms.vort.values, 0.0, atol=1e-12)
-    np.testing.assert_allclose(ds.xroms.convergence.values, syn.U_A + syn.V_A, rtol=1e-9)
+    np.testing.assert_allclose(ds.xroms.convergence.values, -(syn.U_A + syn.V_A), rtol=1e-9)
+    np.testing.assert_allclose(ds.xroms.divergence.values, syn.U_A + syn.V_A, rtol=1e-9)
     # a field of depth alone has none of these at constant depth; salt is quadratic in z
     np.testing.assert_allclose(ds.xroms.ddxi("salt").values, 0.0, atol=1e-12)
 
@@ -341,7 +342,7 @@ def test_croco_unrecognized_vertcoordtype_is_named_in_the_error():
 # --- land, and NaNs in a depth average ------------------------------------------------------------------------------------
 
 
-def test_land_is_nan_in_the_state_and_zero_in_the_speeds(layout):
+def test_land_is_nan_in_the_state_and_in_the_speeds(layout):
     ds = S.dataset(layout, land=True)
     can = canonicalize(ds)
     land = can["mask_rho"] == 0
@@ -359,9 +360,14 @@ def test_land_is_nan_in_the_state_and_zero_in_the_speeds(layout):
     # ... and are finite over water, the mixed layer depth within the water column
     mld = canonicalize(ds.xroms.mld())
     assert bool((np.isfinite(mld) | land).all()) and bool(((mld > 0) & (mld <= can["h"] + 1e-9)).where(~land, True).all())
-    # masked velocities count as 0 when averaged (documented), so speeds and the earth components are 0 over land
-    for name, value in (("speed", ds.xroms.speed), ("east", ds.xroms.east), ("north", ds.xroms.north)):
-        assert float(abs(over_land(value)).max()) == 0.0, f"{name} over land is not 0"
+    # masked velocities count as 0 when averaged (documented), so that the water next to land keeps its values,
+    # but land itself, with no velocity around it, is NaN in the speeds and the earth components too
+    water = ~land
+    for name, value in (("speed", ds.xroms.speed), ("KE", ds.xroms.KE), ("east", ds.xroms.east), ("north", ds.xroms.north)):
+        assert bool(over_land(value).isnull().where(land, True).all()), f"{name} has values over land"
+        assert bool(canonicalize(value).notnull().where(water, True).all()), f"{name} is missing over water"
+    # and a column sum over land has nothing to sum
+    assert bool(over_land(ds.xroms.gridsum("temp", "Z")).isnull().where(land, True).all())
 
 
 def test_depth_average_is_the_gridmean_over_z_where_nothing_is_missing(layout):

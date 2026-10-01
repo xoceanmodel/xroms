@@ -34,7 +34,7 @@ xroms can:
 * calculate derived quantities:
   * horizontal speed, kinetic energy and eddy kinetic energy;
   * geostrophic velocities and vertical shear;
-  * vertical vorticity, horizontal convergence and Ertel potential vorticity;
+  * vertical vorticity, horizontal divergence and convergence, and Ertel potential vorticity;
   * density (ROMS' equation of state or TEOS-10), potential density and buoyancy;
   * $N^2$, $M^2$ and the mixed layer depth;
 * move variables between grid positions, and compute grid-weighted sums and means, depth averages, and surface and

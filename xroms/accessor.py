@@ -536,17 +536,30 @@ class xromsDatasetAccessor:
 
     @property
     def convergence(self):
-        """Horizontal convergence du/dx + dv/dy (1/s) on rho points."""
+        """Horizontal convergence -(du/dx + dv/dy) (1/s) on rho points: positive where the flow converges."""
         u, v = self._uv()
         return self._out(derived.convergence(u, v, self._obj))
 
     @property
+    def divergence(self):
+        """Horizontal divergence du/dx + dv/dy (1/s) on rho points: positive where the flow spreads apart."""
+        u, v = self._uv()
+        return self._out(derived.divergence(u, v, self._obj))
+
+    def _surface_over_f(self, field, name, long_name):
+        out = canonicalize(field).isel(s_rho=-1) / canonicalize(self._obj["f"])
+        out.attrs = {"name": name, "long_name": long_name, "units": ""}
+        return self._out(out.rename(name))
+
+    @property
     def convergence_norm(self):
         """Surface convergence normalized by f (dimensionless), on rho points."""
-        conv = canonicalize(self.convergence)
-        out = conv.isel(s_rho=-1) / canonicalize(self._obj["f"])
-        out.attrs = {"name": "convergence_norm", "long_name": "normalized surface horizontal convergence", "units": ""}
-        return self._out(out.rename("convergence_norm"))
+        return self._surface_over_f(self.convergence, "convergence_norm", "normalized surface horizontal convergence")
+
+    @property
+    def divergence_norm(self):
+        """Surface divergence normalized by f (dimensionless), on rho points."""
+        return self._surface_over_f(self.divergence, "divergence_norm", "normalized surface horizontal divergence")
 
     @property
     def rho(self):
