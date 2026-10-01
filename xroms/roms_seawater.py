@@ -708,7 +708,7 @@ def mld(
             else:
                 water = has_data
         else:
-            bottom, water = depth.where(var.notnull()).max(vdim), has_data
+            bottom, water = _nanmax(depth.where(var.notnull()), vdim), has_data
         out = out.fillna(bottom.where(water))
     out = order(out)
     _label(out, "mld", "mixed layer depth", "m")
@@ -718,9 +718,19 @@ def mld(
     return out
 
 
+def _nanmax(x, dim):
+    """``x.max(dim)`` skipping NaN, and NaN where all of it is (land), without dask's all-NaN warning."""
+    return x.fillna(-np.inf).max(dim).where(x.notnull().any(dim))
+
+
+def _nanmin(x, dim):
+    """``x.min(dim)`` skipping NaN; see :func:`_nanmax`."""
+    return x.fillna(np.inf).min(dim).where(x.notnull().any(dim))
+
+
 def _at(values, depth, where_depth, dim):
     """``values`` at the level of each profile whose depth is ``where_depth`` (NaN if none)."""
-    return values.where(depth == where_depth).max(dim)
+    return _nanmax(values.where(depth == where_depth), dim)
 
 
 def _mld_interp(var, depth, dim, threshold, reference_depth, signed):
@@ -731,8 +741,8 @@ def _mld_interp(var, depth, dim, threshold, reference_depth, signed):
     """
     depth = depth.where(var.notnull())
     # reference value: linear in depth between the points either side of reference_depth
-    above = depth.where(depth <= reference_depth).max(dim)
-    below = depth.where(depth >= reference_depth).min(dim)
+    above = _nanmax(depth.where(depth <= reference_depth), dim)
+    below = _nanmin(depth.where(depth >= reference_depth), dim)
     v_above, v_below = _at(var, depth, above, dim), _at(var, depth, below, dim)
     span = (below - above).where(below != above)
     ref = xr.where(
@@ -742,8 +752,8 @@ def _mld_interp(var, depth, dim, threshold, reference_depth, signed):
     )
     diff = var - ref
     past = (diff if signed else abs(diff)) > threshold
-    d1 = depth.where(past & (depth >= reference_depth)).min(dim)
-    d0 = depth.where(depth < d1).max(dim)
+    d1 = _nanmin(depth.where(past & (depth >= reference_depth)), dim)
+    d0 = _nanmax(depth.where(depth < d1), dim)
     v1, v0 = _at(diff, depth, d1, dim), _at(diff, depth, d0, dim)
     target = threshold if signed else xr.where(v1 < 0, -threshold, threshold)
     step = (v1 - v0).where(v1 != v0)

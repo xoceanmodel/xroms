@@ -504,6 +504,19 @@ class TestLazyDtypeIsTheComputedDtype:
         assert out.dtype == out.compute().dtype
 
 
+def test_isoslice_dim_in_the_variables_own_alias_naming(rutgers):
+    """dim may name the variable's own Rutgers dims (eta_u, xi_v), as the accessor's Dataset does."""
+    by_alias = xroms.isoslice(rutgers.u, [28.05], rutgers.lat_u, dim="eta_u", new_dim="lat")
+    xr.testing.assert_identical(by_alias, xroms.isoslice(rutgers.u, [28.05], rutgers.lat_u, dim="Y", new_dim="lat"))
+    by_alias = xroms.isoslice(rutgers.v, [-89.95], rutgers.lon_v, dim="xi_v", new_dim="lon")
+    xr.testing.assert_identical(by_alias, xroms.isoslice(rutgers.v, [-89.95], rutgers.lon_v, dim="X", new_dim="lon"))
+    xr.testing.assert_identical(
+        rutgers.xroms.isoslice("u", [28.05], "lat_u", dim="eta_u", new_dim="lat"),
+        rutgers.xroms.isoslice("u", [28.05], "lat_u", dim="Y", new_dim="lat"),
+    )
+    assert by_alias.notnull().any()
+
+
 # ------------------------------------------ pre-1.0 xgcm Grid and other bad arguments
 class TestArgumentChecks:
     def test_isoslice_explains_the_1_0_call(self, rutgers):
@@ -610,6 +623,33 @@ class TestInterpll:
                 eta_rho=xr.DataArray(self.EETA, dims="locations"), xi_rho=xr.DataArray(self.EXI, dims="locations")
             )
             np.testing.assert_allclose(reused.values, want.values, rtol=1e-9, atol=1e-9)
+
+    def test_points_outside_the_domain_are_nan(self, field):
+        inside = (field.lon_rho.values[4, 5], field.lat_rho.values[4, 5])
+        out = xroms.interpll(field.temp, [inside[0], inside[0] + 50.0], [inside[1], inside[1]])
+        assert out.isel(locations=0).notnull().all() and out.isel(locations=1).isnull().all()
+        zero = xroms.interpll(field.temp, [inside[0] + 50.0], [inside[1]], unmapped_to_nan=False)
+        assert (zero == 0).all()  # xESMF's own default, on request
+
+    def test_a_regridder_needs_no_points_and_checks_given_ones(self, field):
+        lons, lats = field.lon_rho.values[self.EETA, self.EXI], field.lat_rho.values[self.EETA, self.EXI]
+        regridder = xroms.make_regridder(field.temp, lons, lats)
+        xr.testing.assert_identical(xroms.interpll(field.salt, regridder=regridder), xroms.interpll(field.salt, lons, lats))
+        xr.testing.assert_identical(field.salt.xroms.interpll(regridder=regridder), xroms.interpll(field.salt, lons, lats))
+        with pytest.raises(ValueError, match="not the points this regridder was made for"):
+            xroms.interpll(field.salt, lons[::-1], lats[::-1], regridder=regridder)
+        with pytest.raises(ValueError, match="made with which='pairs'"):
+            xroms.interpll(field.salt, regridder=regridder, which="grid")
+        with pytest.raises(TypeError, match="pass them to xroms.make_regridder"):
+            xroms.interpll(field.salt, regridder=regridder, method="nearest_s2d")
+        with pytest.raises(TypeError, match="lons and lats, or a regridder"):
+            xroms.interpll(field.salt)
+
+    def test_a_grid_regridder_gives_the_grid(self, field):
+        lons = field.lon_rho.isel(eta_rho=0).values[2:-2]
+        lats = field.lat_rho.isel(xi_rho=0).values[2:-2]
+        regridder = xroms.make_regridder(field.temp, lons, lats, which="grid")
+        xr.testing.assert_identical(xroms.interpll(field.temp, regridder=regridder), xroms.interpll(field.temp, lons, lats, which="grid"))
 
     def test_the_input_is_not_modified(self, field):
         before = field.temp.copy(deep=True)

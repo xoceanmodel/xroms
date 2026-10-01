@@ -157,6 +157,22 @@ class TestGridSums:
         out = xroms.gridmean(can.temp, with_land, ("X", "Y"))
         assert np.isfinite(out.values).all()
 
+    def test_gridsum_units_gain_a_metre_per_dim(self, rutgers):
+        units = rutgers.u.attrs["units"]
+        assert xroms.gridsum(rutgers.u, rutgers, "Z").attrs["units"] == f"{units} m"
+        assert xroms.gridsum(rutgers.u, rutgers, ("Z", "Y")).attrs["units"] == f"{units} m2"
+        assert xroms.gridsum(rutgers.temp, rutgers, ("X", "Y", "Z")).attrs["units"] == f"{rutgers.temp.attrs['units']} m3"
+        bare = rutgers.u.copy()
+        bare.attrs = {}
+        assert "units" not in xroms.gridsum(bare, rutgers, "Z").attrs
+        assert xroms.gridmean(rutgers.u, rutgers, "Z").attrs["units"] == units
+
+    def test_dims_in_the_datasets_own_alias_naming(self, rutgers):
+        """A Rutgers u variable's own dims (eta_u) name the same axes as the canonical ones."""
+        xr.testing.assert_identical(xroms.gridsum(rutgers.u, rutgers, "eta_u"), xroms.gridsum(rutgers.u, rutgers, "Y"))
+        xr.testing.assert_identical(xroms.gridmean(rutgers.v, rutgers, ("s_rho", "xi_v")), xroms.gridmean(rutgers.v, rutgers, ("Z", "X")))
+        xr.testing.assert_identical(rutgers.xroms.gridsum("u", "eta_u"), rutgers.xroms.gridsum("u", "Y"))
+
 
 class TestSubset:
     def test_staggers_consistent(self, rutgers):

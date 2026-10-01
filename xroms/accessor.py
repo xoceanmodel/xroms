@@ -335,13 +335,24 @@ class xromsDatasetAccessor:
         """Both horizontal derivatives at constant depth."""
         return self.ddxi(var, grid=grid, **kwargs), self.ddeta(var, grid=grid, **kwargs)
 
+    def _out_reduced(self, out, var):
+        """``_out`` for a reduction of ``var``: the dims it kept are named as ``var`` names them.
+
+        With one horizontal dim gone, the result's position can't be told from its dims (a v
+        variable's ``xi_v`` and a rho variable's ``xi_rho`` are both canonical ``xi_rho``).
+        """
+        own = dict(zip(canonicalize(var).dims, var.dims))
+        return self._out(out.rename({c: o for c, o in own.items() if c != o and c in out.dims}))
+
     def gridsum(self, var, dims, *, grid=None, **kwargs):
         """Grid-weighted sum over ``dims``; see :func:`xroms.gridsum`."""
-        return self._out(utilities.gridsum(self._var(var), self._grid(grid), dims, **kwargs))
+        var = self._var(var)
+        return self._out_reduced(utilities.gridsum(var, self._grid(grid), dims, **kwargs), var)
 
     def gridmean(self, var, dims, *, grid=None, **kwargs):
         """Grid-weighted mean over ``dims``; see :func:`xroms.gridmean`."""
-        return self._out(utilities.gridmean(self._var(var), self._grid(grid), dims, **kwargs))
+        var = self._var(var)
+        return self._out_reduced(utilities.gridmean(var, self._grid(grid), dims, **kwargs), var)
 
     def depth_average(self, var, *, grid=None, **kwargs):
         """Thickness-weighted vertical mean; see :func:`xroms.depth_average`."""
@@ -570,11 +581,11 @@ class xromsDatasetAccessor:
         u, v = self._uv()
         return self._out(derived.ertel(self.buoyancy, u, v, self._obj["f"], self._obj))
 
-    def mld(self, threshold=None, *, thresh=None, **kwargs):
+    def mld(self, threshold=None, *, thresh=None, grid=None, **kwargs):
         """Mixed layer depth (m, positive) on rho points, from ``sig0`` (or ``temp`` with ``variable="temperature"``); see :func:`xroms.mld`."""
         threshold = roms_seawater._threshold_alias(threshold, thresh)
         var = self._obj["temp"] if kwargs.get("variable") == "temperature" else self.sig0
-        return self._out(roms_seawater.mld(var, self._obj, threshold=threshold, **kwargs))
+        return self._out(roms_seawater.mld(var, self._grid(grid), threshold=threshold, **kwargs))
 
 
 @xr.register_dataarray_accessor("xroms")
@@ -660,7 +671,7 @@ class xromsDataArrayAccessor:
         """Interpolate onto values of ``iso_array``; see :func:`xroms.isoslice`."""
         return self._named(interp.isoslice(self._obj, iso_values, iso_array, **kwargs))
 
-    def interpll(self, lons, lats, **kwargs):
+    def interpll(self, lons=None, lats=None, **kwargs):
         """Interpolate to lon/lat points with xESMF; see :func:`xroms.interpll`."""
         return interp.interpll(self._obj, lons, lats, **kwargs)
 

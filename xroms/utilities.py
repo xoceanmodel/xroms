@@ -406,7 +406,9 @@ def hgrad(var, grid=None, which="both", **kwargs):
 # --- grid-weighted sums and means ----------------------------------------------------
 
 
-_AXIS_NAMES = {"X": "X", "Y": "Y", "Z": "Z", "xi_rho": "X", "xi_u": "X", "eta_rho": "Y", "eta_v": "Y", "s_rho": "Z", "s_w": "Z"}
+_AXIS_NAMES = {"X": "X", "Y": "Y", "Z": "Z", "xi_rho": "X", "xi_u": "X", "eta_rho": "Y", "eta_v": "Y", "s_rho": "Z", "s_w": "Z",
+               # Rutgers/REMORA alias names, as the Dataset itself names its dims
+               "eta_u": "Y", "xi_v": "X", "eta_psi": "Y", "xi_psi": "X"}
 
 
 def _grid_weights(var, grid, dims, zeta):
@@ -451,6 +453,8 @@ def gridsum(var, grid, dims, *, zeta=None):
     out = (var * weight).sum(reduce)
     out.attrs = dict(var.attrs)
     out.attrs["long_name"] = f"{var.attrs.get('long_name', var.name)}, grid sum over {', '.join(reduce)}"
+    if out.attrs.get("units"):  # times metres for each dim summed over
+        out.attrs["units"] = f"{out.attrs['units']} m" + (str(len(reduce)) if len(reduce) > 1 else "")
     return order(out.rename(var.name))
 
 

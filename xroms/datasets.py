@@ -17,4 +17,11 @@ def fetch_ROMS_example_full_grid():
     import xarray as xr
 
     fname = _fetcher().fetch("ROMS_example_full_grid.nc")
-    return xr.open_dataset(fname, chunks={})
+    ds = xr.open_dataset(fname, chunks={})
+    # the file labels its longitudes and latitudes "meters"
+    for name in ds.variables:
+        prefix, _, pos = name.partition("_")
+        if prefix in ("lon", "lat") and ds[name].attrs.get("units") == "meters":
+            what, units = ("longitude", "degree_east") if prefix == "lon" else ("latitude", "degree_north")
+            ds[name].attrs.update(long_name=f"{what} of {pos.upper()}-points", units=units)
+    return ds

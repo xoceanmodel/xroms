@@ -169,10 +169,12 @@ def isoslice(var, iso_values, iso_array, *, dim=None, new_dim=None, method="line
         )
     if method not in ("linear", "nearest"):
         raise ValueError(f"method must be 'linear' or 'nearest', not {method!r}")
+    named = var.dims
     var, iso_array = canonicalize(var), canonicalize(iso_array)
     if isinstance(iso_values, xr.DataArray):
         iso_values = canonicalize(iso_values)
-    dim = _resolve_dim(var, dim)
+    # dim may be given in the variable's own (e.g. Rutgers alias) naming
+    dim = _resolve_dim(var, dict(zip(named, var.dims)).get(dim, dim))
     _check_pairing(var, iso_values, iso_array, dim)
     if method == "linear" and var.sizes[dim] < 2:
         raise ValueError(
@@ -287,23 +289,52 @@ def zslice(
     return out
 
 
-def interpll(var, lons, lats, which="pairs", regridder=None, **kwargs):
+def interpll(var, lons=None, lats=None, which=None, regridder=None, **kwargs):
     """Interpolate ``var`` horizontally to lon/lat points with xESMF.
 
-    ``which="pairs"`` treats ``lons``/``lats`` as point pairs (dim
-    ``locations``); ``"grid"`` builds the lat x lon grid. Pass a previously
-    returned ``regridder`` (``out.attrs`` is not used for this; keep the object
-    from :func:`make_regridder`) to reuse weights across variables and times.
-    Extra ``kwargs`` go to ``xesmf.Regridder``.
+    ``which="pairs"`` (the default) treats ``lons``/``lats`` as point pairs (dim
+    ``locations``); ``"grid"`` builds the lat x lon grid. Points outside the
+    model domain are NaN. Extra ``kwargs`` go to ``xesmf.Regridder`` (see
+    :func:`make_regridder`).
+
+    To reuse the weights across variables on the same points and times, pass
+    the ``regridder`` returned by :func:`make_regridder` instead of the points:
+    ``interpll(var, regridder=r)``. Points given along with it must be the ones
+    it was made for.
     """
     var = canonicalize(var)
     if regridder is None:
+        if lons is None or lats is None:
+            raise TypeError("interpll needs lons and lats, or a regridder from xroms.make_regridder")
+        which = which or "pairs"
         regridder = make_regridder(var, lons, lats, which=which, **kwargs)
+    else:
+        which = _check_regridder(regridder, lons, lats, which, kwargs)
     src = _xesmf_input(var)
     out = regridder(src, keep_attrs=True)
     if which == "pairs":
         out = out.assign_coords(locations=("locations", np.arange(out.sizes["locations"]), {"axis": "X"}))
     return out
+
+
+def _check_regridder(regridder, lons, lats, which, kwargs):
+    """The ``which`` of a given ``regridder``; raise if the other arguments disagree with it."""
+    if kwargs:
+        raise TypeError(f"options {sorted(kwargs)} build a regridder: pass them to xroms.make_regridder, not with regridder=")
+    made = "pairs" if regridder.sequence_out else "grid"
+    if which is not None and which != made:
+        raise ValueError(f"which={which!r}, but the regridder was made with which={made!r}")
+    target = getattr(regridder, "_xroms_points", None)
+    if (lons is None) != (lats is None):
+        raise TypeError("give both lons and lats, or neither")
+    if lons is not None and target is not None:
+        given = (np.asarray(lons, dtype=float).flatten(), np.asarray(lats, dtype=float).flatten())
+        if any(a.shape != b.shape or not np.allclose(a, b, rtol=0, atol=1e-12) for a, b in zip(given, target)):
+            raise ValueError(
+                "lons/lats are not the points this regridder was made for: make a new one with "
+                "xroms.make_regridder(var, lons, lats), or leave out lons and lats"
+            )
+    return made
 
 
 def _xesmf_input(var):
@@ -315,14 +346,21 @@ def _xesmf_input(var):
 
 
 def make_regridder(var, lons, lats, which="pairs", method="bilinear", **kwargs):
-    """Build (and return, for reuse) the xESMF regridder used by :func:`interpll`."""
+    """Build (and return, for reuse) the xESMF regridder used by :func:`interpll`.
+
+    The weights depend on ``var``'s horizontal points, so a regridder made for a
+    rho-point variable serves every rho-point variable (and time) at ``lons``,
+    ``lats``; u and v points need their own. Points outside the model domain come
+    out NaN (``unmapped_to_nan=True``; pass ``unmapped_to_nan=False`` for xESMF's 0).
+    Extra ``kwargs`` go to ``xesmf.Regridder``.
+    """
     try:
         import xesmf as xe
     except ImportError:  # pragma: no cover - optional dependency
         raise ModuleNotFoundError("interpll needs xESMF (conda install -c conda-forge xesmf)") from None
     var = canonicalize(var)
-    lats = np.asarray(lats).flatten()
-    lons = np.asarray(lons).flatten()
+    lats = np.asarray(lats, dtype=float).flatten()
+    lons = np.asarray(lons, dtype=float).flatten()
     if which == "pairs":
         target = xr.Dataset({"lat": (["locations"], lats), "lon": (["locations"], lons)})
         locstream_out = True
@@ -331,4 +369,7 @@ def make_regridder(var, lons, lats, which="pairs", method="bilinear", **kwargs):
         locstream_out = False
     else:
         raise ValueError(f"which must be 'pairs' or 'grid', not {which!r}")
-    return xe.Regridder(_xesmf_input(var), target, method, locstream_out=locstream_out, **kwargs)
+    kwargs.setdefault("unmapped_to_nan", True)
+    regridder = xe.Regridder(_xesmf_input(var), target, method, locstream_out=locstream_out, **kwargs)
+    regridder._xroms_points = (lons, lats)  # so that interpll can check points given with it
+    return regridder

@@ -116,13 +116,41 @@ def test_pure_functions_keep_the_contract_over_land(layout, op):
     check_op(op, ds, p)
 
 
-@pytest.mark.parametrize("op_name", ["depth_average", "gridmean_over_z"])
+_OVER_LAND = {
+    "depth_average": lambda ds: xroms.depth_average(ds.temp, ds),
+    "gridmean_over_z": lambda ds: xroms.gridmean(ds.temp, ds, "Z"),
+    "mld": lambda ds: xroms.mld(xroms.potential_density(ds.temp, ds.salt), ds),
+    "mld_temperature_nan": lambda ds: xroms.mld(ds.temp, ds, variable="temperature", fill="nan", reference_depth=1.0),
+}
+
+
+@pytest.mark.parametrize("op_name", list(_OVER_LAND))
 def test_means_over_land_do_not_warn_when_computed(layout, op_name):
     ds = chunked(S.dataset(layout, land=True))
-    mean = xroms.depth_average(ds.temp, ds) if op_name == "depth_average" else xroms.gridmean(ds.temp, ds, "Z")
+    mean = _OVER_LAND[op_name](ds)
     with warnings.catch_warnings():
         warnings.simplefilter("error", RuntimeWarning)
         mean.compute(scheduler="synchronous")  # in this thread, where the filter is certain to apply
+
+
+@pytest.mark.parametrize("variable", ["density", "temperature"])
+def test_mld_never_reduces_an_all_nan_column(layout, variable, monkeypatch):
+    """numpy warns about all-NaN slices, and dask's suppression of that is not thread-safe
+    (the warning leaks under the threaded scheduler), so land columns must never reach one."""
+
+    def strict(reduce):
+        def checked(a, *args, axis=None, **kwargs):
+            if isinstance(a, np.ndarray) and a.size and np.isnan(a).all(axis=axis).any():
+                raise AssertionError(f"{reduce.__name__} over an all-NaN slice")
+            return reduce(a, *args, axis=axis, **kwargs)
+
+        return checked
+
+    monkeypatch.setattr(np, "nanmax", strict(np.nanmax))
+    monkeypatch.setattr(np, "nanmin", strict(np.nanmin))
+    ds = chunked(S.dataset(layout, land=True))
+    var = xroms.potential_density(ds.temp, ds.salt) if variable == "density" else ds.temp
+    xroms.mld(var, ds, variable=variable).compute(scheduler="synchronous")
 
 
 @functools.lru_cache(maxsize=None)

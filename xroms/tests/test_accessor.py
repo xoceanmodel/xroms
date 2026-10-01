@@ -240,10 +240,22 @@ GRID_CALLS = {
     "gridsum": lambda acc, **kw: acc.gridsum("temp", "Z", **kw),
     "gridmean": lambda acc, **kw: acc.gridmean("temp", ("X", "Y"), **kw),
     "depth_average": lambda acc, **kw: acc.depth_average("temp", shallow=0, deep=10, reference="surface", **kw),
+    "mld": lambda acc, **kw: acc.mld(threshold=0.03, **kw),
     "zslice": lambda acc, **kw: acc.zslice("temp", [-5.0], **kw),
     "assign_z": _assigned,
     "xgcm_grid": _xgcm_products,
 }
+
+
+def test_reductions_keep_the_datasets_own_names(rutgers):
+    """With an eta or xi dim summed out, the one left is still named as the variable's (xi_v, eta_u)."""
+    assert rutgers.xroms.gridmean("v", ("Z", "Y")).dims == ("ocean_time", "xi_v")
+    assert rutgers.xroms.gridsum("u", ("Z", "X")).dims == ("ocean_time", "eta_u")
+    assert rutgers.xroms.gridmean("temp", "Y").dims == ("ocean_time", "s_rho", "xi_rho")
+    xr.testing.assert_allclose(
+        rutgers.xroms.gridmean("v", ("Z", "Y")).reset_coords(drop=True).rename(xi_v="xi_rho"),
+        xroms.gridmean(rutgers.v, rutgers, ("Z", "Y")).reset_coords(drop=True),
+    )
 
 
 def test_grid_calls_cover_every_method_with_grid():
