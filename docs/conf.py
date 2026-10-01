@@ -110,6 +110,7 @@ exclude_patterns = [
     "Thumbs.db",
     ".DS_Store",
     "_old_docs",
+    "ocean_skill_adoption.md",  # working note for the ocean-skill proof of concept, read on GitHub
 ]
 
 
