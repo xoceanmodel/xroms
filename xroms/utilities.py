@@ -681,12 +681,12 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
 
     Calculate a lon-lat slice at a constant z value (-10) but without zeta changing in time:
 
-    (use ds.z_rho0 which is relative to mean sea level and does not vary in time)
-    >>> sl = xroms.utilities.xisoslice(ds.z_rho0, -10, ds.temp, 's_rho')
+    (resting heights, relative to mean sea level and not varying in time)
+    >>> sl = xroms.utilities.xisoslice(xroms.z(ds, zeta=0), -10, ds.temp, 's_rho')
 
     Calculate the depth of a specific isohaline (33):
 
-    >>> sl = xroms.utilities.xisoslice(ds.salt, 33, ds.z_rho, 's_rho')
+    >>> sl = xroms.utilities.xisoslice(ds.salt, 33, xroms.z(ds), 's_rho')
 
     Calculate the salt 10 meters above the seabed. Either do this on the vertical
     rho grid, or first change to the w grid and then use `xisoslice`. You may prefer
@@ -695,12 +695,12 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
 
     * on rho grid directly:
 
-      >>> sl = xroms.xisoslice(ds.z_rho + ds.h, 10., ds.salt, 's_rho')
+      >>> sl = xroms.xisoslice(xroms.z(ds, reference="bottom"), 10., ds.salt, 's_rho')
 
     * on w grid:
 
       >>> var_w = xroms.to_s_w(ds.salt)
-      >>> sl = xroms.xisoslice(ds.z_w + ds.h, 10., var_w, 's_w')
+      >>> sl = xroms.xisoslice(xroms.z(ds, scoord="s_w", reference="bottom"), 10., var_w, 's_w')
 
     In addition to calculating the slices themselves, you may need to calculate
     related coordinates for plotting. For example, to accompany the lat-z slice,
@@ -708,7 +708,7 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
 
     calculate z values (s_rho)
 
-    >>> slz = xroms.utilities.xisoslice(ds.lon_rho, -91.5, ds.z_rho, 'xi_rho')
+    >>> slz = xroms.utilities.xisoslice(ds.lon_rho, -91.5, xroms.z(ds), 'xi_rho')
 
     calculate latitude values (eta_rho)
 
@@ -768,8 +768,10 @@ def xisoslice(iso_array, iso_value, projected_array, coord):
     varl = (varl * zc).sum(coord)
     varu = (varu * zc).sum(coord)
 
-    # A linear fit to of the projected array to the isosurface.
-    out = varl - propl * (varu - varl) / (propu - propl)
+    # A linear fit to of the projected array to the isosurface; NaN where there is
+    # no crossing (propu == propl == 0), without dividing by zero (dask would warn)
+    den = propu - propl
+    out = varl - propl * (varu - varl) / den.where(den != 0)
 
     # If the sum == 2, that means iso_value is exactly in iso_array
     check = zc.sum(coord) == 2

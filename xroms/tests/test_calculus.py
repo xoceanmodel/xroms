@@ -1,6 +1,7 @@
 """Derivatives, grid moves, weighted sums, selection and interpolation on analytic fields."""
 
 import sys
+import warnings
 
 import numpy as np
 import pytest
@@ -302,6 +303,13 @@ class TestSlices:
         can = C.canonicalize(rutgers)
         out = xroms.xisoslice(xroms.z(rutgers), -10.0, can.temp, "s_rho")
         np.testing.assert_allclose(out.values, xroms.zslice(rutgers.temp, [-10.0], rutgers).isel(z=0).values, atol=1e-9)
+
+    def test_xisoslice_without_a_crossing_is_nan_without_warnings(self, rutgers):
+        c = chunked(C.canonicalize(rutgers))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            out = xroms.xisoslice(xroms.z(c), -1e4, c.temp, "s_rho").compute()
+        assert out.isnull().all()
 
 
 class TestInputsAreMatchedToTheGrid:
