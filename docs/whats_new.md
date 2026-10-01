@@ -25,7 +25,9 @@ update code written for 0.6.
   and `zeta=0`, `"mean"` or a DataArray. Also `compute_depth`, `dz`, `vertical_params`, `stretching` and
   `sigma_levels`. Vertical outputs carry CF `standard_name`, `positive` and `units`.
 * Vertical selection and interpolation: `surface`, `bottom`, `depth_band_weights` and `depth_average`; `zslice` onto
-  fixed heights or depths, including `method="nearest"`; `isoslice` onto any monotonic field.
+  fixed heights or depths, including `method="nearest"`; `isoslice` onto any monotonic field. Positions xroms did not
+  label (`z=` in `zslice`, `z_w` in `depth_band_weights`) are described with `positive=`/`reference=`, which win over
+  their attrs; reading the sign from attrs xroms did not write warns.
 * Grid metrics and masks: `dx`, `dy`, `dA`, `dV`, `nominal_resolution` and `mask_at`, at any position. On the accessor:
   `z_rho`, `z_w`, `z()`, `dz()`, `dx()`, `dy()`, `dA()`, `dV()`, `vertical_params`, `assign_z()`, and `xgcm_grid()`
   for your own xgcm work.

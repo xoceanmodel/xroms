@@ -87,6 +87,32 @@ def infer_reference(attrs, default=("mean_sea_level", "up")):
     return (ref or default[0], pos or default[1])
 
 
+def labels_of(arr, func, what, *, reference=None, positive=None, default=("mean_sea_level", "up")):
+    """``(reference, positive)`` of ``arr``: the keywords where given, else its attrs, else ``default``.
+
+    xroms writes ``vertical_reference`` on every vertical position it returns, so attrs
+    with it are labels. Attrs without it may be left over from the arithmetic that made
+    ``arr`` (an ``h``'s ``standard_name``, a sigma's ``positive``): a reading taken from
+    them that differs from ``default`` warns, naming the keywords that settle it.
+    """
+    if reference is not None and positive is not None:
+        return reference, positive
+    try:
+        ref, pos = infer_reference(arr.attrs, default=default)
+    except ValueError as err:
+        raise ValueError(f"{err} (in the attrs of {what}); pass reference= and positive= to say what {what} is") from None
+    if reference is None and positive is None and "vertical_reference" not in arr.attrs and (ref, pos) != tuple(default):
+        found = {k: arr.attrs[k] for k in ("standard_name", "positive") if k in arr.attrs}
+        warnings.warn(
+            f"{func}: {what} is read as reference={ref!r}, positive={pos!r} from its attrs {found}, which xroms did "
+            f"not write (it has no vertical_reference), so they may be left over from other arithmetic. Pass "
+            f"reference= and positive= to say what {what} is.",
+            UserWarning,
+            stacklevel=3,
+        )
+    return reference or ref, positive or pos
+
+
 def label(da, reference="mean_sea_level", positive="up", name=None, long_name=None):
     """``da`` labelled with xroms' vertical metadata (returns a new object).
 
@@ -425,18 +451,21 @@ def bottom(var):
     return _level(var, last=False)
 
 
-def depth_band_weights(z_w, shallow, deep, *, dim_w="s_w", dim_rho="s_rho"):
+def depth_band_weights(z_w, shallow, deep, *, dim_w="s_w", dim_rho="s_rho", positive=None, reference=None):
     """Thickness of each layer inside a depth band (metres), on the rho levels.
 
     ``z_w`` holds interface positions relative to the mean sea level or the free
     surface, e.g. ``xroms.z(grid, scoord="w", reference="surface")`` for bands
-    measured below the moving free surface. Its ``positive`` attr says which way
-    it counts (up if it has none); a reference relative to the seabed, or one this
-    function cannot interpret, raises. ``shallow``/``deep`` are depths (positive
-    down) below that same reference, so ``shallow=0, deep=10`` is its upper 10 m.
-    Layers outside the band get weight 0.
+    measured below the moving free surface. ``positive`` (``"up"``/``"down"``) and
+    ``reference`` (``"mean_sea_level"``/``"surface"``) say which way it counts and
+    from where. Given, they win over ``z_w``'s attrs; left out, they come from its
+    attrs (xroms' own labels, else a CF ``standard_name`` or ``positive``, with a
+    warning when xroms did not write them), else heights relative to mean sea level.
+    A reference relative to the seabed raises. ``shallow``/``deep`` are depths
+    (positive down) below that same reference, so ``shallow=0, deep=10`` is its upper
+    10 m. Layers outside the band get weight 0.
     """
-    reference, positive = infer_reference(z_w.attrs)
+    reference, positive = labels_of(z_w, "depth_band_weights", "z_w", reference=reference, positive=positive)
     _check_reference(reference, positive)
     if reference == "bottom":
         raise ValueError(

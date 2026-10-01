@@ -7,7 +7,7 @@ from . import _xgcm
 from ._align import _check_grid, with_grid_coords
 from .conventions import canonicalize, hposition, horizontal_coords, vposition
 from .utilities import order
-from .vertical import _check_reference, infer_reference, label, z_like
+from .vertical import _check_reference, infer_reference, label, labels_of, z_like
 
 
 _AXIS_DIMS = {"Z": ("s_rho", "s_w"), "X": ("xi_rho", "xi_u"), "Y": ("eta_rho", "eta_v")}
@@ -207,20 +207,29 @@ def _order_with(out, new_dim, replaced):
     return ordered
 
 
-def _in_requested_labels(z, reference, positive):
-    """``z`` expressed in ``reference``/``positive``, going by its own CF labels.
+def _in_requested_labels(z, reference, positive, explicit):
+    """``z`` expressed in ``reference``/``positive``, going by its own labels.
 
-    A z in the requested reference and sign is returned as is, one that differs
-    only in sign is negated, and one in another reference is refused (its values
-    are not that reference's positions; it has to be built again). A z carrying no
-    label is taken at its word.
+    xroms' labels (``vertical_reference``, on everything ``xroms.z`` returns) are
+    honoured: a z in the requested reference and sign is returned as is, one that
+    differs only in sign is negated, and one in another reference is refused (its
+    values are not that reference's positions; it has to be built again). Attrs
+    xroms did not write may be left over from other arithmetic: when the caller
+    said ``reference=``/``positive=`` (``explicit``), z is taken to be in those;
+    otherwise its CF ``standard_name``/``positive`` are read, with a warning when
+    they change it. A z with no labels at all is taken at its word.
     """
-    try:
-        have_ref, have_pos = infer_reference(z.attrs, default=(None, None))
-    except ValueError as err:
-        raise ValueError(
-            f"{err} (in the attrs of z); fix them, or build z with xroms.z(ds, reference=..., positive=...)"
-        ) from None
+    if "vertical_reference" not in z.attrs:
+        if explicit:
+            return z
+        have_ref, have_pos = labels_of(z, "zslice", "z", default=(reference, positive))
+    else:
+        try:
+            have_ref, have_pos = infer_reference(z.attrs, default=(None, None))
+        except ValueError as err:
+            raise ValueError(
+                f"{err} (in the attrs of z); fix them, or build z with xroms.z(ds, reference=..., positive=...)"
+            ) from None
     if have_ref is not None and have_ref != reference:
         raise ValueError(
             f"z is labelled relative to {have_ref!r} but {reference!r} was requested. Pass "
@@ -259,13 +268,17 @@ def zslice(
     positive="down")`` is 10 m below the moving surface.
 
     ``z`` (instead of ``grid``) holds the vertical positions of ``var``'s points.
-    If it carries xroms/CF vertical labels they are honoured: a z in the requested
-    reference and sign is used as is, one with the opposite sign is negated, and
-    one in another reference raises (build it with ``xroms.z(ds, reference=...)``).
-    A z with no labels is taken to be in the requested reference already.
+    If it carries xroms' labels (as ``xroms.z`` returns it) they are honoured: a z in
+    the requested reference and sign is used as is, one with the opposite sign is
+    negated, and one in another reference raises (build it with
+    ``xroms.z(ds, reference=...)``). A z without them is taken to be in the requested
+    reference and sign when ``reference=`` or ``positive=`` is given; otherwise any CF
+    ``standard_name``/``positive`` attrs it has are read, with a warning (they may be
+    left over from other arithmetic), and with none it is taken at its word.
     """
     grid = _check_grid(grid, "zslice")
     var = canonicalize(var)
+    explicit = reference is not None or positive is not None
     if reference is None or positive is None:
         attrs = depths.attrs if isinstance(depths, xr.DataArray) else {}
         try:
@@ -280,7 +293,7 @@ def zslice(
     if z is None and grid is None:
         raise ValueError("zslice needs grid= (to compute depths) or z=")
     if z is not None:
-        z = _in_requested_labels(z, reference, positive)
+        z = _in_requested_labels(z, reference, positive, explicit)
     zz = z_like(var, grid, zeta=zeta, z=z, reference=reference, positive=positive)
     if z is not None:
         zz = label(zz, reference, positive) if "vertical_reference" not in zz.attrs else zz

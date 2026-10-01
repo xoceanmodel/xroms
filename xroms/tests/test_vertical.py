@@ -102,6 +102,30 @@ def test_depth_band_weights_respects_the_positive_attr(rutgers):
     xr.testing.assert_allclose(xroms.depth_band_weights(bare, 5, 30), xroms.depth_band_weights(up, 5, 30))
 
 
+def test_depth_band_weights_keywords_say_what_z_w_is(rutgers):
+    """Attrs xroms did not write (an h's standard_name, a stray positive) decided the sign silently
+    (ocean-skill friction 8): positive=/reference= now win over them, and reading them warns."""
+    up = xroms.z(rutgers, scoord="w", reference="surface")
+    want = xroms.depth_band_weights(up, 0, 10)
+    for stray in ({"standard_name": "sea_floor_depth_below_geoid"}, {"positive": "down"}):
+        z_w = up.copy()
+        z_w.attrs = stray
+        xr.testing.assert_allclose(xroms.depth_band_weights(z_w, 0, 10, positive="up", reference="surface"), want)
+        with pytest.warns(UserWarning, match="xroms did not write"):
+            assert float(xroms.depth_band_weights(z_w, 0, 10).sum()) == 0.0  # still read as depths
+    # the keywords win over xroms' own labels too
+    down = xroms.z(rutgers, scoord="w", reference="surface", positive="down")
+    xr.testing.assert_allclose(xroms.depth_band_weights(-down, 0, 10, positive="up", reference="surface"), want)
+    # xroms' labels, and no attrs at all, are read without a warning
+    bare = up.copy()
+    bare.attrs = {}
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        xroms.depth_band_weights(up, 0, 10)
+        xroms.depth_band_weights(down, 0, 10)
+        xroms.depth_band_weights(bare, 0, 10)
+
+
 def test_depth_band_weights_rejects_what_it_cannot_interpret(rutgers):
     ds = rutgers
     seabed = xroms.z(ds, scoord="w", reference="bottom")
@@ -385,6 +409,22 @@ def test_zeta_renamed_to_its_cf_name_is_still_the_free_surface(layout):
     with pytest.raises(ValueError, match="several variables could be the free surface"):
         xroms.z(two)
     xr.testing.assert_identical(xroms.z(two, zeta=two.ssh), xroms.z(ds))
+
+
+def test_a_renamed_free_surface_is_found_on_a_cut_dataset():
+    """ocean-skill renames zeta to its CF name and then cuts the Dataset to sections, rows and columns, where
+    positions can't be read from the dims: z used a flat surface there (ocean-skill friction 6)."""
+    ds = merged("ucla", romstools_grid=True)
+    ds = ds.assign(zeta=ds.zeta + 0.5)
+    ssh = ds.rename(zeta="sea_surface_height_above_geoid")
+    path = dict(eta_rho=xr.DataArray([1, 2, 3], dims="along"), xi_rho=xr.DataArray([2, 3, 4], dims="along"))
+    for cut in (path, dict(eta_rho=2), dict(eta_rho=2, xi_rho=3)):
+        want = xroms.z(ds.isel(cut))
+        assert "time" in want.dims
+        xr.testing.assert_identical(xroms.z(ssh.isel(cut)), want)
+    # a sea surface height that is not on h's points, such as a tide gauge's series, is not the free surface
+    gauge = ds.drop_vars("zeta").assign(sea_surface_height=("time", np.zeros(ds.sizes["time"])))
+    assert C.free_surface_name(gauge) is None
 
 
 def test_to_grid_rejects_an_xgcm_grid_where_hcoord_goes():

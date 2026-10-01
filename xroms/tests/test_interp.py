@@ -15,6 +15,8 @@ Expected values come from the analytic fields of ``_synthetic.py`` or from a bru
 force search written independently of the implementation.
 """
 
+import warnings
+
 import numpy as np
 import pytest
 import xarray as xr
@@ -362,12 +364,15 @@ class TestZsliceWithAGivenZ:
     def test_labels_given_as_a_cf_standard_name_are_read_too(self, rutgers):
         z = xroms.z(rutgers, positive="down")
         z.attrs = {"standard_name": "depth_below_geoid"}  # mean sea level, positive down
-        got = xroms.zslice(rutgers.temp, [-5.0], z=z)
+        with pytest.warns(UserWarning, match="xroms did not write"):  # CF labels, but maybe left over
+            got = xroms.zslice(rutgers.temp, [-5.0], z=z)
         want = xroms.zslice(rutgers.temp, [-5.0], rutgers)
         np.testing.assert_allclose(got.values, want.values, rtol=0, atol=1e-12)
         z.attrs = {"standard_name": "depth"}  # relative to the surface: another reference
-        with pytest.raises(ValueError, match="'surface'"):
+        with pytest.raises(ValueError, match="'surface'"), warnings.catch_warnings(record=True) as seen:
+            warnings.simplefilter("always")
             xroms.zslice(rutgers.temp, [-5.0], z=z)
+        assert any("xroms did not write" in str(w.message) for w in seen)
 
     @pytest.mark.parametrize("method", ["linear", "nearest"])
     def test_negating_z_also_works_for_nearest_and_for_u_points(self, rutgers, method):
@@ -410,7 +415,8 @@ class TestZsliceWithAGivenZ:
     def test_only_positive_is_compared_when_z_names_no_reference(self, rutgers):
         z = xroms.z(rutgers, positive="down")
         z.attrs = {"positive": "down"}
-        got = xroms.zslice(rutgers.temp, [-5.0], z=z)  # heights relative to mean sea level
+        with pytest.warns(UserWarning, match="xroms did not write"):
+            got = xroms.zslice(rutgers.temp, [-5.0], z=z)  # heights relative to mean sea level
         want = xroms.zslice(rutgers.temp, [-5.0], rutgers)
         np.testing.assert_allclose(got.values, want.values, rtol=0, atol=1e-12)
 
@@ -502,6 +508,24 @@ class TestLazyDtypeIsTheComputedDtype:
         out = xroms.isoslice(var, [-5.0], xroms.z(c).astype("float32"))
         assert out.dtype.kind == "f"
         assert out.dtype == out.compute().dtype
+
+
+def test_zslice_keywords_say_what_an_unlabelled_z_is():
+    """A z without xroms' labels but with a stray positive='down' was negated whatever the keywords said
+    (ocean-skill friction 9): reference=/positive= now say what such a z is, and reading its attrs warns."""
+    ds = merged("ucla", romstools_grid=True)
+    z = xroms.z(ds, zeta=0)
+    want = xroms.zslice(ds.temp, [-10.0], z=z)
+    stray = z.copy()
+    stray.attrs = {"positive": "down"}
+    got = xroms.zslice(ds.temp, [-10.0], z=stray, positive="up")
+    xr.testing.assert_allclose(got, want)
+    assert got.z.attrs == want.z.attrs
+    with pytest.warns(UserWarning, match="xroms did not write"):
+        assert xroms.zslice(ds.temp, [-10.0], z=stray).isnull().all()  # still read as depths
+    # xroms' own labels are still honoured: depths asked for as heights are converted
+    depths = xroms.z(ds, zeta=0, positive="down")
+    xr.testing.assert_allclose(xroms.zslice(ds.temp, [-10.0], z=depths, positive="up"), want)
 
 
 def test_isoslice_dim_in_the_variables_own_alias_naming(rutgers):

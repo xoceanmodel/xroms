@@ -283,17 +283,15 @@ class TestDepthBand:
         followed = xroms.depth_average(var, ds, shallow=0.0, deep=10.0, zeta=zeta, reference="surface")
         assert float(abs(followed - averaged[TEMP].transpose(*followed.dims)).max()) > 1e-4
 
-    @pytest.mark.xfail(
-        strict=True,
-        raises=AssertionError,
-        reason="ocean-skill bug: depth_band takes the first dim of z_w that is not s_rho for the interface dim, which "
-        "is 'time' once zeta varies in time, so the band comes back empty (s_rho of size 0) and depth_average "
-        "returns variables with a spurious s_w dimension. (Its compare pipeline avoids it by dropping zeta.)",
-    )
     def test_a_free_surface_that_varies_in_time(self):
         ds, meta = osk_inputs()
         std = roms.standardize(ds, meta)
-        assert roms.depth_band(std, meta, 0.0, 10.0).sizes["s_rho"] > 0
+        if roms.depth_band(std, meta, 0.0, 10.0).sizes["s_rho"] == 0:
+            pytest.xfail(
+                "this ocean-skill has the depth_band bug its xroms proof of concept fixes: it takes the first dim of "
+                "z_w that is not s_rho for the interface dim, which is 'time' once zeta varies in time, so the band "
+                "comes back empty (its compare pipeline avoided it by dropping zeta)"
+            )
         averaged = roms.depth_average(std, meta, 0.0, 10.0)
         close(averaged[TEMP], xroms.depth_average(ds.temp, ds, shallow=0.0, deep=10.0))
 

@@ -488,17 +488,28 @@ FREE_SURFACE_NAMES = (
 
 
 def free_surface_name(ds):
-    """Name of ``ds``'s free surface, or None: ``zeta``, else the one rho-point variable
-    named or standard-named as a CF sea surface height (:data:`FREE_SURFACE_NAMES`).
+    """Name of ``ds``'s free surface, or None: ``zeta``, else the one variable named or
+    standard-named as a CF sea surface height (:data:`FREE_SURFACE_NAMES`) on rho points.
 
-    Raises ``ValueError`` when several variables could be it.
+    On a Dataset that has been cut to a transect, a row or a column, positions can't be
+    read from the dims, so there it is the one on ``h``'s points (the same dims as ``h``,
+    besides time); a sea surface height elsewhere, such as a tide gauge's series in a
+    full Dataset, is not the free surface. Raises ``ValueError`` when several variables
+    could be it.
     """
     if "zeta" in ds.variables:
         return "zeta"
+    h_dims = set(ds["h"].dims) if "h" in ds.variables else None
+
+    def on_h_points(var):
+        if hposition(var) == "rho":
+            return True
+        return h_dims is not None and hposition(var) is None and set(var.dims) - {time_dim(var)} == h_dims
+
     found = [
         name
         for name, var in ds.data_vars.items()
-        if (name in FREE_SURFACE_NAMES or var.attrs.get("standard_name") in FREE_SURFACE_NAMES) and hposition(var) == "rho"
+        if (name in FREE_SURFACE_NAMES or var.attrs.get("standard_name") in FREE_SURFACE_NAMES) and on_h_points(var)
     ]
     if len(found) > 1:
         raise ValueError(f"several variables could be the free surface ({found}); choose one with zeta=<DataArray>")
