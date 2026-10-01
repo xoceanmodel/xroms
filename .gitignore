@@ -8,3 +8,5 @@ __pycache__
 build/
 xroms/_version.py
 dist/
+docs/_build/
+docs/generated/

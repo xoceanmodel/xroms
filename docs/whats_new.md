@@ -1,5 +1,77 @@
 # What's New
 
+## v1.0.0 (unreleased)
+
+A rewrite. xroms is now stateless, has no setup step, and works with current xgcm. {doc}`migration` shows how to
+update code written for 0.6.
+
+### Design
+* No setup step. `roms_dataset` and `set_grid` are gone: open the output with xarray and call xroms. Each call
+  computes what it needs from the data in hand, lazily under dask, and nothing is cached. Subsets, time selections and
+  edits can therefore no longer leave stale depths, grid metrics or xgcm grids behind. Depths and metrics are computed
+  only for the data asked about ({issue}`74`).
+* Two layers, one implementation. Functions take DataArrays plus the Dataset as `grid` and return canonical dims. The
+  `ds.xroms` accessor offers the same calculations by variable name, and returns results in the Dataset's own naming.
+* The ROMS family: Rutgers ROMS, UCLA ROMS, CROCO ({issue}`24`) and REMORA output, detected per call from the file's names and
+  attributes. This covers s-coordinate parameters stored as variables or as attributes, CROCO's `VertCoordType`, time
+  without a coordinate (UCLA), Cartesian x/y grids and time-varying masks.
+* Results keep the right dims. A time dim is never re-broadcast or dropped. A variable is matched to the free surface
+  at its own times, with an error naming the options when it can't be (after a time mean, for example).
+* Chunked input works, and only the dim being operated on is rechunked. The other dims keep their chunks, and the
+  operated dim gets its chunk structure back afterwards.
+
+### New
+* Vertical coordinate: `z` at any position, with `reference="mean_sea_level"`, `"surface"` or `"bottom"`, `positive=`
+  and `zeta=0`, `"mean"` or a DataArray. Also `compute_depth`, `dz`, `vertical_params`, `stretching` and
+  `sigma_levels`. Vertical outputs carry CF `standard_name`, `positive` and `units`.
+* Vertical selection and interpolation: `surface`, `bottom`, `depth_band_weights` and `depth_average`; `zslice` onto
+  fixed heights or depths, including `method="nearest"`; `isoslice` onto any monotonic field.
+* Grid metrics and masks: `dx`, `dy`, `dA`, `dV`, `nominal_resolution` and `mask_at`, at any position. On the accessor:
+  `z_rho`, `z_w`, `z()`, `dz()`, `dx()`, `dy()`, `dA()`, `dV()`, `vertical_params`, `assign_z()`, and `xgcm_grid()`
+  for your own xgcm work.
+* Opening helpers:
+  * `merge_grid` for output with a separate grid file;
+  * `decode_time` for UCLA output;
+  * `add_cf_attrs`, which adds the attributes cf-xarray and SGRID readers need;
+  * `canonicalize` and `rename_like`.
+* Longitudes: `wrap_longitude`, `straddles` and `lonlat_at`.
+* Vectors: `grid_to_earth` and `earth_to_grid`.
+* Selection: `subset(..., halo=)` and `trim`; `argsel2d`/`sel2d` with `method="geodesic"` (pyproj); `make_regridder`, to
+  reuse xESMF weights in `interpll`.
+* Density and mixed layer: `eos="teos10"` in `density` and `potential_density` (gsw). `mld` takes `threshold`,
+  `reference_depth`, `variable="temperature"`, `fill` and `method`.
+
+### Changed results
+{doc}`migration` has the details.
+* Horizontal derivatives at constant depth stay on the input's vertical levels, and their slope term uses a
+  second-order `ddz`.
+* There are no more artificial zeros at the top and bottom of vertical derivatives.
+* Layer thicknesses on w levels are correct at the top and bottom.
+* `argsel2d`/`sel2d` use the haversine distance.
+* Horizontal derivatives of a single selected s-level raise unless `along_s=True`.
+* `depth_average` and `gridmean` give NaN where there is no water, and weight only the points with data.
+
+### Removed
+Each of these raises an error naming its replacement:
+* `roms_dataset`, `open_netcdf`, `open_mfnetcdf`, `open_zarr` and `grid_interp`;
+* `ds.xroms.set_grid` and `ds.xroms.xgrid`, and the `include_*` flags;
+* the DataArray accessor's `ddxi`, `ddeta`, `ddz`, `gridmean`, `gridsum` and `zslice`;
+* the `ds.xroms.w`/`omega` placeholders;
+* the `add_verts` and `proj` options, with `lon_vert`/`lat_vert` and the pygridgen dependency.
+
+### Packaging
+* `xgcm>=0.10`, no longer pinned to 0.8.1 ({issue}`77`), so xroms installs alongside roms-tools.
+* numba is listed explicitly, and Python 3.11 or newer is required.
+* No import side effects: no global `keep_attrs`, no warning filters, and no eager imports of cartopy, xesmf or
+  cf-xarray. cf-xarray and pygridgen ({issue}`12`) are no longer needed.
+* `pyproject.toml`, with optional extras `interp`, `geodesic`, `teos10`, `examples` and `all`. The wheel no longer
+  contains the 62 MB example file, which pooch downloads on first use, or the tests.
+
+### Fixes
+* Opening output no longer depends on cf-xarray's reading of the dims ({issue}`69`).
+* `isoslice` takes a scalar value and an explicit `iso_array`, and depths have their own `zslice` ({issue}`75`).
+* `xisoslice` returns the value when the iso value is one of the levels ({issue}`7`).
+
 ## v0.6.2 (August 27, 2025)
 * catching and ignoring a bunch of warnings from `xgcm`, but still staying with `xgcm` `v0.8.1` until I can update this code to match.
 * updating CI test versions to 3.11, 3.12, 3.13

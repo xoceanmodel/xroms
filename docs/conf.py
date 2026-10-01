@@ -68,6 +68,9 @@ extensions = [
     "myst_nb",
 ]
 
+# {issue}`74` links to xroms issue 74
+extlinks = {"issue": ("https://github.com/xoceanmodel/xroms/issues/%s", "#%s")}
+
 # for compiling notebooks with mystnb
 # https://docs.readthedocs.io/en/stable/guides/jupyter.html#using-notebooks-in-other-formats
 nb_custom_formats = {
@@ -107,7 +110,7 @@ html_title = "xroms documentation"
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ["_static"]
+html_static_path = []
 
 # https://myst-nb.readthedocs.io/en/v0.13.0/use/execute.html#execution-timeout
 # had this message:
@@ -126,10 +129,9 @@ nbsphinx_allow_errors = True
 autodoc_typehints = "none"
 autodoc_default_options = {
     "members": True,
-    "inherited-members": True,
     "show-inheritance": True,
-    "undoc-members": True,
-    "private-members": True,
 }
+# the API page lists the accessors' members itself (autosummary's class template)
+numpydoc_show_class_members = False
 napoleon_use_param = True
 napoleon_use_rtype = True

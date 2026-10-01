@@ -34,7 +34,10 @@ out byte-identical on every run.
   quirks included; treat them as a record, not a requirement.
 - dtypes are whatever v0.6.2 returned. The window's `u, v, temp, salt, zeta` are float32,
   so `to_rho_u`, `to_rho_v`, `to_u_temp`, `to_v_temp`, `to_psi_temp`, `to_s_w_temp`,
-  `speed`, `sig0` and `buoy` are float32 there: compare them at rtol ~1e-5, not 1e-12.
+  `speed`, `sig0` and `buoy` are float32 there. xroms 1.0 computes them the same way, so
+  `test_golden.py` still holds them to rtol 1e-12. Only `KE` and `isoslice_temp_on_salt`,
+  which v0.6.2 promoted to float64 and 1.0 keeps in float32, are compared to one float32
+  ulp (rtol 1.2e-7).
 - Global attrs: `source_commit`, library versions, `created_by`, `input`,
   `roms_dataset_call`, `mask_rho_land_cells`, and `failed_<key>` for any output that could
   not be computed (none at present).

@@ -4,96 +4,77 @@
 [![Code Coverage](https://img.shields.io/codecov/c/github/xoceanmodel/xroms.svg?style=for-the-badge)](https://codecov.io/gh/xoceanmodel/xroms)
 [![License:MIT](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Documentation Status](https://img.shields.io/readthedocs/xroms/latest.svg?style=for-the-badge)](https://xroms.readthedocs.io/en/latest/?badge=latest)
-[![Code Style Status](https://img.shields.io/github/actions/workflow/status/xoceanmodel/xroms/pre-commit.yml?branch-main&label=Code%20Style&style=for-the-badge)](https://github.com/xoceanmodel/xroms/actions)
+[![Code Style Status](https://img.shields.io/github/actions/workflow/status/xoceanmodel/xroms/pre-commit.yml?branch=main&label=Code%20Style&style=for-the-badge)](https://github.com/xoceanmodel/xroms/actions)
 [![Conda Version](https://img.shields.io/conda/vn/conda-forge/xroms.svg?style=for-the-badge)](https://anaconda.org/conda-forge/xroms)
 [![Python Package Index](https://img.shields.io/pypi/v/xroms.svg?style=for-the-badge)](https://pypi.org/project/xroms)
 
 [![DOI](https://zenodo.org/badge/265067025.svg?style=for-the-badge)](https://zenodo.org/badge/latestdoi/265067025)
 
-`xroms` contains functions for commonly used scripts for working with ROMS output in xarray.
+`xroms` analyses output of the ROMS family of ocean models (Rutgers ROMS, UCLA ROMS, CROCO and REMORA) with
+[xarray](https://docs.xarray.dev). It knows the staggered C-grid and the terrain-following vertical coordinate.
 
-There are functions to...
-* help read in model output with automatically-calculated z coordinates
-* calculate many derived variables with correct grid metrics in one line including:
-  * horizontal speed
-  * kinetic energy
-  * eddy kinetic energy
-  * vertical shear
-  * vertical vorticity
-  * horizontal divergence
-  * normalized surface divergence
-  * Ertel potential vorticity
-  * density as calculated in ROMS
-  * potential density
-  * buoyancy
-  * $N^2$ (buoyancy frequency/vertical buoyancy gradient)
-  * $M^2$ (horizontal buoyancy gradient)
-* useful functions including:
-  * derivatives in all dimensions, accounting for curvilinear grids and sigma layers
-  * grid metrics (i.e., grid lengths, areas, and volumes)
-  * subset horizontal grid such that the staggered grids are consistent
-  * easily change horizontal and vertical grids using `xgcm` grid objects
-  * easily reorder to dimensional convention
-  * slice along a fixed value
-  * wrapper for interpolation in longitude/latitude and for fixed depths
-  * mixed-layer depth
-* Demonstrations:
-  * selecting data in many different ways
-  * interpolation
-  * changing time sampling
-  * calculating climatologies
-  * various calculations
-* provide/track attributes and coordinates through functions
-  * wraps [`cf-xarray`](https://cf-xarray.readthedocs.io/en/latest/) to generalize coordinate and dimension calling.
-* ability to automatically choose colormaps for plotting with `xarray`
-  * wraps `xcmocean` for this
+There is no setup step and nothing is stored. Open the output with xarray and call xroms; each call computes what it
+needs from the data in hand, lazily under dask, so results always match the data you pass, however you subset, select
+or edit it.
 
+```python
+import xarray as xr
+import xroms
+
+ds = xr.open_dataset("ocean_his.nc", chunks={})
+ds.xroms.speed                                  # on rho points, in the Dataset's own naming
+ds.xroms.ddz("salt")                            # vertical derivative, on w levels
+xroms.zslice(ds.temp, [-10, -50], ds)           # temperature at 10 m and 50 m below mean sea level
+```
+
+xroms can:
+* compute depths at any grid position, relative to mean sea level, the moving free surface or the seabed, plus layer
+  thicknesses and grid lengths, areas and volumes;
+* take derivatives at constant depth along xi, eta and z, accounting for the curvilinear grid and the s coordinate;
+* calculate derived quantities:
+  * horizontal speed, kinetic energy and eddy kinetic energy;
+  * geostrophic velocities and vertical shear;
+  * vertical vorticity, horizontal convergence and Ertel potential vorticity;
+  * density (ROMS' equation of state or TEOS-10), potential density and buoyancy;
+  * $N^2$, $M^2$ and the mixed layer depth;
+* move variables between grid positions, and compute grid-weighted sums and means, depth averages, and surface and
+  bottom layers;
+* interpolate to fixed depths, onto any other field (density surfaces, latitudes), and to lon/lat points (with xESMF);
+* subset with the staggered grids kept consistent, select the nearest grid point, rotate velocities to east/north, and
+  convert longitude conventions;
+* decode UCLA ROMS time and merge output with a separate grid file.
+
+Everything stays lazy and keeps your dask chunks. Coming from xroms 0.6? The
+[migration guide](https://xroms.readthedocs.io/en/latest/migration.html) shows what changed.
 
 ## Installation
 
-You need to have `conda` installed for these installation instructions. You'll have best results if you use the channel `conda-forge`, which you can prioritize with `conda config --add channels conda-forge --force`.
+From PyPI:
 
-### Install, the easy way
+```
+pip install xroms
+```
 
-PyPI:
+From conda-forge:
 
-  ```
-  pip install xroms
-  ```
+```
+conda install -c conda-forge xroms
+```
 
-conda-forge:
+Optional features come with extras: `teos10` (gsw, for the TEOS-10 equation of state), `geodesic` (pyproj, for the
+ellipsoidal nearest-point search) and `examples` (pooch and netCDF4, for the example data), or `all` for these three,
+e.g. `pip install "xroms[all]"`. `xroms.interpll` needs xESMF, which is best installed from conda-forge
+(`conda install -c conda-forge xesmf`).
 
-  ```
-  mamba install -c conda-forge xroms
-  ```
+### Development
 
-### Create environment if needed
+```
+git clone https://github.com/xoceanmodel/xroms.git
+cd xroms
+mamba env create -f environment.yml
+mamba activate xroms
+pip install -e . --no-deps
+pytest
+```
 
-As a first step, you can create an environment for this package with conda if you want. If you do this, you'll need to git clone the package first as below. Note that `mamba` and `conda` can be used interchangeably, but `mamba` is faster for installation.
-
-    mamba env create -f environment.yml
-
-You can choose to install with conda the optional dependencies for full functionality:
-
-    conda install --file requirements-opt.txt
-
-and to install optional dependency `xcmocean`:
-
-
-    pip install git+https://github.com/pangeo-data/xcmocean
-
-Then choose one of the following to install `xroms` from GitHub:
-
-1. Clone `xroms` into a particular directory then install so that it is editable (`-e`)
-
-    ```
-    git clone https://github.com/xoceanmodel/xroms.git
-    cd xroms
-    pip install -e .
-    ```
-
-1. Directly install `xroms` from github
-
-    ```
-    pip install git+https://github.com/xoceanmodel/xroms
-    ```
+Without conda, `pip install -e ".[dev]"` installs xroms with the test and optional dependencies (except xESMF).
