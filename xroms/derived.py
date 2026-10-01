@@ -22,6 +22,7 @@ v on v points and raise a ValueError otherwise (see :func:`xroms.to_u` and
 import numpy as np
 import xarray as xr
 
+from ._align import with_grid_coords
 from .conventions import hposition, normalize_hcoord, normalize_scoord
 from .utilities import (
     _check_grid,
@@ -168,6 +169,7 @@ def KE(rho0, speed):
     return _label(order(var), "KE", "kinetic energy", "kg/(m*s^2)")
 
 
+@with_grid_coords
 def uv_geostrophic(
     zeta, f, grid, *, hboundary="extend", hfill_value=np.nan, which="both"
 ):
@@ -300,6 +302,7 @@ def EKE(ug, vg, *args, hboundary="extend", hfill_value=np.nan):
     return _label(var, "EKE", "eddy kinetic energy", "m^2/s^2")
 
 
+@with_grid_coords
 def dudz(u, grid=None, *, z=None, zeta=None, sboundary="extend", sfill_value=np.nan):
     """Calculate the xi component of vertical shear [1/s]
 
@@ -358,6 +361,7 @@ def dudz(u, grid=None, *, z=None, zeta=None, sboundary="extend", sfill_value=np.
     )
 
 
+@with_grid_coords
 def dvdz(v, grid=None, *, z=None, zeta=None, sboundary="extend", sfill_value=np.nan):
     """Calculate the eta component of vertical shear [1/s]
 
@@ -461,6 +465,7 @@ def vertical_shear(dudz, dvdz, *args, hboundary="extend", hfill_value=np.nan):
     return _label(var, "shear", "vertical shear", "1/s")
 
 
+@with_grid_coords
 def relative_vorticity(
     u,
     v,
@@ -551,6 +556,7 @@ def relative_vorticity(
     return _label(var, "vort", "vertical component of vorticity", "1/s")
 
 
+@with_grid_coords
 def convergence(
     u: xr.DataArray,
     v: xr.DataArray,
@@ -643,6 +649,7 @@ def convergence(
     return _label(var, "convergence", "horizontal convergence", "1/s")
 
 
+@with_grid_coords
 def ertel(
     phi,
     u,

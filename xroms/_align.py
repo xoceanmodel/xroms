@@ -19,10 +19,13 @@ pairing explicit:
   vertically on its own (:func:`level_positions`), by label or else by count.
 """
 
+import functools
+import inspect
+
 import numpy as np
 import xarray as xr
 
-from .conventions import TIME_NAMES, canonicalize, time_dim
+from .conventions import TIME_NAMES, canonicalize, horizontal_coords, hposition, time_dim
 
 
 HAXES = {"X": ("xi_rho", "xi_u"), "Y": ("eta_rho", "eta_v")}
@@ -243,6 +246,48 @@ def select_like(field, like, *, name=None):
                 "variable, or add index coords with xroms.add_cf_attrs(ds, index_coords=True)."
             )
     return field
+
+
+def attach_grid_coords(out, grid):
+    """``out`` with ``grid``'s horizontal coordinates at its position: lon/lat, else x/y.
+
+    A result that lands somewhere its inputs were not (a derivative on psi
+    points, z at u points) loses their coordinates; this puts the grid's own
+    back, matched to the result like any grid field. Coordinates the result
+    already has are kept, and ones that cannot be matched are left out. Tuples
+    of results are handled element by element.
+    """
+    if isinstance(out, tuple):
+        return tuple(attach_grid_coords(item, grid) for item in out)
+    if not isinstance(out, xr.DataArray) or not isinstance(grid, xr.Dataset):
+        return out
+    pos = hposition(out)
+    if pos is None:
+        return out
+    coords = {}
+    for name in horizontal_coords(grid, pos):
+        if name is None or name in out.coords:
+            continue
+        try:
+            field = select_like(grid[name], out, name=name)
+        except GridMismatchError:
+            continue
+        if set(field.dims) <= set(out.dims):
+            # the bare variable: no index coords are added to the result
+            coords[name] = field.variable
+    return out.assign_coords(coords) if coords else out
+
+
+def with_grid_coords(func):
+    """Give the result of ``func``, which reads a ``grid``, that grid's coordinates at its position."""
+    signature = inspect.signature(func)
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        out = func(*args, **kwargs)
+        return attach_grid_coords(out, signature.bind_partial(*args, **kwargs).arguments.get("grid"))
+
+    return wrapper
 
 
 def require(grid, *names, purpose=None):

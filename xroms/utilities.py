@@ -21,7 +21,7 @@ import numpy as np
 import xarray as xr
 
 from . import _xgcm
-from ._align import _check_grid, _reject_legacy, require, select_like
+from ._align import _check_grid, _reject_legacy, require, select_like, with_grid_coords
 from .conventions import CANONICAL, canonicalize, hposition, normalize_hcoord, normalize_scoord, time_dim, vposition
 from .vertical import dz as _dz
 from .vertical import z_like
@@ -203,6 +203,7 @@ def _ddz_same_levels(var, zz, sboundary, sfill_value):
     return out.assign_coords({**zz.coords, **var.coords})
 
 
+@with_grid_coords
 def ddz(
     var,
     grid=None,
@@ -331,6 +332,7 @@ def _hderivative(var, grid, axis, *, z, zeta, hcoord, scoord, hboundary, hfill_v
     return _finish(result, new_attrs, hcoord, scoord, hboundary, hfill_value, sboundary, sfill_value)
 
 
+@with_grid_coords
 def ddxi(
     var,
     grid=None,
@@ -365,6 +367,7 @@ def ddxi(
     )
 
 
+@with_grid_coords
 def ddeta(
     var,
     grid=None,
@@ -388,6 +391,7 @@ def ddeta(
     )
 
 
+@with_grid_coords
 def hgrad(var, grid=None, which="both", **kwargs):
     """Both horizontal derivatives (``which="both"``), or ``"xi"``/``"eta"`` only."""
     if which == "xi":
@@ -435,6 +439,7 @@ def _grid_weights(var, grid, dims, zeta):
     return var, weight, reduce
 
 
+@with_grid_coords
 def gridsum(var, grid, dims, *, zeta=None):
     """Grid-weighted sum over ``dims`` (axis letters ``X``/``Y``/``Z`` or dim names).
 
@@ -449,6 +454,7 @@ def gridsum(var, grid, dims, *, zeta=None):
     return order(out.rename(var.name))
 
 
+@with_grid_coords
 def gridmean(var, grid, dims, *, zeta=None):
     """Grid-weighted mean over ``dims``; NaN points (e.g. land) carry no weight."""
     grid = _check_grid(grid, "gridmean")

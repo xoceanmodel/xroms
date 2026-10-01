@@ -19,7 +19,7 @@ import numpy as np
 import xarray as xr
 
 from . import conventions
-from ._align import _reject_legacy, require, select_like
+from ._align import _reject_legacy, require, select_like, with_grid_coords
 from .conventions import canonicalize, vposition
 from .interp import isoslice
 from .utilities import _check_grid, ddeta, ddxi, ddz, order
@@ -54,6 +54,7 @@ def _with_cf_standard_names(var):
     return var
 
 
+@with_grid_coords
 def density(temp, salt, z=None, *, grid=None, zeta=None, eos="roms", lon=None, lat=None):
     """Calculate the in-situ density [kg/m^3], with ROMS' equation of state or TEOS-10.
 
@@ -290,6 +291,7 @@ def _check_eos(eos):
         raise ValueError(f"eos must be 'roms' (ROMS' own equation of state) or 'teos10' (TEOS-10, with gsw), not {eos!r}")
 
 
+@with_grid_coords
 def potential_density(temp, salt, z=0, *, eos="roms", grid=None, zeta=None, z_points=None, lon=None, lat=None):
     """Calculate potential density [kg/m^3] with constant depth reference.
 
@@ -392,6 +394,7 @@ def buoyancy(sig0, rho0=1025.0):
     return var
 
 
+@with_grid_coords
 def N2(rho, grid, rho0=None, *, z=None, zeta=None, sboundary="fill", sfill_value=np.nan):
     """Calculate buoyancy frequency squared (vertical buoyancy gradient).
 
@@ -447,6 +450,7 @@ def N2(rho, grid, rho0=None, *, z=None, zeta=None, sboundary="fill", sfill_value
     return _label(order(var), "N2", "buoyancy frequency squared, or vertical buoyancy gradient", "1/s^2")
 
 
+@with_grid_coords
 def M2(
     rho,
     grid,
@@ -556,6 +560,7 @@ def _threshold_alias(threshold, thresh, stacklevel=3):
     return thresh
 
 
+@with_grid_coords
 def mld(
     var, grid=None, *args, z=None, zeta=None, threshold=None, reference_depth=0.0,
     variable="density", fill="bottom", method="interp", dim=None, thresh=None,

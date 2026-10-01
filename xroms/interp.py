@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 
 from . import _xgcm
-from ._align import _check_grid
+from ._align import _check_grid, with_grid_coords
 from .conventions import canonicalize, hposition, horizontal_coords, vposition
 from .utilities import order
 from .vertical import _check_reference, infer_reference, label, z_like
@@ -232,6 +232,7 @@ def _in_requested_labels(z, reference, positive):
     return z
 
 
+@with_grid_coords
 def zslice(
     var,
     depths,

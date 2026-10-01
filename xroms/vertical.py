@@ -24,7 +24,7 @@ import numpy as np
 import xarray as xr
 
 from . import _xgcm
-from ._align import GridMismatchError, _check_grid, is_time_varying, level_positions, require, select_like
+from ._align import _check_grid, GridMismatchError, is_time_varying, level_positions, require, select_like, with_grid_coords
 from .conventions import (
     canonicalize,
     hposition,
@@ -208,6 +208,7 @@ def _to_hcoord(field, hcoord):
     return field
 
 
+@with_grid_coords
 def z(
     grid,
     *,
@@ -345,6 +346,7 @@ def z_like(var, grid, *, zeta=None, z=None, reference="mean_sea_level", positive
     )
 
 
+@with_grid_coords
 def dz(grid, *, hcoord="rho", scoord="s_rho", zeta=None, method="average", like=None):
     """Layer thicknesses (positive, metres).
 
@@ -446,6 +448,7 @@ def depth_band_weights(z_w, shallow, deep, *, dim_w="s_w", dim_rho="s_rho"):
     return overlap.rename("dz_band")
 
 
+@with_grid_coords
 def depth_average(var, grid, *, shallow=None, deep=None, zeta=None, reference="mean_sea_level"):
     """Thickness-weighted vertical mean of a rho-level ``var``.
 

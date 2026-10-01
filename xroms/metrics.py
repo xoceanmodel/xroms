@@ -4,7 +4,7 @@ import numpy as np
 import xarray as xr
 
 from . import _xgcm
-from ._align import _check_grid, require, select_like
+from ._align import _check_grid, require, select_like, with_grid_coords
 from .conventions import canonicalize, normalize_hcoord
 
 
@@ -27,6 +27,7 @@ def _metric(grid, name, hcoord, like):
     return _at(field, normalize_hcoord(hcoord) or "rho")
 
 
+@with_grid_coords
 def dx(grid, hcoord="rho", *, like=None):
     """Grid spacing along xi (metres), ``1 / pm`` averaged onto ``hcoord``."""
     grid = _check_grid(grid, "dx")
@@ -35,6 +36,7 @@ def dx(grid, hcoord="rho", *, like=None):
     return out.rename(f"dx_{hcoord or 'rho'}")
 
 
+@with_grid_coords
 def dy(grid, hcoord="rho", *, like=None):
     """Grid spacing along eta (metres), ``1 / pn`` averaged onto ``hcoord``."""
     grid = _check_grid(grid, "dy")
@@ -43,6 +45,7 @@ def dy(grid, hcoord="rho", *, like=None):
     return out.rename(f"dy_{hcoord or 'rho'}")
 
 
+@with_grid_coords
 def dA(grid, hcoord="rho", *, like=None):
     """Cell area (m²) at ``hcoord``: ``dx * dy``."""
     grid = _check_grid(grid, "dA")
@@ -51,6 +54,7 @@ def dA(grid, hcoord="rho", *, like=None):
     return out.rename(f"dA_{hcoord or 'rho'}")
 
 
+@with_grid_coords
 def dV(grid, hcoord="rho", scoord="s_rho", *, zeta=None, like=None):
     """Cell volume (m³) at (``hcoord``, ``scoord``): ``dz * dA``."""
     from .vertical import dz

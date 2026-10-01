@@ -93,3 +93,45 @@ def test_single_time_variable_with_full_grid(label, op, same_pos):
         out = func(t0, ds)
         assert "ocean_time" not in out.dims
         np.testing.assert_allclose(out.values, func(canonicalize(ds).temp, ds).isel(ocean_time=0).values)
+
+
+# --- coordinates of results that land on another position ---------------------------
+
+
+class TestGridCoordsAtTheResultsPosition:
+    """Pure functions that read a grid give their result the grid's lon/lat (or x/y) where it lands."""
+
+    @pytest.mark.parametrize(
+        "compute, names",
+        [
+            (lambda ds: xroms.relative_vorticity(ds.u, ds.v, ds), ("lon_psi", "lat_psi")),
+            (lambda ds: xroms.ddxi(ds.salt, ds), ("lon_u", "lat_u")),
+            (lambda ds: xroms.ddeta(ds.salt, ds), ("lon_v", "lat_v")),
+            (lambda ds: xroms.z(ds, hcoord="u"), ("lon_u", "lat_u")),
+            (lambda ds: xroms.dx(ds, "v"), ("lon_v", "lat_v")),
+            (lambda ds: xroms.convergence(ds.u, ds.v, ds), ("lon_rho", "lat_rho")),
+        ],
+    )
+    def test_moved_results_carry_the_grids_coords(self, rutgers, compute, names):
+        out = compute(rutgers)
+        for name in names:
+            expected = canonicalize(rutgers[name].reset_coords(drop=True))
+            np.testing.assert_array_equal(out[name].transpose(*expected.dims).values, expected.values)
+        # bare variables: no index coordinates are added
+        assert set(out.indexes) <= set(rutgers.indexes)
+
+    def test_subsets_and_lazy_results(self, rutgers):
+        sub = xroms.subset(rutgers, X=slice(2, 8), Y=slice(1, 6))
+        vort = xroms.relative_vorticity(sub.u, sub.v, sub)
+        np.testing.assert_array_equal(vort.lon_psi.values, sub.lon_psi.values)
+        lazy = xroms.relative_vorticity(chunked(rutgers).u, chunked(rutgers).v, chunked(rutgers))
+        assert lazy.chunks is not None and "lon_psi" in lazy.coords
+
+    def test_cartesian_grids_get_x_and_y(self, remora):
+        out = xroms.ddxi(remora.temp, remora)
+        assert {"x_u", "y_u"} <= set(out.coords)
+
+    def test_positions_the_grid_has_no_coords_for_get_none(self):
+        ds = merged("ucla")
+        out = xroms.ddxi(ds.temp, ds)
+        assert not {"lon_u", "lat_u"} & set(out.coords)
