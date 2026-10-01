@@ -16,6 +16,7 @@ from .conventions import (
     add_cf_attrs,
     canonicalize,
     decode_time,
+    merge_grid,
     rename_like,
     rho0,
     sigma_levels,

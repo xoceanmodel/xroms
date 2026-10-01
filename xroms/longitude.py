@@ -338,7 +338,7 @@ def lonlat_at(grid, hcoord="u"):
         raise GridMismatchError(
             f"the grid has neither lon_rho/lat_rho nor x_rho/y_rho, so the {hcoord} points cannot be placed. For UCLA "
             "ROMS or CROCO output the grid is often a separate file: pass it, or merge it with "
-            "xr.merge([ds, grid], compat='override')."
+            "xroms.merge_grid(ds, grid)."
         )
     x, y = grid[xname].reset_coords(drop=True), grid[yname].reset_coords(drop=True)
     if xname.startswith("lon_"):

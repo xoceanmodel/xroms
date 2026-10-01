@@ -98,7 +98,7 @@ def _check_footprint(obj, grid, what):
             raise GridMismatchError(
                 f"{what} and grid= cover different {dim} points ({obj.sizes[dim]} vs {grid.sizes[dim]}), so "
                 "they cannot be used together. Subset the Dataset and the grid the same way "
-                "(e.g. xroms.subset on both), or merge them: xr.merge([ds, grid], compat='override')."
+                "(e.g. xroms.subset on both), or merge them: xroms.merge_grid(ds, grid)."
             )
 
 

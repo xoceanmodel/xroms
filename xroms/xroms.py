@@ -8,7 +8,7 @@ _MIGRATION = (
     "xroms 1.0 has no setup step and no stored xgcm grid. Open output with xarray "
     "(xr.open_dataset / xr.open_mfdataset / xr.open_zarr) and call xroms directly, "
     "e.g. ds.xroms.ddxi('temp') or xroms.ddxi(ds.temp, ds). If the grid is in a separate "
-    "file, merge it (xr.merge([ds, grid], compat='override')) or pass grid=. Depths and "
+    "file, merge it (xroms.merge_grid(ds, grid)) or pass grid=. Depths and "
     "metrics that roms_dataset used to attach are now computed on demand: ds.xroms.z(), "
     "ds.xroms.dz(), ds.xroms.dA(), or ds.xroms.assign_z() to attach depth coordinates. "
     "See the migration guide in the documentation."

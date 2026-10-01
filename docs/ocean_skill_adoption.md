@@ -22,8 +22,8 @@ own env, except for one new failure: a test that calls the removed `xroms.roms_d
 
 ## How xroms 1.0 is called
 
-- **No setup step and no state.** Open with xarray, then either merge the grid
-  (`xr.merge([out, grid], compat="override")`) or pass `grid=`. Nothing is cached.
+- **No setup step and no state.** Open with xarray, then either merge the grid with `xroms.merge_grid(out, grid)` or
+  pass `grid=`. Nothing is cached.
 - **Canonical dims.** Pure functions take DataArrays plus the Dataset as `grid`, and return canonical dims:
   - rho `(eta_rho, xi_rho)`
   - u `(eta_rho, xi_u)`
@@ -43,8 +43,9 @@ own env, except for one new failure: a test that calls the removed `xroms.roms_d
   `Vtransform`/`hc` on the Dataset, or pass `Vtransform=` to `z`/`vertical_params`.
 - **Lazy.** Everything stays lazy. Only the dim being operated on is rechunked, and its chunks are restored afterwards.
 - **Coordinates.** Results carry the Dataset's coordinates (lon/lat at the result's position), never its data
-  variables. A UCLA output merged with its grid holds lon/lat as data variables. `ds = xroms.add_cf_attrs(ds)` makes
-  them coordinates, and from then on every result carries them.
+  variables. `xroms.merge_grid` makes the grid's lon/lat coordinates. A plain `xr.merge` with a grid file that stores
+  them as data variables leaves them that way, and results then don't carry them. `xroms.add_cf_attrs(ds)` does the
+  same for a Dataset that is already merged.
 
 ## Wave 1: the proof of concept
 

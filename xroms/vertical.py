@@ -186,7 +186,7 @@ def _resolve_zeta(grid, zeta, like=None):
                     "depths would silently assume a flat free surface. Choose the free surface "
                     "explicitly: zeta=0 (static, resting depths), zeta=<DataArray> (e.g. the output's "
                     "zeta), or merge the output and grid Datasets so the grid has a zeta, e.g. "
-                    "xr.merge([out, grid], compat='override')."
+                    "xroms.merge_grid(out, grid)."
                 )
             return 0.0
         field = grid[name]

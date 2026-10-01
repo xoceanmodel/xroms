@@ -660,6 +660,81 @@ def decode_time(ds, reference_date=None, time_var=None):
 # --- CF / SGRID decoration ------------------------------------------------------
 
 
+def _position_coords(ds):
+    """``ds`` with the lon/lat and x/y at every horizontal position as coordinates.
+
+    Each variable then carries those at its own position, and writing ``ds`` lists
+    them in its CF ``coordinates`` attribute.
+    """
+    names = [f"{prefix}_{pos}" for pos in HCOORDS for prefix in ("lon", "lat", "x", "y")]
+    promoted = [name for name in names if name in ds.data_vars]
+    ds = ds.set_coords(promoted)
+    for var in ds.data_vars.values():
+        listed = var.encoding.get("coordinates")
+        if listed is not None and any(name in var.coords and name not in listed.split() for name in promoted):
+            # the file's own list leaves them out: on writing, xarray lists every coordinate the variable has
+            del var.encoding["coordinates"]
+    return ds
+
+
+def merge_grid(ds, grid):
+    """Model output and its separate grid as one Dataset, with lon/lat as coordinates.
+
+    UCLA ROMS, roms-tools and often CROCO keep the grid (``h``, ``pm``/``pn``,
+    masks, ``angle``, ``f``, longitudes and latitudes) in a file of its own. This
+    merges it into the output like ``xr.merge([ds, grid], compat="override")``:
+    where both have a variable or an attribute, ``ds``'s is kept. It also:
+
+    * puts the grid in ``ds``'s dim naming, if ``ds`` is canonical and the grid
+      uses Rutgers aliases;
+    * checks that both cover the same points: same sizes and, where both have
+      them, the same labels, so nothing is padded with NaN;
+    * makes the lon/lat (or x/y) at every position coordinates (see
+      :func:`add_cf_attrs`), so that every variable and every xroms result carries
+      them and results can be stored back.
+
+    Only metadata changes: data stays lazy, and neither input is modified.
+
+    Parameters
+    ----------
+    ds : Dataset
+        Model output.
+    grid : Dataset
+        Its grid.
+
+    Returns
+    -------
+    Dataset
+
+    Raises
+    ------
+    ValueError
+        If the two cover different points (a subdomain, a tile), or ``ds`` uses
+        Rutgers aliases while the grid uses canonical names.
+    """
+    if not isinstance(ds, xr.Dataset) or not isinstance(grid, xr.Dataset):
+        raise TypeError("merge_grid takes the output and the grid as Datasets")
+    if convention(grid) == "rutgers" and convention(ds) != "rutgers":
+        grid = canonicalize(grid)
+    elif convention(ds) == "rutgers" and convention(grid) != "rutgers" and {"xi_u", "eta_v"} & set(grid.dims):
+        # canonical u/v/psi fields (eta_rho, xi_u) next to Rutgers ones (eta_u, xi_u) would mix two namings
+        raise ValueError(
+            "the output uses Rutgers dim names (eta_u, xi_v, ...) and the grid canonical ones: "
+            "merge_grid(xroms.canonicalize(ds), grid) merges them in canonical naming."
+        )
+    for dim in sorted(set(ds.dims) & set(grid.dims)):
+        labels_differ = dim in ds.indexes and dim in grid.indexes and not ds.indexes[dim].equals(grid.indexes[dim])
+        if ds.sizes[dim] != grid.sizes[dim] or labels_differ:
+            raise ValueError(
+                f"the output and the grid cover different {dim} points ({ds.sizes[dim]} vs {grid.sizes[dim]}"
+                f"{', other labels' if labels_differ else ''}): subset the grid the same way as the output first, "
+                "e.g. with xroms.subset or isel on both."
+            )
+    merged = xr.merge([ds, grid], compat="override", join="exact", combine_attrs="override")
+    merged.attrs = {**grid.attrs, **ds.attrs}
+    return _position_coords(merged)
+
+
 def add_cf_attrs(ds, *, index_coords=False, sgrid=True):
     """Return a copy of ``ds`` decorated for cf-xarray (metadata only).
 
@@ -680,26 +755,17 @@ def add_cf_attrs(ds, *, index_coords=False, sgrid=True):
     use ``ds.xroms.xgcm_grid()``.
     """
     ds = ds.copy()
-    position_coords = []
     for pos in HCOORDS:
         for suffix, (std, units) in {"lon": ("longitude", "degrees_east"), "lat": ("latitude", "degrees_north")}.items():
             name = f"{suffix}_{pos}"
             if name in ds.variables:
                 ds[name].attrs.setdefault("standard_name", std)
                 ds[name].attrs.setdefault("units", units)
-                position_coords.append(name)
         for suffix, std in {"x": "projection_x_coordinate", "y": "projection_y_coordinate"}.items():
             name = f"{suffix}_{pos}"
             if name in ds.variables:
                 ds[name].attrs.setdefault("standard_name", std)
-                position_coords.append(name)
-    promoted = [name for name in position_coords if name in ds.data_vars]
-    ds = ds.set_coords(promoted)
-    for var in ds.data_vars.values():
-        listed = var.encoding.get("coordinates")
-        if listed is not None and any(name in var.coords and name not in listed.split() for name in promoted):
-            # the file's own list leaves them out: on writing, xarray lists every coordinate the variable has
-            del var.encoding["coordinates"]
+    ds = _position_coords(ds)
     for dim in ("s_rho", "s_w"):
         if dim in ds.coords:
             ds[dim].attrs.setdefault("axis", "Z")

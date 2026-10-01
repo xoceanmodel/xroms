@@ -1,7 +1,9 @@
 """Shared fixtures: synthetic ROMS-family datasets with analytic fields."""
 
+import contextlib
 from pathlib import Path
 
+import dask
 import pytest
 
 from xroms.tests import _synthetic as syn
@@ -32,6 +34,25 @@ CHUNKS = {
 def chunked(ds):
     """Chunk ``ds`` along every dim it has, splitting horizontal dims too."""
     return ds.chunk({d: c for d, c in CHUNKS.items() if d in ds.dims})
+
+
+class Computes:
+    """A dask scheduler that refuses to compute, and counts the attempts."""
+
+    def __init__(self):
+        self.count = 0
+
+    def __call__(self, dsk, keys, **kwargs):
+        self.count += 1
+        raise RuntimeError("dask data was computed while the result was being built")
+
+
+@contextlib.contextmanager
+def no_computes():
+    counter = Computes()
+    with dask.config.set(scheduler=counter):
+        yield counter
+    assert counter.count == 0, f"{counter.count} dask computes"
 
 
 def merged(layout, **kwargs):

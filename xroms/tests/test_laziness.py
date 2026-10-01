@@ -23,7 +23,6 @@ reads it. ``test_dask_parameters_are_read_and_nothing_else_is`` pins that every 
 a single number.
 """
 
-import contextlib
 
 import dask
 import numpy as np
@@ -33,26 +32,7 @@ import xarray as xr
 import xroms
 from xroms.conventions import canonicalize
 from xroms.tests import _sweep as S
-from xroms.tests.conftest import INPUT, chunked
-
-
-class Computes:
-    """A dask scheduler that refuses to compute, and counts the attempts."""
-
-    def __init__(self):
-        self.count = 0
-
-    def __call__(self, dsk, keys, **kwargs):
-        self.count += 1
-        raise RuntimeError("dask data was computed while the result was being built")
-
-
-@contextlib.contextmanager
-def no_computes():
-    counter = Computes()
-    with dask.config.set(scheduler=counter):
-        yield counter
-    assert counter.count == 0, f"{counter.count} dask computes"
+from xroms.tests.conftest import INPUT, chunked, no_computes
 
 
 def test_the_scheduler_notices_a_compute(rutgers):

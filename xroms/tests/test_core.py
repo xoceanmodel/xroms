@@ -12,7 +12,7 @@ import xroms
 from xroms import _xgcm, conventions as C, metrics as M, vertical as V
 from xroms._align import GridMismatchError, select_like
 from xroms.tests import _synthetic as syn
-from xroms.tests.conftest import INPUT, chunked, merged
+from xroms.tests.conftest import INPUT, chunked, merged, no_computes
 
 
 @pytest.fixture
@@ -701,3 +701,52 @@ class TestAlign:
         can = C.canonicalize(rutgers)
         with pytest.raises(GridMismatchError, match="xi_rho"):
             select_like(can.h, can.temp.isel(xi_rho=3))
+
+
+class TestMergeGrid:
+    """merge_grid: output and a separate grid as one Dataset, lon/lat as coordinates."""
+
+    def test_is_xr_merge_with_lonlat_as_coordinates(self, ucla):
+        out, grid = ucla
+        ds = xroms.merge_grid(out, grid)
+        xr.testing.assert_equal(ds.reset_coords(), xr.merge([out, grid], compat="override").reset_coords())
+        assert {"lon_rho", "lat_rho"} <= set(ds.coords) and {"lon_rho", "lat_rho"} <= set(ds.temp.coords)
+        assert {"lon_rho", "lat_rho"} <= set(ds.xroms.speed.coords)
+        ds["speed"] = ds.xroms.speed  # results store back
+        # the output's attributes are kept, the grid's fill in what it lacks; the inputs are untouched
+        assert ds.attrs == {**grid.attrs, **out.attrs}
+        assert "lon_rho" in grid.data_vars and "lon_rho" not in out.variables
+
+    def test_real_ucla_files(self):
+        out, grid = xr.open_dataset(INPUT / "ucla_rst.nc"), xr.open_dataset(INPUT / "ucla_grd.nc")
+        ds = xroms.merge_grid(out, grid)
+        np.testing.assert_array_equal(ds.xroms.z_w.values, xroms.z(xr.merge([out, grid]), scoord="s_w").values)
+        assert {"lon_rho", "lat_rho"} <= set(ds.xroms.z_rho.coords)
+
+    def test_lazy(self, ucla):
+        out, grid = ucla
+        with no_computes():
+            ds = xroms.merge_grid(chunked(out), chunked(grid))
+        assert isinstance(ds.temp.data, dask.array.Array) and isinstance(ds.lon_rho.data, dask.array.Array)
+
+    def test_a_rutgers_grid_takes_canonical_output_naming(self, rutgers):
+        grid_names = ["h", "pm", "pn", "angle", "mask_rho", "mask_u", "lon_rho", "lat_rho", "lon_u", "lat_u"]
+        out = C.canonicalize(rutgers.drop_vars(grid_names))
+        ds = xroms.merge_grid(out, rutgers[grid_names])
+        assert C.convention(ds) == "canonical" and ds.mask_u.dims == ("eta_rho", "xi_u")
+        assert {"lon_u", "lat_u"} <= set(ds.coords) and {"lon_u", "lat_u"} <= set(ds.u.coords)
+        # the other way round would mix two namings
+        with pytest.raises(ValueError, match="canonicalize"):
+            xroms.merge_grid(rutgers.drop_vars(grid_names), C.canonicalize(rutgers[grid_names]))
+        # a grid with rho points only fits either
+        assert "h" in xroms.merge_grid(rutgers.drop_vars(grid_names), C.canonicalize(rutgers[["h", "pm", "pn"]]))
+
+    def test_different_points_are_refused(self, ucla):
+        out, grid = ucla
+        with pytest.raises(ValueError, match=r"different xi_rho points \(8 vs 12\)"):
+            xroms.merge_grid(out.isel(xi_rho=slice(0, 8)), grid)
+        labelled = out.assign_coords(eta_rho=np.arange(out.sizes["eta_rho"]))
+        with pytest.raises(ValueError, match="different eta_rho points.*other labels"):
+            xroms.merge_grid(labelled, grid.assign_coords(eta_rho=np.arange(grid.sizes["eta_rho"]) + 1))
+        with pytest.raises(TypeError, match="Datasets"):
+            xroms.merge_grid(out, grid.h)

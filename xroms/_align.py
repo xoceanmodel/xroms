@@ -301,5 +301,5 @@ def require(grid, *names, purpose=None):
         raise GridMismatchError(
             f"grid variables {missing} are needed{why} but not found. For UCLA ROMS or CROCO "
             "output the grid is often a separate file: merge it with "
-            "xr.merge([ds, grid], compat='override') or pass grid=<grid Dataset>."
+            "xroms.merge_grid(ds, grid) or pass grid=<grid Dataset>."
         )
