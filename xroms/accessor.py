@@ -561,9 +561,11 @@ class xromsDatasetAccessor:
         u, v = self._uv()
         return self._out(derived.ertel(self.buoyancy, u, v, self._obj["f"], self._obj))
 
-    def mld(self, thresh=0.03, **kwargs):
-        """Mixed layer depth (m, positive) on rho points; see :func:`xroms.mld`."""
-        return self._out(roms_seawater.mld(self.sig0, self._obj, thresh=thresh, **kwargs))
+    def mld(self, threshold=None, *, thresh=None, **kwargs):
+        """Mixed layer depth (m, positive) on rho points, from ``sig0`` (or ``temp`` with ``variable="temperature"``); see :func:`xroms.mld`."""
+        threshold = roms_seawater._threshold_alias(threshold, thresh)
+        var = self._obj["temp"] if kwargs.get("variable") == "temperature" else self.sig0
+        return self._out(roms_seawater.mld(var, self._obj, threshold=threshold, **kwargs))
 
 
 @xr.register_dataarray_accessor("xroms")

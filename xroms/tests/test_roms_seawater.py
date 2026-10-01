@@ -272,6 +272,76 @@ class TestPotentialDensityAndBuoyancy:
         assert xroms.buoyancy(_with_member(expected)).dims == ORDERED + ("member",)
 
 
+class TestTEOS10:
+    """``eos="teos10"``: SP -> SA at each point's pressure and location -> CT -> density (gsw)."""
+
+    @staticmethod
+    def _by_hand(ds, z_ref=None):
+        gsw = pytest.importorskip("gsw")
+        z = xroms.z(ds).transpose(*ds.temp.dims).values
+        lon, lat = ds.lon_rho.values, ds.lat_rho.values
+        p = gsw.p_from_z(z, lat)
+        sa = gsw.SA_from_SP(ds.salt.values, p, lon, lat)
+        ct = gsw.CT_from_pt(sa, ds.temp.values)
+        return gsw.rho(sa, ct, p if z_ref is None else gsw.p_from_z(z_ref, lat))
+
+    def test_density_is_the_gsw_chain(self, rutgers):
+        rho = xroms.density(rutgers.temp, rutgers.salt, grid=rutgers, eos="teos10")
+        np.testing.assert_allclose(rho.transpose(*rutgers.temp.dims).values, self._by_hand(rutgers), rtol=1e-14)
+        assert rho.dims == ("ocean_time", "s_rho", "eta_rho", "xi_rho")
+        assert rho.attrs == {"name": "rho", "long_name": "density (TEOS-10)", "units": "kg/m^3"}
+        # close to ROMS' own equation of state, but not the same
+        roms = xroms.density(rutgers.temp, rutgers.salt, grid=rutgers)
+        assert 0 < float(abs(rho - roms).max()) < 0.05
+
+    def test_potential_density_at_the_surface_is_sigma0(self, rutgers):
+        gsw = pytest.importorskip("gsw")
+        sig0 = xroms.potential_density(rutgers.temp, rutgers.salt, eos="teos10", grid=rutgers)
+        np.testing.assert_allclose(sig0.transpose(*rutgers.temp.dims).values, self._by_hand(rutgers, z_ref=0.0), rtol=1e-14)
+        z = xroms.z(rutgers).transpose(*rutgers.temp.dims).values
+        p = gsw.p_from_z(z, rutgers.lat_rho.values)
+        sa = gsw.SA_from_SP(rutgers.salt.values, p, rutgers.lon_rho.values, rutgers.lat_rho.values)
+        sigma0 = gsw.sigma0(sa, gsw.CT_from_pt(sa, rutgers.temp.values))
+        np.testing.assert_allclose(sig0.transpose(*rutgers.temp.dims).values - 1000, sigma0, rtol=0, atol=1e-9)
+        deep = xroms.potential_density(rutgers.temp, rutgers.salt, z=-1000.0, eos="teos10", grid=rutgers)
+        np.testing.assert_allclose(deep.transpose(*rutgers.temp.dims).values, self._by_hand(rutgers, z_ref=-1000.0), rtol=1e-14)
+        assert sig0.attrs["long_name"] == "potential density (TEOS-10)"
+
+    def test_explicit_heights_and_location(self, rutgers):
+        pytest.importorskip("gsw")
+        z = xroms.z(rutgers)
+        bare = rutgers.temp.reset_coords(drop=True), rutgers.salt.reset_coords(drop=True)
+        expected = xroms.potential_density(rutgers.temp, rutgers.salt, eos="teos10", grid=rutgers)
+        given = xroms.potential_density(*bare, eos="teos10", z_points=z, lon=rutgers.lon_rho, lat=rutgers.lat_rho)
+        np.testing.assert_allclose(given.values, expected.values, rtol=1e-14)
+        # without coords of its own, the location comes from the grid
+        from_grid = xroms.density(*bare, grid=rutgers, eos="teos10")
+        xr.testing.assert_allclose(from_grid.reset_coords(drop=True), xroms.density(rutgers.temp, rutgers.salt, grid=rutgers, eos="teos10").reset_coords(drop=True))
+
+    def test_cartesian_grids_need_a_location(self, remora):
+        pytest.importorskip("gsw")
+        with pytest.raises(ValueError, match="lon= and lat="):
+            xroms.density(remora.temp, remora.salt, grid=remora, eos="teos10")
+        rho = xroms.density(remora.temp, remora.salt, grid=remora, eos="teos10", lon=-150.0, lat=30.0)
+        assert np.isfinite(rho.values).all()
+
+    def test_lazy_stays_lazy(self, rutgers):
+        pytest.importorskip("gsw")
+        c = chunked(rutgers)
+        lazy = xroms.potential_density(c.temp, c.salt, eos="teos10", grid=c)
+        assert lazy.chunks is not None
+        eager = xroms.potential_density(rutgers.temp, rutgers.salt, eos="teos10", grid=rutgers)
+        np.testing.assert_allclose(lazy.values, eager.values, rtol=1e-14)
+
+    def test_argument_errors(self, rutgers):
+        with pytest.raises(ValueError, match="eos must be"):
+            xroms.density(rutgers.temp, rutgers.salt, grid=rutgers, eos="eos80")
+        with pytest.raises(ValueError, match="z_points="):
+            xroms.potential_density(rutgers.temp, rutgers.salt, eos="teos10")
+        with pytest.raises(ValueError, match="both lon= and lat="):
+            xroms.density(rutgers.temp, rutgers.salt, grid=rutgers, eos="teos10", lon=0.0)
+
+
 # --- N2 -----------------------------------------------------------------------------
 
 
@@ -548,12 +618,16 @@ class TestMLD:
         # sig0 = 1025 - s z: exceeds its top value by thresh a distance thresh/s below the top level
         ds = merged(layout)
         s, thresh = 0.01, 0.03
-        md = xroms.mld(_linear_sig0(ds, s), ds, thresh=thresh)
+        md = xroms.mld(_linear_sig0(ds, s), ds, threshold=thresh)
         z_top = xroms.z(ds).isel(s_rho=-1)
         np.testing.assert_allclose(md.values, (-z_top + thresh / s).values, rtol=1e-9)
         assert md.dims == z_top.dims
         assert md.name == "mld"
-        assert md.attrs == {"name": "mld", "long_name": "mixed layer depth", "units": "m"}
+        assert md.attrs == {
+            "name": "mld", "long_name": "mixed layer depth", "units": "m",
+            "standard_name": "ocean_mixed_layer_thickness_defined_by_sigma_theta",
+            "mld_variable": "density", "mld_threshold": thresh, "mld_reference_depth": 0.0,
+        }
 
     def test_positive_and_not_deeper_than_the_water(self, layout):
         ds = merged(layout)
@@ -567,7 +641,7 @@ class TestMLD:
         # only the deeper columns are stratified enough to reach the threshold
         s, thresh = 0.01, 0.5
         z = xroms.z(rutgers)
-        md = xroms.mld(_linear_sig0(rutgers, s), rutgers, thresh=thresh)
+        md = xroms.mld(_linear_sig0(rutgers, s), rutgers, threshold=thresh)
         column_range = s * (z.isel(s_rho=-1) - z.isel(s_rho=0))
         crossing = column_range > thresh
         assert crossing.any() and (~crossing).any()
@@ -579,14 +653,14 @@ class TestMLD:
 
     def test_unstratified_water_is_the_full_depth_in_every_layout(self, layout):
         ds = merged(layout)
-        md = xroms.mld(_linear_sig0(ds), ds, thresh=1e6)
+        md = xroms.mld(_linear_sig0(ds), ds, threshold=1e6)
         np.testing.assert_allclose(md.values, np.broadcast_to(ds.h.values, md.shape))
 
     def test_land_stays_nan_and_water_is_filled(self, with_land):
         mask = with_land.mask_rho.values == 1
         sig0 = xroms.potential_density(with_land.temp, with_land.salt)
         for thresh in (0.03, 1e6):
-            md = xroms.mld(sig0, with_land, thresh=thresh)
+            md = xroms.mld(sig0, with_land, threshold=thresh)
             assert np.isnan(md.values[:, ~mask]).all()
             assert np.isfinite(md.values[:, mask]).all()
         np.testing.assert_allclose(md.values[:, mask], np.broadcast_to(with_land.h.values[mask], (2, mask.sum())))
@@ -594,8 +668,8 @@ class TestMLD:
     def test_without_mask_rho_the_surface_values_decide_what_is_water(self, with_land):
         sig0 = xroms.potential_density(with_land.temp, with_land.salt)
         for thresh in (0.03, 1e6):
-            with_mask = xroms.mld(sig0, with_land, thresh=thresh)
-            no_mask = xroms.mld(sig0, with_land.drop_vars("mask_rho"), thresh=thresh)
+            with_mask = xroms.mld(sig0, with_land, threshold=thresh)
+            no_mask = xroms.mld(sig0, with_land.drop_vars("mask_rho"), threshold=thresh)
             xr.testing.assert_identical(no_mask, with_mask)
 
     def test_only_the_new_dimension_is_squeezed(self, rutgers):
@@ -624,7 +698,7 @@ class TestMLD:
         # puts the base of the mixed layer exactly on the second level from the top
         sig0 = xroms.density(real.temp, real.salt, 0)
         thresh = float(sig0[0, -2, 0, 0] - sig0[0, -1, 0, 0])
-        md = xroms.mld(sig0, real, thresh=thresh)
+        md = xroms.mld(sig0, real, threshold=thresh)
         np.testing.assert_allclose(md[0, 0, 0], abs(Z_COL[-2]))
         np.testing.assert_allclose(md.values, np.abs(xroms.z(real).isel(s_rho=-2).values))
 
@@ -672,5 +746,116 @@ class TestMLD:
             assert "h and mask now come from grid (the Dataset that holds them)" in msg
             assert "xroms.mld(sig0, ds)" in msg
         # the keywords are not affected
-        keywords = xroms.mld(sig0, rutgers, thresh=0.03, z=None, zeta=None)
+        keywords = xroms.mld(sig0, rutgers, threshold=0.03, z=None, zeta=None)
         xr.testing.assert_identical(keywords, xroms.mld(sig0, rutgers))
+
+    def test_thresh_is_the_old_name_of_threshold(self, rutgers):
+        sig0 = _linear_sig0(rutgers)
+        with pytest.warns(FutureWarning, match="threshold"):
+            old = xroms.mld(sig0, rutgers, thresh=0.05)
+        xr.testing.assert_identical(old, xroms.mld(sig0, rutgers, threshold=0.05))
+        with pytest.warns(FutureWarning, match="threshold"):
+            via_accessor = rutgers.xroms.mld(thresh=0.05)
+        xr.testing.assert_identical(via_accessor, rutgers.xroms.mld(threshold=0.05))
+        with pytest.raises(TypeError, match="threshold= only"):
+            xroms.mld(sig0, rutgers, threshold=0.05, thresh=0.05)
+
+    def test_methods_agree_on_monotonic_profiles(self, layout):
+        ds = merged(layout)
+        sig0 = xroms.potential_density(ds.temp, ds.salt)
+        for reference_depth in (0, 5, 10):
+            for threshold in (0.01, 0.03, 0.2):
+                kwargs = dict(reference_depth=reference_depth, threshold=threshold)
+                np.testing.assert_allclose(
+                    xroms.mld(sig0, ds, **kwargs).values, xroms.mld(sig0, ds, method="transform", **kwargs).values, rtol=1e-10
+                )
+
+    @pytest.mark.parametrize("variable", ["density", "temperature"])
+    @pytest.mark.parametrize("reference_depth", [5.0, 10.0])
+    def test_matches_a_column_by_column_search(self, rutgers, variable, reference_depth):
+        # oracle: ocean-skill's per-profile threshold search (mld._mld_threshold_1d), as plain numpy
+        var = xroms.potential_density(rutgers.temp, rutgers.salt) if variable == "density" else rutgers.temp
+        threshold = 0.03 if variable == "density" else 0.2
+        md = xroms.mld(var, rutgers, variable=variable, reference_depth=reference_depth, fill="nan")
+        expected = xr.apply_ufunc(
+            _column_mld, var, -xroms.z(rutgers), input_core_dims=[["s_rho"], ["s_rho"]], vectorize=True,
+            kwargs=dict(threshold=threshold, reference_depth=reference_depth),
+        ).transpose(*md.dims)
+        assert np.isfinite(expected.values).all()
+        np.testing.assert_allclose(md.values, expected.values, rtol=1e-12)
+        assert md.attrs["mld_variable"] == variable and md.attrs["mld_threshold"] == threshold
+        assert md.attrs["mld_reference_depth"] == reference_depth
+        assert md.attrs["standard_name"].endswith("sigma_theta" if variable == "density" else "temperature")
+
+    def test_the_search_finds_the_shallowest_crossing(self):
+        # density (relative to the top) passes 0.03 at 20 m, falls back below it at 30 m, and passes it again deeper
+        z = xr.DataArray([-50.0, -40.0, -30.0, -20.0, -10.0, -2.0], dims="s_rho")
+        sig0 = xr.DataArray(1025.0 + np.array([0.5, 0.0, -0.01, 0.05, 0.01, 0.0]), dims="s_rho", name="sig0")
+        # between 10 m (+0.01) and 20 m (+0.05)
+        np.testing.assert_allclose(xroms.mld(sig0, z=z), 15.0)
+
+    def test_temperature_changes_count_either_way(self):
+        # warmer below (a polar inversion): only a search on |change| finds it
+        z = xr.DataArray([-40.0, -30.0, -20.0, -10.0, -2.0], dims="s_rho")
+        temp = xr.DataArray([2.0, 1.5, 1.0, 0.1, 0.0], dims="s_rho", name="temp")
+        np.testing.assert_allclose(xroms.mld(temp, z=z, variable="temperature", fill="nan"), 10.0 + 10.0 * (0.1 / 0.9))
+        cooler = 2.0 - temp
+        np.testing.assert_allclose(xroms.mld(cooler, z=z, variable="temperature", fill="nan"), 10.0 + 10.0 * (0.1 / 0.9))
+        np.testing.assert_allclose(xroms.mld(cooler, z=z, variable="temperature", fill="nan", method="transform"), 10.0 + 10.0 * (0.1 / 0.9))
+
+    def test_fill_nan_and_bottom_without_a_grid(self, rutgers):
+        sig0 = _linear_sig0(rutgers)
+        z = xroms.z(rutgers)
+        assert xroms.mld(sig0, rutgers, threshold=1e6, fill="nan").isnull().all()
+        # without a grid the bottom is the deepest point with data
+        md = xroms.mld(sig0, z=z, threshold=1e6)
+        np.testing.assert_allclose(md.values, (-z.isel(s_rho=0)).transpose(*md.dims).values)
+
+    def test_profiles_on_other_levels(self):
+        # a z-level climatology: surface first, missing below the bottom
+        woa = xr.DataArray(
+            [[1025.0, 1025.01, 1025.05, 1025.3, np.nan]], dims=("x", "depth"), coords={"depth": [0.0, 10.0, 20.0, 50.0, 100.0]}
+        )
+        np.testing.assert_allclose(xroms.mld(woa, z=-woa.depth, dim="depth"), [15.0])
+        np.testing.assert_allclose(xroms.mld(woa, z=-woa.depth, dim="depth", reference_depth=10), [10.0 + 10.0 * 0.03 / 0.04])
+        np.testing.assert_allclose(xroms.mld(woa, z=-woa.depth, dim="depth", threshold=1.0), [50.0])
+        with pytest.raises(ValueError, match="dim="):
+            xroms.mld(woa, z=-woa.depth)
+        with pytest.raises(ValueError, match="pass z="):
+            xroms.mld(woa, dim="depth")
+
+    def test_option_errors(self, rutgers):
+        sig0 = _linear_sig0(rutgers)
+        for kwargs, match in (
+            (dict(variable="salinity"), "variable"),
+            (dict(fill="deepest"), "fill"),
+            (dict(method="nearest"), "method"),
+        ):
+            with pytest.raises(ValueError, match=match):
+                xroms.mld(sig0, rutgers, **kwargs)
+
+    def test_accessor_temperature_criterion(self, rutgers):
+        md = rutgers.xroms.mld(variable="temperature", reference_depth=5)
+        xr.testing.assert_allclose(
+            md.reset_coords(drop=True), xroms.mld(rutgers.temp, rutgers, variable="temperature", reference_depth=5).reset_coords(drop=True)
+        )
+
+
+def _column_mld(values, depth, *, threshold, reference_depth):
+    """One profile's threshold-crossing depth: ocean-skill's ``_mld_threshold_1d``."""
+    order = np.argsort(depth)
+    d, v = depth[order], values[order]
+    valid = np.isfinite(d) & np.isfinite(v)
+    d, v = d[valid], v[valid]
+    if d.size < 2 or d[0] > reference_depth or d[-1] < reference_depth:
+        return np.nan
+    diff = v - np.interp(reference_depth, d, v)
+    exceed = np.flatnonzero((np.abs(diff) > threshold) & (d >= reference_depth))
+    if exceed.size == 0:
+        return np.nan
+    first = int(exceed[0])
+    if first == 0:
+        return float(d[first])
+    d0, d1, v0, v1 = d[first - 1], d[first], diff[first - 1], diff[first]
+    target = threshold if v1 > 0 else -threshold
+    return float(d1) if v1 == v0 else float(d0 + (target - v0) / (v1 - v0) * (d1 - d0))

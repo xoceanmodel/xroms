@@ -13,6 +13,8 @@ ordered (time, vertical, eta, xi, then any other dimensions), whatever the order
 of the inputs' dimensions.
 """
 
+import warnings
+
 import numpy as np
 import xarray as xr
 
@@ -52,15 +54,15 @@ def _with_cf_standard_names(var):
     return var
 
 
-def density(temp, salt, z=None, *, grid=None, zeta=None):
-    """Calculate the density [kg/m^3] as calculated in ROMS.
+def density(temp, salt, z=None, *, grid=None, zeta=None, eos="roms", lon=None, lat=None):
+    """Calculate the in-situ density [kg/m^3], with ROMS' equation of state or TEOS-10.
 
     Parameters
     ----------
     temp : DataArray, ndarray
-        Temperature [Celsius]
+        Potential temperature [Celsius], as ROMS carries it
     salt : DataArray, ndarray
-        Salinity
+        Practical salinity
     z : DataArray, ndarray, int, float, optional
         Height of the points [m], as in ROMS: zero at the mean sea level and
         negative below it. This sets the pressure in the equation of state. To
@@ -73,6 +75,15 @@ def density(temp, salt, z=None, *, grid=None, zeta=None):
         Free surface used when computing ``z`` from ``grid``: the grid's
         ``zeta`` (None), a constant (0 for static depths), its time mean, or a
         field (see :func:`xroms.z`).
+    eos : {"roms", "teos10"}, optional
+        Equation of state: ROMS' own (Nonlinear/rho_eos.F, the default), or
+        TEOS-10 with gsw (``pip install 'xroms[teos10]'``), which converts
+        practical to absolute salinity at each point's pressure and location and
+        potential to conservative temperature first.
+    lon, lat : float or DataArray, optional
+        Location of the points, for ``eos="teos10"`` only. By default they are
+        ``temp``'s lon/lat coordinates, else ``grid``'s; pass them for a
+        Cartesian grid (constants will do).
 
     Returns
     -------
@@ -88,13 +99,19 @@ def density(temp, salt, z=None, *, grid=None, zeta=None):
 
     Notes
     -----
-    Equation of state based on ROMS Nonlinear/rho_eos.F.
+    ``eos="roms"`` is ROMS' equation of state (Nonlinear/rho_eos.F).
+    ``eos="teos10"`` uses gsw's ``p_from_z``, ``SA_from_SP``, ``CT_from_pt`` and
+    ``rho``.
 
     Examples
     --------
     >>> xroms.density(ds.temp, ds.salt, grid=ds)
     >>> xroms.density(ds.temp, ds.salt, z=xroms.z(ds))
+    >>> xroms.density(ds.temp, ds.salt, grid=ds, eos="teos10")
     """
+    _check_eos(eos)
+    if grid is not None:
+        grid = _check_grid(grid, "density")
     if isinstance(temp, xr.DataArray):
         temp = canonicalize(temp)
     if isinstance(salt, xr.DataArray):
@@ -111,8 +128,22 @@ def density(temp, salt, z=None, *, grid=None, zeta=None):
             )
         if not isinstance(temp, xr.DataArray):
             raise ValueError("density can compute z from grid= only when temp is a DataArray; pass z= instead")
-        z = z_like(temp, _check_grid(grid, "density"), zeta=zeta)
+        z = z_like(temp, grid, zeta=zeta)
 
+    if eos == "teos10":
+        var = _teos10(temp, salt, z, *_lonlat(temp, grid, lon, lat))
+    else:
+        var = _roms_eos(temp, salt, z)
+
+    if isinstance(var, xr.DataArray):
+        var = _with_cf_standard_names(order(var))
+        _label(var, "rho", "density" if eos == "roms" else "density (TEOS-10)", "kg/m^3")
+
+    return var
+
+
+def _roms_eos(temp, salt, z):
+    """ROMS' equation of state (Nonlinear/rho_eos.F): density [kg/m^3] at height ``z``."""
     A00 = +19092.56
     A01 = +209.8925
     A02 = -3.041638
@@ -205,26 +236,80 @@ def density(temp, salt, z=None, *, grid=None, zeta=None):
         + H02 * salt * temp**2
     )
     bulk = K0 - K1 * z + K2 * z**2
-    var = (den1 * bulk) / (bulk + 0.1 * z)
-
-    if isinstance(var, xr.DataArray):
-        var = _with_cf_standard_names(order(var))
-        _label(var, "rho", "density", "kg/m^3")
-
-    return var
+    return (den1 * bulk) / (bulk + 0.1 * z)
 
 
-def potential_density(temp, salt, z=0):
+def _teos10(temp, salt, z, lon, lat, z_ref=None):
+    """Density [kg/m^3] with TEOS-10 (gsw), from ROMS' potential temperature and practical salinity.
+
+    TEOS-10 works in absolute salinity and conservative temperature, so the chain
+    is SP -> SA (at each point's pressure and location) -> CT (from potential
+    temperature) -> density, in situ, or at the pressure of height ``z_ref`` for
+    potential density.
+    """
+    try:
+        import gsw
+    except ImportError as err:
+        raise ImportError("eos='teos10' needs gsw: pip install 'xroms[teos10]', or conda install -c conda-forge gsw") from err
+
+    def ufunc(func, *args):
+        return xr.apply_ufunc(func, *args, dask="parallelized", output_dtypes=[np.float64])
+
+    p = ufunc(gsw.p_from_z, z, lat)
+    sa = ufunc(gsw.SA_from_SP, salt, p, lon, lat)
+    ct = ufunc(gsw.CT_from_pt, sa, temp)
+    if z_ref is not None:
+        p = ufunc(gsw.p_from_z, z_ref, lat)
+    return ufunc(gsw.rho, sa, ct, p)
+
+
+def _lonlat(temp, grid, lon, lat):
+    """Longitude and latitude at the points of ``temp``: given, its coords, or the grid's."""
+    if lon is not None and lat is not None:
+        return lon, lat
+    if lon is not None or lat is not None:
+        raise ValueError("pass both lon= and lat=, or neither")
+    if isinstance(temp, xr.DataArray):
+        pos = conventions.hposition(temp) or "rho"
+        for source in (temp, grid):
+            if source is None:
+                continue
+            xname, yname = conventions.horizontal_coords(source, pos)
+            if xname is not None and xname.startswith("lon"):
+                if source is temp:
+                    return temp[xname].reset_coords(drop=True), temp[yname].reset_coords(drop=True)
+                return tuple(select_like(grid[name], temp, name=name).reset_coords(drop=True) for name in (xname, yname))
+    raise ValueError(
+        "eos='teos10' needs longitude and latitude to convert practical to absolute salinity, and found "
+        "none on the variable or the grid: pass lon= and lat= (constants will do for a Cartesian grid)."
+    )
+
+
+def _check_eos(eos):
+    if eos not in ("roms", "teos10"):
+        raise ValueError(f"eos must be 'roms' (ROMS' own equation of state) or 'teos10' (TEOS-10, with gsw), not {eos!r}")
+
+
+def potential_density(temp, salt, z=0, *, eos="roms", grid=None, zeta=None, z_points=None, lon=None, lat=None):
     """Calculate potential density [kg/m^3] with constant depth reference.
 
     Parameters
     ----------
     temp : DataArray, ndarray
-        Temperature [Celsius]
+        Potential temperature [Celsius], as ROMS carries it
     salt : DataArray, ndarray
-        Salinity
+        Practical salinity
     z : int, float, optional
         Reference height [m] (0 is the mean sea level; negative is below it).
+    eos : {"roms", "teos10"}, optional
+        Equation of state, as in :func:`xroms.density`.
+    grid, zeta, z_points : optional
+        For ``eos="teos10"`` only: practical salinity is converted to absolute
+        salinity at each point's own pressure, so the heights of the points are
+        needed, ``z_points`` (m, negative below the surface), or computed from
+        ``grid`` (and ``zeta``) as in :func:`xroms.density`.
+    lon, lat : float or DataArray, optional
+        For ``eos="teos10"`` only, as in :func:`xroms.density`.
 
     Returns
     -------
@@ -234,16 +319,42 @@ def potential_density(temp, salt, z=0):
 
     Notes
     -----
-    Uses equation of state based on ROMS Nonlinear/rho_eos.F
+    ``eos="roms"`` is ROMS' equation of state (Nonlinear/rho_eos.F) evaluated at
+    height ``z``. ``eos="teos10"`` is gsw's ``rho`` at the pressure of ``z``.
+    Either way this is the full density, not the anomaly: subtract 1000 for
+    sigma.
 
     Examples
     --------
     >>> xroms.potential_density(ds.temp, ds.salt)
+    >>> xroms.potential_density(ds.temp, ds.salt, eos="teos10", grid=ds)
     """
-    var = density(temp, salt, z)
+    _check_eos(eos)
+    if eos == "roms":
+        var = density(temp, salt, z)
+    else:
+        if grid is not None:
+            grid = _check_grid(grid, "potential_density")
+        if isinstance(temp, xr.DataArray):
+            temp = canonicalize(temp)
+        if isinstance(salt, xr.DataArray):
+            salt = canonicalize(salt)
+        if z_points is None:
+            if grid is None or not isinstance(temp, xr.DataArray):
+                raise ValueError(
+                    "eos='teos10' converts practical to absolute salinity at each point's pressure, so it "
+                    "needs the heights of the points: pass grid= (the Dataset with h, zeta and the "
+                    "s-coordinate parameters) or z_points= (m, negative below the surface)"
+                )
+            z_points = z_like(temp, grid, zeta=zeta)
+        elif isinstance(z_points, xr.DataArray):
+            z_points = canonicalize(z_points)
+        var = _teos10(temp, salt, z_points, *_lonlat(temp, grid, lon, lat), z_ref=z)
+        if isinstance(var, xr.DataArray):
+            var = _with_cf_standard_names(order(var))
 
     if isinstance(var, xr.DataArray):
-        _label(var, "sig0", "potential density", "kg/m^3")
+        _label(var, "sig0", "potential density" if eos == "roms" else "potential density (TEOS-10)", "kg/m^3")
 
     return var
 
@@ -428,49 +539,99 @@ def M2(
     return _label(order(var), "M2", "horizontal buoyancy gradient", "1/s^2")
 
 
-def mld(sig0, grid, *args, thresh=0.03, z=None, zeta=None):
-    """Calculate the mixed layer depth [m], positive, and the water depth if none is found.
+#: criterion variable of mld: its default threshold and the CF standard_name of the result
+_MLD_VARIABLES = {
+    "density": (0.03, "ocean_mixed_layer_thickness_defined_by_sigma_theta"),
+    "temperature": (0.2, "ocean_mixed_layer_thickness_defined_by_temperature"),
+}
+
+
+def _threshold_alias(threshold, thresh, stacklevel=3):
+    """``threshold``, accepting v0.6's name ``thresh`` with a FutureWarning."""
+    if thresh is None:
+        return threshold
+    if threshold is not None:
+        raise TypeError("pass threshold= only (thresh= is its old name)")
+    warnings.warn("mld's thresh= is now threshold=", FutureWarning, stacklevel=stacklevel)
+    return thresh
+
+
+def mld(
+    var, grid=None, *args, z=None, zeta=None, threshold=None, reference_depth=0.0,
+    variable="density", fill="bottom", method="interp", dim=None, thresh=None,
+):
+    """Calculate the mixed layer depth [m, positive], by a threshold criterion.
+
+    The base of the mixed layer is the shallowest depth below ``reference_depth``
+    at which ``var`` departs from its value at ``reference_depth`` by more than
+    ``threshold`` (de Boyer Montégut et al., 2004), interpolated linearly between
+    levels.
 
     Parameters
     ----------
-    sig0 : DataArray
-        Potential density [kg/m^3], on rho points and with a vertical dimension.
-    grid : Dataset
-        Dataset with ``h`` (positive water depth), ``zeta`` and the s-coordinate
-        parameters, and ``mask_rho`` if the grid has land.
-    thresh : float, optional
-        Density increase over the surface value [kg/m^3] that marks the base of
-        the mixed layer.
+    var : DataArray
+        Potential density [kg/m^3] (``variable="density"``, e.g. from
+        :func:`xroms.potential_density`) or temperature [C]
+        (``variable="temperature"``), with a vertical dimension.
+    grid : Dataset, optional
+        Dataset with ``h``, ``zeta`` and the s-coordinate parameters, and
+        ``mask_rho`` if the grid has land. Used to compute the heights of
+        ``var``'s points when ``z`` is not given, and for ``fill="bottom"``.
     z : DataArray, optional
-        Heights [m] at the points of ``sig0``, instead of computing them from
-        ``grid``.
+        Heights [m, negative below the mean sea level] of ``var``'s points,
+        instead of computing them from ``grid``. Depths are ``-z``.
     zeta : None, float, "mean" or DataArray, optional
         Free surface used when computing the heights from ``grid`` (see
         :func:`xroms.z`).
+    threshold : float, optional
+        Departure from the reference value that marks the base of the mixed
+        layer: an increase of density (default 0.03 kg/m^3), or a change of
+        temperature either way (default 0.2 C).
+    reference_depth : float, optional
+        Depth [m, positive] of the reference value, interpolated linearly
+        between levels. The default, 0, takes the shallowest level, as xroms
+        always has; de Boyer Montégut et al. (2004), ocean-skill and roms-tools
+        use 10. A reference depth above the shallowest point of a profile takes
+        that point, and one below the deepest takes the deepest.
+    variable : {"density", "temperature"}, optional
+        What ``var`` is, which sets the criterion and the default ``threshold``.
+    fill : {"bottom", "nan"}, optional
+        What a water column without a crossing gets: the depth of the bottom,
+        or NaN. The bottom is ``h`` from ``grid`` over water (``mask_rho == 1``,
+        or where the profile has data if ``grid`` has no ``mask_rho``) or,
+        without ``grid`` or its ``h``, the depth of the deepest point with data.
+        Columns without data (land) are NaN either way.
+    method : {"interp", "transform"}, optional
+        ``"interp"`` searches each profile for the shallowest level past the
+        threshold and interpolates between it and the level above; profiles
+        need not be monotonic and may have missing values. ``"transform"``
+        interpolates the depth onto the threshold with xgcm's ``transform``, as
+        :func:`xroms.isoslice` does (and as xroms did before 1.0, and roms-tools
+        does): each profile must be monotonic (temperature decreasing with
+        depth), without missing values. The two agree on monotonic profiles.
+    dim : str, optional
+        Vertical dimension of ``var``: its s-coordinate dimension by default.
+        Name it for profiles on other levels (``z`` is then required and is
+        used as given, e.g. ``z=-woa.depth``).
 
     Returns
     -------
-    DataArray of mixed layer depth [m, positive] on the rho horizontal grid,
-    without a vertical dimension.
+    DataArray of mixed layer depth [m, positive] on the points of ``var``,
+    without the vertical dimension. Its attrs record the criterion
+    (``standard_name``, ``mld_variable``, ``mld_threshold``,
+    ``mld_reference_depth``).
 
     Notes
     -----
-    The mixed layer depth is based on the fixed potential density (PD)
-    threshold: it is the depth where ``sig0`` first exceeds its value at the
-    surface (the top level) by ``thresh``, linearly interpolated between
-    levels. Where that never happens over water (``mask_rho == 1`` in ``grid``;
-    where the surface ``sig0`` is valid if ``grid`` has no ``mask_rho``), the
-    mixed layer is taken to be the whole water column and the result is ``h``.
-    Land stays NaN.
+    Depths are ``-z``, measured from the mean sea level like ``h`` (pass ``z``
+    from :func:`xroms.z` with ``reference="surface", positive="up"`` to measure
+    from the moving surface instead, and ``fill="nan"`` or no ``grid``, since
+    ``h`` is measured from the mean sea level).
 
-    Like :func:`xroms.isoslice`, which does the interpolation, this expects
-    each column of ``sig0`` to increase monotonically with depth: in a column
-    with density inversions the depth found is not guaranteed to be the
-    shallowest crossing.
-
-    Before xroms 1.0 the call was ``mld(sig0, xgrid, h, mask)``; ``h`` and the
-    mask are read from ``grid`` now, and passing them (or anything else
-    positionally after ``grid``) raises a `TypeError`.
+    Before xroms 1.0 the call was ``mld(sig0, xgrid, h, mask, thresh=0.03)``;
+    ``h`` and the mask are read from ``grid`` now, and passing them (or
+    anything else positionally after ``grid``) raises a `TypeError`. ``thresh``
+    still works, with a FutureWarning; it is now ``threshold``.
 
     Converted to xroms by K. Thyng Aug 2020 from:
 
@@ -489,38 +650,106 @@ def mld(sig0, grid, *args, thresh=0.03, z=None, zeta=None):
     Examples
     --------
     >>> xroms.mld(xroms.potential_density(ds.temp, ds.salt), ds)
+    >>> xroms.mld(ds.temp, ds, variable="temperature", reference_depth=10)
     """
     _reject_legacy(
         args,
         "mld",
         "h and mask now come from grid (the Dataset that holds them): use xroms.mld(sig0, ds). "
-        "thresh, z and zeta are keyword arguments.",
+        "threshold, z and zeta are keyword arguments.",
     )
-    if not isinstance(sig0, xr.DataArray):
-        raise TypeError("sig0 must be a DataArray")
-    if grid is None:
-        raise ValueError("mld needs grid= (a Dataset with h, and mask_rho if it has land)")
-    grid = _check_grid(grid, "mld")
-    sig0 = canonicalize(sig0)
-    vdim = vposition(sig0)
-    if vdim is None:
-        raise ValueError(f"{sig0.name!r} has no vertical dimension; mld needs density profiles")
-    require(grid, "h", purpose="the depth of mixed layers that reach the bottom")
-
-    zz = z_like(sig0, grid, zeta=zeta, z=z)
-    surface = sig0.isel({vdim: -1}, drop=True)
-
-    # the mixed layer depth is the isosurface of depth where the potential density equals the surface + a threshold
-    depth = isoslice(zz, [0.0], sig0 - surface - thresh, dim=vdim, new_dim="iso")
-    depth = depth.squeeze("iso", drop=True)
-
-    # Replace nans that are not masked with the depth of the water column.
-    h = select_like(grid["h"], sig0, name="h").reset_coords(drop=True)
-    if "mask_rho" in grid.variables:
-        water = select_like(grid["mask_rho"], sig0, name="mask_rho").reset_coords(drop=True) == 1
+    threshold = _threshold_alias(threshold, thresh)
+    if not isinstance(var, xr.DataArray):
+        raise TypeError("var must be a DataArray")
+    if variable not in _MLD_VARIABLES:
+        raise ValueError(f"variable must be 'density' or 'temperature', not {variable!r}")
+    if fill not in ("bottom", "nan"):
+        raise ValueError(f"fill must be 'bottom' or 'nan', not {fill!r}")
+    if method not in ("interp", "transform"):
+        raise ValueError(f"method must be 'interp' or 'transform', not {method!r}")
+    default, standard_name = _MLD_VARIABLES[variable]
+    threshold = default if threshold is None else float(threshold)
+    reference_depth = float(reference_depth)
+    if grid is not None:
+        grid = _check_grid(grid, "mld")
+    var = canonicalize(var)
+    vdim = dim or vposition(var)
+    if vdim is None or vdim not in var.dims:
+        raise ValueError(
+            f"{var.name!r} has no vertical dimension{'' if dim is None else ' ' + repr(dim)}; mld needs profiles"
+            + (" (name it with dim= if it is not an s-coordinate)" if dim is None else "")
+        )
+    if vdim in ("s_rho", "s_w"):
+        if z is None and grid is None:
+            raise ValueError("mld needs the heights of var's points: pass grid= (a Dataset with h, zeta and the s-coordinate parameters) or z=")
+        zz = z_like(var, grid, zeta=zeta, z=z)
     else:
-        water = surface.notnull()
-    depth = depth.fillna(h.where(water))
+        if not isinstance(z, xr.DataArray) or vdim not in z.dims:
+            raise ValueError(f"for levels other than s_rho/s_w, pass z= (heights, negative below the surface) along {vdim!r}")
+        zz = z
+    depth = -zz.reset_coords(drop=True)
 
-    # Take absolute value so as to return positive MLD values
-    return _label(abs(depth), "mld", "mixed layer depth", "m")
+    if method == "interp":
+        out = _mld_interp(var, depth, vdim, threshold, reference_depth, signed=variable == "density")
+    else:
+        out = _mld_transform(var, depth, vdim, threshold, reference_depth, signed=variable == "density")
+
+    has_data = (var.notnull() & depth.notnull()).any(vdim)
+    if fill == "bottom":
+        if grid is not None and "h" in grid.variables:
+            bottom = select_like(grid["h"], var, name="h").reset_coords(drop=True)
+            if "mask_rho" in grid.variables:
+                water = select_like(grid["mask_rho"], var, name="mask_rho").reset_coords(drop=True) == 1
+            else:
+                water = has_data
+        else:
+            bottom, water = depth.where(var.notnull()).max(vdim), has_data
+        out = out.fillna(bottom.where(water))
+    out = order(out)
+    _label(out, "mld", "mixed layer depth", "m")
+    out.attrs.update(
+        standard_name=standard_name, mld_variable=variable, mld_threshold=threshold, mld_reference_depth=reference_depth
+    )
+    return out
+
+
+def _at(values, depth, where_depth, dim):
+    """``values`` at the level of each profile whose depth is ``where_depth`` (NaN if none)."""
+    return values.where(depth == where_depth).max(dim)
+
+
+def _mld_interp(var, depth, dim, threshold, reference_depth, signed):
+    """Shallowest crossing below the reference depth, found level by level (ocean-skill's method).
+
+    Order-free: levels are found by depth with reductions over ``dim``, so
+    profiles may run either way, have gaps and need not be monotonic.
+    """
+    depth = depth.where(var.notnull())
+    # reference value: linear in depth between the points either side of reference_depth
+    above = depth.where(depth <= reference_depth).max(dim)
+    below = depth.where(depth >= reference_depth).min(dim)
+    v_above, v_below = _at(var, depth, above, dim), _at(var, depth, below, dim)
+    span = (below - above).where(below != above)
+    ref = xr.where(
+        above.isnull(),
+        v_below,
+        xr.where(below.isnull() | (below == above), v_above, v_above + (reference_depth - above) / span * (v_below - v_above)),
+    )
+    diff = var - ref
+    past = (diff if signed else abs(diff)) > threshold
+    d1 = depth.where(past & (depth >= reference_depth)).min(dim)
+    d0 = depth.where(depth < d1).max(dim)
+    v1, v0 = _at(diff, depth, d1, dim), _at(diff, depth, d0, dim)
+    target = threshold if signed else xr.where(v1 < 0, -threshold, threshold)
+    step = (v1 - v0).where(v1 != v0)
+    crossing = d0 + (target - v0) / step * (d1 - d0)
+    return crossing.where(d0.notnull() & step.notnull(), d1)
+
+
+def _mld_transform(var, depth, dim, threshold, reference_depth, signed):
+    """Crossing found with xgcm's transform (monotonic profiles), as xroms did before 1.0."""
+    depth = depth.broadcast_like(var)
+    ref = isoslice(var, [reference_depth], depth, dim=dim, new_dim="iso", mask_edges=False).squeeze("iso", drop=True)
+    excess = var - ref if signed else ref - var
+    crossing = isoslice(depth, [threshold], excess, dim=dim, new_dim="iso")
+    return crossing.squeeze("iso", drop=True)
