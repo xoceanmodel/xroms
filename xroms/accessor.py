@@ -218,9 +218,16 @@ class xromsDatasetAccessor:
         """The s-coordinate parameters (Vtransform, hc, Cs, sigma) of this Dataset."""
         return vertical_params(self._obj)
 
-    def z(self, hcoord="rho", scoord="s_rho", *, zeta=None, reference="mean_sea_level", positive="up", method="average", grid=None):
+    def z(
+        self, hcoord="rho", scoord="s_rho", *, zeta=None, reference="mean_sea_level", positive="up", method="average",
+        grid=None, hc=None, Vtransform=None, default_Vtransform=None,
+    ):
         """Vertical position at (``hcoord``, ``scoord``); see :func:`xroms.z`."""
-        return self._out(vertical.z(self._grid(grid), hcoord=hcoord, scoord=scoord, zeta=zeta, reference=reference, positive=positive, method=method))
+        out = vertical.z(
+            self._grid(grid), hcoord=hcoord, scoord=scoord, zeta=zeta, reference=reference, positive=positive,
+            method=method, hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform,
+        )
+        return self._out(out)
 
     @property
     def z_rho(self):
@@ -232,9 +239,10 @@ class xromsDatasetAccessor:
         """z at rho points on w levels (layer interfaces)."""
         return self.z(scoord="s_w")
 
-    def dz(self, hcoord="rho", scoord="s_rho", *, zeta=None, grid=None):
+    def dz(self, hcoord="rho", scoord="s_rho", *, zeta=None, grid=None, hc=None, Vtransform=None, default_Vtransform=None):
         """Layer thickness (m); see :func:`xroms.dz`."""
-        return self._out(vertical.dz(self._grid(grid), hcoord=hcoord, scoord=scoord, zeta=zeta))
+        params = dict(hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform)
+        return self._out(vertical.dz(self._grid(grid), hcoord=hcoord, scoord=scoord, zeta=zeta, **params))
 
     def dx(self, hcoord="rho", *, grid=None):
         """Grid spacing along xi (m) at ``hcoord``."""
@@ -248,19 +256,21 @@ class xromsDatasetAccessor:
         """Cell area (m²) at ``hcoord``."""
         return self._out(metrics.dA(self._grid(grid), hcoord))
 
-    def dV(self, hcoord="rho", scoord="s_rho", *, zeta=None, grid=None):
+    def dV(self, hcoord="rho", scoord="s_rho", *, zeta=None, grid=None, hc=None, Vtransform=None, default_Vtransform=None):
         """Cell volume (m³) at (``hcoord``, ``scoord``)."""
-        return self._out(metrics.dV(self._grid(grid), hcoord, scoord, zeta=zeta))
+        params = dict(hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform)
+        return self._out(metrics.dV(self._grid(grid), hcoord, scoord, zeta=zeta, **params))
 
-    def assign_z(self, *, zeta=None, hcoord="rho", grid=None):
+    def assign_z(self, *, zeta=None, hcoord="rho", grid=None, hc=None, Vtransform=None, default_Vtransform=None):
         """A **new** Dataset with lazy ``z_rho``/``z_w`` coordinates attached.
 
         This is an explicit snapshot: recompute after changing ``zeta`` or ``h``.
         On numpy-backed data the depths are computed immediately. ``h`` comes from
         ``grid`` if given (completed from this Dataset, as in :meth:`z`).
         """
-        z_rho = self.z(hcoord, "s_rho", zeta=zeta, grid=grid)
-        z_w = self.z(hcoord, "s_w", zeta=zeta, grid=grid)
+        params = dict(zeta=zeta, grid=grid, hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform)
+        z_rho = self.z(hcoord, "s_rho", **params)
+        z_w = self.z(hcoord, "s_w", **params)
         return self._obj.assign_coords({z_rho.name: z_rho.variable, z_w.name: z_w.variable})
 
     def xgcm_grid(self, padding="extend", *, vertical_metrics=False, zeta=None, grid=None):

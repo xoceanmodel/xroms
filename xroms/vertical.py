@@ -250,7 +250,9 @@ def z(
     positive="up",
     method="average",
     like=None,
+    hc=None,
     Vtransform=None,
+    default_Vtransform=None,
 ):
     """Vertical position of every point of ``grid`` at (``hcoord``, ``scoord``).
 
@@ -277,6 +279,11 @@ def z(
         Restrict the computation to the footprint, times and vertical levels of
         this variable. Levels are matched by label where both have an index, else
         they must be equally many.
+    hc, Vtransform, default_Vtransform : optional
+        Vertical parameters: ``hc`` and ``Vtransform`` win over the grid's,
+        ``default_Vtransform`` applies only when the grid states none (see
+        :func:`xroms.vertical_params`). Only the parameters of ``scoord``'s levels
+        are needed: ``Cs_r``/``sigma_r`` for ``s_rho``, ``Cs_w``/``sigma_w`` for ``s_w``.
     """
     hcoord = normalize_hcoord(hcoord) or "rho"
     scoord = normalize_scoord(scoord) or "s_rho"
@@ -285,7 +292,7 @@ def z(
         raise ValueError(f"method must be 'average' or 'interp_inputs', not {method!r}")
     grid = _check_grid(grid, "z")
     require(grid, "h", purpose="depths")
-    params = vertical_params(grid, Vtransform=Vtransform)
+    params = vertical_params(grid, levels=scoord, hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform)
     cs, sigma = (params.Cs_r, params.sigma_r) if scoord == "s_rho" else (params.Cs_w, params.sigma_w)
 
     rho_like = canonicalize(like) if like is not None else None
@@ -324,9 +331,13 @@ def z(
 _z = z  # z_like's ``z=`` argument shadows the function name
 
 
-def z_like(var, grid, *, zeta=None, z=None, reference="mean_sea_level", positive="up", method="average"):
+def z_like(
+    var, grid, *, zeta=None, z=None, reference="mean_sea_level", positive="up", method="average",
+    hc=None, Vtransform=None, default_Vtransform=None,
+):
     """z at the grid position of ``var``, restricted to its footprint, times and levels.
 
+    ``hc``, ``Vtransform`` and ``default_Vtransform`` go to :func:`z` (unused with ``z``).
     A given ``z`` must be on ``var``'s vertical levels, and at its horizontal
     points or at rho points (then averaged onto ``var``'s points, as `z` does).
     It is matched to ``var`` like any grid field (see
@@ -353,6 +364,7 @@ def z_like(var, grid, *, zeta=None, z=None, reference="mean_sea_level", positive
             if want in ("v", "psi"):
                 z = _xgcm.interp(z, "Y")
         return z
+    params = dict(hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform)
     hcoord = hposition(var) or "rho"
     scoord = vposition(var)
     if scoord is None:
@@ -368,17 +380,17 @@ def z_like(var, grid, *, zeta=None, z=None, reference="mean_sea_level", positive
             )
         full = _z(
             grid, hcoord=hcoord, scoord=level, zeta=zeta, reference=reference,
-            positive=positive, method=method, like=var,
+            positive=positive, method=method, like=var, **params,
         )
         return select_like(full, var, name="z")
     return _z(
         grid, hcoord=hcoord, scoord=scoord, zeta=zeta, reference=reference,
-        positive=positive, method=method, like=var,
+        positive=positive, method=method, like=var, **params,
     )
 
 
 @with_grid_coords
-def dz(grid, *, hcoord="rho", scoord="s_rho", zeta=None, method="average", like=None):
+def dz(grid, *, hcoord="rho", scoord="s_rho", zeta=None, method="average", like=None, hc=None, Vtransform=None, default_Vtransform=None):
     """Layer thicknesses (positive, metres).
 
     On ``s_rho`` this is ``diff(z_w)``. On ``s_w`` it is the spacing between
@@ -389,7 +401,8 @@ def dz(grid, *, hcoord="rho", scoord="s_rho", zeta=None, method="average", like=
     With ``like``, the footprint and times are restricted to that variable's, and
     so are its levels when it is on ``scoord`` (matched by label where both have an
     index, else they must be equally many): a variable cut vertically on its own
-    gets the thicknesses of its own layers.
+    gets the thicknesses of its own layers. ``hc``, ``Vtransform`` and
+    ``default_Vtransform`` are as in :func:`z`.
     """
     grid = _check_grid(grid, "dz")
     scoord = normalize_scoord(scoord) or "s_rho"
@@ -397,7 +410,7 @@ def dz(grid, *, hcoord="rho", scoord="s_rho", zeta=None, method="average", like=
     # differences and half cells need every level of the grid: select the levels afterwards
     vdim = vposition(like) if like is not None else None
     like_hz = like.isel({vdim: 0}, drop=True) if vdim is not None else like
-    kwargs = dict(hcoord=hcoord, zeta=zeta, method=method, like=like_hz)
+    kwargs = dict(hcoord=hcoord, zeta=zeta, method=method, like=like_hz, hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform)
     z_w = z(grid, scoord="s_w", **kwargs)
     if scoord == "s_rho":
         out = _xgcm.diff(z_w, "Z")
@@ -483,19 +496,25 @@ def depth_band_weights(z_w, shallow, deep, *, dim_w="s_w", dim_rho="s_rho", posi
 
 
 @with_grid_coords
-def depth_average(var, grid, *, shallow=None, deep=None, zeta=None, reference="mean_sea_level"):
+def depth_average(
+    var, grid, *, shallow=None, deep=None, zeta=None, reference="mean_sea_level", hc=None, Vtransform=None, default_Vtransform=None
+):
     """Thickness-weighted vertical mean of a rho-level ``var``.
 
     With no band limits this is the full-column (barotropic) average. Band limits
     are depths (positive down) below ``reference``: use ``reference="surface"``
     for "the upper 10 m of the water column" (``shallow=0, deep=10``). A ``var``
     cut vertically on its own is averaged over its own layers (see :func:`dz`).
+    ``hc``, ``Vtransform`` and ``default_Vtransform`` are as in :func:`z`.
     """
     grid = _check_grid(grid, "depth_average")
     var = canonicalize(var)
     if "s_rho" not in var.dims:
         raise ValueError("depth_average needs a variable on s_rho levels")
-    z_w = z(grid, hcoord=hposition(var) or "rho", scoord="s_w", zeta=zeta, reference=reference, like=var)
+    z_w = z(
+        grid, hcoord=hposition(var) or "rho", scoord="s_w", zeta=zeta, reference=reference, like=var,
+        hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform,
+    )
     if shallow is None and deep is None:
         w = _xgcm.diff(z_w, "Z")
     else:

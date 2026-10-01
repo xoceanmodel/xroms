@@ -24,6 +24,11 @@ update code written for 0.6.
 * Vertical coordinate: `z` at any position, with `reference="mean_sea_level"`, `"surface"` or `"bottom"`, `positive=`
   and `zeta=0`, `"mean"` or a DataArray. Also `compute_depth`, `dz`, `vertical_params`, `stretching` and
   `sigma_levels`. Vertical outputs carry CF `standard_name`, `positive` and `units`.
+* Vertical parameters as keywords: `hc=` and `Vtransform=` win over the Dataset's, and `default_Vtransform=` applies
+  only when the Dataset states none. `vertical_params`, `z`, `dz`, `dV`, `zslice`, `depth_average`, `gridsum` and
+  `gridmean` take them, and so do their accessor versions. Each call looks up only the parameters it uses: depths on rho
+  levels need only `Cs_r`/`sigma_r`, and `vertical_params(ds, levels=False)` gives `hc` and `Vtransform` alone, however
+  the Dataset was cut vertically.
 * Vertical selection and interpolation: `surface`, `bottom`, `depth_band_weights` and `depth_average`; `zslice` onto
   fixed heights or depths, including `method="nearest"`; `isoslice` onto any monotonic field. Positions xroms did not
   label (`z=` in `zslice`, `z_w` in `depth_band_weights`) are described with `positive=`/`reference=`, which win over

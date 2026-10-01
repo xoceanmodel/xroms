@@ -3,7 +3,8 @@
 Sections: depth warnings for Vtransform 1 (``compute_depth``), the sign convention
 of depth bands, the attrs of depth outputs, the level marked by ``surface`` and
 ``bottom``, xgcm grids passed where a Dataset belongs, and the ``_align`` helpers
-the vertical and metric functions rely on. The behaviours that concern data cut or
+the vertical and metric functions rely on, and the vertical parameters each call needs
+(``levels=``, ``hc=``, ``default_Vtransform=``). The behaviours that concern data cut or
 edited before computing (explicit zeta/z, vertical subsets, strided subsets, grids
 without zeta) are tested in ``test_modify_then_compute.py``.
 """
@@ -19,6 +20,7 @@ import xroms
 
 from xroms import _align
 from xroms import conventions as C
+from xroms.tests import _synthetic as syn
 from xroms.tests.conftest import chunked, merged
 
 
@@ -431,3 +433,161 @@ def test_to_grid_rejects_an_xgcm_grid_where_hcoord_goes():
     ds = merged("rutgers")
     with pytest.raises(TypeError, match="xgcm grid"):
         xroms.to_grid(ds.temp, ds.xroms.xgcm_grid(), "u")
+
+
+# ----------------------------------------------------- vertical parameters: only what a call needs
+def _without_pair(ds, names):
+    """``ds`` without the parameters ``names`` of one level pair, nor theta_s/theta_b to compute them from."""
+    out = ds.drop_vars(names)
+    out.attrs = {k: v for k, v in out.attrs.items() if k not in (*names, "theta_s", "theta_b")}
+    return out
+
+
+def test_depths_on_rho_levels_need_only_the_rho_parameters():
+    """h, hc, Cs_r and sigma_r are enough for z at rho levels, as in ocean-skill's Datasets with a separate grid
+    file; Cs_w used to be required as well (ocean-skill friction 1)."""
+    ds = merged("ucla", romstools_grid=True)
+    slim = _without_pair(ds, ["Cs_w", "sigma_w"])
+    assert "s_w" not in slim.dims
+    xr.testing.assert_identical(xroms.z(slim), xroms.z(ds))
+    xr.testing.assert_identical(slim.xroms.z_rho, ds.xroms.z_rho)
+    xr.testing.assert_identical(xroms.zslice(slim.temp, [-5.0], slim), xroms.zslice(ds.temp, [-5.0], ds))
+    xr.testing.assert_identical(xroms.ddxi(slim.temp, slim), xroms.ddxi(ds.temp, ds))
+    xr.testing.assert_identical(xroms.density(slim.temp, slim.salt, grid=slim), xroms.density(ds.temp, ds.salt, grid=ds))
+    p = C.vertical_params(slim, levels="s_rho")
+    assert p.Cs_w is None and p.sigma_w is None
+    xr.testing.assert_identical(p.Cs_r, C.vertical_params(ds).Cs_r)
+    # whatever needs the interfaces still asks for their parameters
+    for call in (
+        lambda: xroms.z(slim, scoord="s_w"),
+        lambda: xroms.dz(slim),
+        lambda: xroms.depth_average(slim.temp, slim),
+        lambda: C.vertical_params(slim),
+    ):
+        with pytest.raises(ValueError, match="cannot find Cs_w"):
+            call()
+
+
+def test_depths_on_w_levels_need_only_the_w_parameters(rutgers):
+    w_only = rutgers.drop_vars([name for name in rutgers.variables if "s_rho" in rutgers[name].dims])
+    assert "s_rho" not in w_only.dims and "s_w" in w_only.dims
+    xr.testing.assert_identical(xroms.z(w_only, scoord="s_w"), xroms.z(rutgers, scoord="s_w"))
+    # one rho level selected with an integer keeps every interface (and, like every variable of
+    # that Dataset, the scalar s_rho coord)
+    one = xroms.z(rutgers.isel(s_rho=3), scoord="s_w")
+    xr.testing.assert_identical(one.drop_vars("s_rho"), xroms.z(rutgers, scoord="s_w"))
+    for ds in (w_only, rutgers.isel(s_rho=3)):
+        with pytest.raises(ValueError, match=r"no 's_rho' one.*xroms.z\(ds\).isel\(s_rho=3\)"):
+            xroms.z(ds)
+
+
+def test_w_parameters_need_one_level_more_than_the_data(ucla):
+    """UCLA output has no s_w dim, so a short Cs_w used to give z on too few interfaces, silently."""
+    ds = xroms.merge_grid(*ucla)
+    assert "s_w" not in ds.dims
+    short = ds.assign_attrs(Cs_w=ds.attrs["Cs_w"][:-1])
+    with pytest.raises(ValueError, match="Cs_w has 6 levels but the data have 6 along 's_rho', so 7 interfaces"):
+        xroms.z(short, scoord="s_w")
+    xr.testing.assert_identical(xroms.z(short), xroms.z(ds))
+
+
+@pytest.mark.parametrize("cut", ["rho levels alone", "one level", "attrs only, then cut", "2-D", "w levels alone"])
+def test_hc_and_vtransform_alone_whatever_the_vertical_cut(cut):
+    """levels=False looks up only hc and Vtransform, as ocean-skill's own lookup did (ocean-skill friction 4)."""
+    ds = merged("ucla", romstools_grid=True)
+    attrs_only = ds.drop_vars(["Cs_r", "Cs_w", "sigma_r", "sigma_w"])
+    sub = {
+        "rho levels alone": ds.isel(s_rho=slice(1, 4)),
+        "one level": ds.isel(s_rho=3),
+        "attrs only, then cut": attrs_only.isel(s_rho=slice(1, 4)),
+        "2-D": ds.isel(s_rho=-1, s_w=-1),
+        "w levels alone": ds.isel(s_w=slice(0, 3)),
+    }[cut]
+    p = C.vertical_params(sub, levels=False)
+    assert (p.hc, p.Vtransform) == (20.0, 2)
+    assert (p.Cs_r, p.Cs_w, p.sigma_r, p.sigma_w) == (None, None, None, None)
+    with pytest.raises(ValueError, match="s_rho"):  # the level arrays still check the levels of the data
+        C.vertical_params(sub)
+
+
+def test_levels_names_a_pair_or_is_true_or_false(rutgers):
+    full = C.vertical_params(rutgers)
+    for levels, have in (("rho", "Cs_r"), ("s_rho", "Cs_r"), ("w", "Cs_w"), ("s_w", "Cs_w")):
+        p = C.vertical_params(rutgers, levels=levels)
+        other = "Cs_w" if have == "Cs_r" else "Cs_r"
+        xr.testing.assert_identical(getattr(p, have), getattr(full, have))
+        assert getattr(p, other) is None
+    for bad in (None, "x", 2, ("s_rho", "s_w")):
+        with pytest.raises(ValueError, match="levels must be True"):
+            C.vertical_params(rutgers, levels=bad)
+
+
+def _built_from_the_grid(**kw):
+    """Every call that builds depths from the grid, taking hc=, Vtransform= and default_Vtransform=."""
+    return {
+        "vertical_params": lambda ds: (C.vertical_params(ds, **kw).hc, C.vertical_params(ds, **kw).Vtransform),
+        "z": lambda ds: xroms.z(ds, **kw),
+        "z_w": lambda ds: xroms.z(ds, scoord="s_w", hcoord="u", **kw),
+        "dz": lambda ds: xroms.dz(ds, scoord="s_w", **kw),
+        "dV": lambda ds: xroms.dV(ds, **kw),
+        "zslice": lambda ds: xroms.zslice(ds.temp, [-5.0], ds, **kw),
+        "depth_average": lambda ds: xroms.depth_average(ds.temp, ds, shallow=0, deep=10, reference="surface", **kw),
+        "gridsum": lambda ds: xroms.gridsum(ds.temp, ds, "Z", **kw),
+        "gridmean": lambda ds: xroms.gridmean(ds.temp, ds, ("Z", "X"), **kw),
+        "ds.xroms.z": lambda ds: ds.xroms.z(**kw),
+        "ds.xroms.dz": lambda ds: ds.xroms.dz(**kw),
+        "ds.xroms.dV": lambda ds: ds.xroms.dV(**kw),
+        "ds.xroms.assign_z": lambda ds: ds.xroms.assign_z(**kw).z_w,
+        "ds.xroms.zslice": lambda ds: ds.xroms.zslice("temp", [-5.0], **kw),
+        "ds.xroms.depth_average": lambda ds: ds.xroms.depth_average("temp", **kw),
+        "ds.xroms.gridsum": lambda ds: ds.xroms.gridsum("temp", "Z", **kw),
+    }
+
+
+@pytest.mark.parametrize("name", list(_built_from_the_grid()))
+def test_hc_keyword_wins_over_the_dataset(rutgers, name):
+    """A catalog's hc for a file without one (or with another), as Vtransform= already did (ocean-skill friction 2)."""
+    want = _built_from_the_grid()[name](rutgers.assign(hc=5.0))
+    for ds in (rutgers.drop_vars("hc"), rutgers):  # no hc, and an hc of 20 m the keyword overrides
+        got = _built_from_the_grid(hc=5.0)[name](ds)
+        assert got == want if name == "vertical_params" else xr.testing.assert_identical(got, want) is None
+    if name == "z":
+        with pytest.raises(ValueError, match="pass hc="):
+            xroms.z(rutgers.drop_vars("hc"))
+
+
+@pytest.mark.parametrize("bad", [-1.0, float("nan"), float("inf"), "x", [1.0, 2.0]])
+def test_hc_keyword_must_be_a_depth(rutgers, bad):
+    with pytest.raises(ValueError, match="hc must be a finite number of metres"):
+        xroms.z(rutgers, hc=bad)
+
+
+@pytest.mark.parametrize("name", list(_built_from_the_grid()))
+def test_vtransform_keywords_everywhere_depths_are_built(name):
+    raw = syn.make_dataset("rutgers").drop_vars("Vtransform")  # states no Vtransform, nor implies one
+    want = _built_from_the_grid()[name](raw.assign(Vtransform=1))
+    for kw in (dict(Vtransform=1), dict(default_Vtransform=1)):
+        got = _built_from_the_grid(**kw)[name](raw)
+        assert got == want if name == "vertical_params" else xr.testing.assert_identical(got, want) is None
+
+
+def test_default_vtransform_applies_only_when_the_dataset_states_none():
+    """ocean-skill's rule "the file's Vtransform, else 2" used to need a pre-check of where xroms looks (friction 5)."""
+    raw = syn.make_dataset("rutgers").drop_vars("Vtransform")
+    says_1 = syn.make_dataset("rutgers", vtransform=1)
+    vt = lambda ds, **kw: C.vertical_params(ds, **kw).Vtransform
+    assert (vt(raw, default_Vtransform=2), vt(raw, default_Vtransform=1)) == (2, 1)
+    assert vt(says_1, default_Vtransform=2) == 1
+    assert vt(says_1, Vtransform=2, default_Vtransform=1) == 2  # the argument still beats everything
+    # what the layout says counts as stated: CROCO's VertCoordType, UCLA output and REMORA
+    assert vt(raw.assign_attrs(VertCoordType="OLD"), default_Vtransform=2) == 1
+    assert vt(merged("ucla"), default_Vtransform=1) == 2
+    assert vt(merged("remora"), default_Vtransform=1) == 2
+    # a VertCoordType that can't be read is not "nothing stated"
+    with pytest.raises(ValueError, match="VertCoordType is 'WEIRD'"):
+        vt(raw.assign_attrs(VertCoordType="WEIRD"), default_Vtransform=2)
+    # a bad default raises even where the Dataset states one
+    with pytest.raises(ValueError, match="default_Vtransform must be 1 or 2"):
+        vt(says_1, default_Vtransform=3)
+    with pytest.raises(ValueError, match="default_Vtransform= .used only when the Dataset states none"):
+        vt(raw)

@@ -55,12 +55,16 @@ def dA(grid, hcoord="rho", *, like=None):
 
 
 @with_grid_coords
-def dV(grid, hcoord="rho", scoord="s_rho", *, zeta=None, like=None):
-    """Cell volume (m³) at (``hcoord``, ``scoord``): ``dz * dA``."""
+def dV(grid, hcoord="rho", scoord="s_rho", *, zeta=None, like=None, hc=None, Vtransform=None, default_Vtransform=None):
+    """Cell volume (m³) at (``hcoord``, ``scoord``): ``dz * dA``.
+
+    ``hc``, ``Vtransform`` and ``default_Vtransform`` are as in :func:`xroms.z`.
+    """
     from .vertical import dz
 
     grid = _check_grid(grid, "dV")
-    out = dz(grid, hcoord=hcoord, scoord=scoord, zeta=zeta, like=like) * dA(grid, hcoord, like=like)
+    params = dict(hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform)
+    out = dz(grid, hcoord=hcoord, scoord=scoord, zeta=zeta, like=like, **params) * dA(grid, hcoord, like=like)
     out.attrs = {"units": "m3", "long_name": f"cell volume at {hcoord or 'rho'}/{scoord} points"}
     return out.rename(f"dV_{scoord}_{hcoord or 'rho'}")
 

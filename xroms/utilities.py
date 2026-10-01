@@ -421,8 +421,11 @@ _AXIS_NAMES = {"X": "X", "Y": "Y", "Z": "Z", "xi_rho": "X", "xi_u": "X", "eta_rh
                "eta_u": "Y", "xi_v": "X", "eta_psi": "Y", "xi_psi": "X"}
 
 
-def _grid_weights(var, grid, dims, zeta):
-    """Metric weights (dx, dy and/or dz at var's position) and the dims to reduce."""
+def _grid_weights(var, grid, dims, zeta, **params):
+    """Metric weights (dx, dy and/or dz at var's position) and the dims to reduce.
+
+    ``params`` are the vertical parameters for ``dz`` (``hc``, ``Vtransform``, ``default_Vtransform``).
+    """
     var = canonicalize(var)
     items = [dims] if isinstance(dims, str) else list(dims)
     axes = []
@@ -444,7 +447,7 @@ def _grid_weights(var, grid, dims, zeta):
             vpos = vposition(var)
             if vpos is None:
                 raise ValueError(f"{var.name!r} has no vertical dimension")
-            weight = weight * _dz(grid, hcoord=pos, scoord=vpos, zeta=zeta, like=var).reset_coords(drop=True)
+            weight = weight * _dz(grid, hcoord=pos, scoord=vpos, zeta=zeta, like=var, **params).reset_coords(drop=True)
             reduce.append(vpos)
     if any(r is None for r in reduce):
         raise ValueError(f"{var.name!r} lacks a dimension for axes {axes}")
@@ -452,16 +455,18 @@ def _grid_weights(var, grid, dims, zeta):
 
 
 @with_grid_coords
-def gridsum(var, grid, dims, *, zeta=None):
+def gridsum(var, grid, dims, *, zeta=None, hc=None, Vtransform=None, default_Vtransform=None):
     """Grid-weighted sum over ``dims`` (axis letters ``X``/``Y``/``Z`` or dim names).
 
     Multiplies by the grid spacing at ``var``'s position (``dx``, ``dy``, ``dz``)
     before summing: e.g. ``gridsum(u, ds, "Z")`` is depth-integrated u. Missing
     (NaN) points are left out of the sum, and where all of them are missing (land)
-    the sum is NaN.
+    the sum is NaN. ``hc``, ``Vtransform`` and ``default_Vtransform`` are the
+    vertical parameters for ``dz``, as in :func:`xroms.z`.
     """
     grid = _check_grid(grid, "gridsum")
-    var, weight, reduce = _grid_weights(var, grid, dims, zeta)
+    params = dict(hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform)
+    var, weight, reduce = _grid_weights(var, grid, dims, zeta, **params)
     out = (var * weight).sum(reduce, min_count=1)  # NaN where nothing was summed (land), not 0
     out.attrs = dict(var.attrs)
     out.attrs["long_name"] = f"{var.attrs.get('long_name', var.name)}, grid sum over {', '.join(reduce)}"
@@ -471,10 +476,14 @@ def gridsum(var, grid, dims, *, zeta=None):
 
 
 @with_grid_coords
-def gridmean(var, grid, dims, *, zeta=None):
-    """Grid-weighted mean over ``dims``; NaN points (e.g. land) carry no weight."""
+def gridmean(var, grid, dims, *, zeta=None, hc=None, Vtransform=None, default_Vtransform=None):
+    """Grid-weighted mean over ``dims``; NaN points (e.g. land) carry no weight.
+
+    ``hc``, ``Vtransform`` and ``default_Vtransform`` are as in :func:`gridsum`.
+    """
     grid = _check_grid(grid, "gridmean")
-    var, weight, reduce = _grid_weights(var, grid, dims, zeta)
+    params = dict(hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform)
+    var, weight, reduce = _grid_weights(var, grid, dims, zeta, **params)
     weight = weight.broadcast_like(var).where(var.notnull(), 0.0)
     total = weight.sum(reduce)
     out = (var * weight).sum(reduce) / total.where(total > 0)

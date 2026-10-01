@@ -295,14 +295,17 @@ def sigma_levels(N, loc="rho"):
 
 @dataclass(frozen=True)
 class VerticalParams:
-    """Terrain-following vertical coordinate parameters of a ROMS dataset."""
+    """Terrain-following vertical coordinate parameters of a ROMS dataset.
+
+    The level arrays of a pair :func:`vertical_params` was not asked for (``levels=``) are None.
+    """
 
     Vtransform: int
     hc: float
-    Cs_r: xr.DataArray
-    Cs_w: xr.DataArray
-    sigma_r: xr.DataArray
-    sigma_w: xr.DataArray
+    Cs_r: xr.DataArray | None = None
+    Cs_w: xr.DataArray | None = None
+    sigma_r: xr.DataArray | None = None
+    sigma_w: xr.DataArray | None = None
 
 
 def _sources(ds, grid):
@@ -372,7 +375,123 @@ def _as_level_array(value, dim):
     return xr.DataArray(np.asarray(value, dtype=float).reshape(-1), dims=dim)
 
 
-def vertical_params(ds, grid=None, *, Vtransform=None):
+#: per level dim: the Cs and sigma names, where sigma values are read from, and ``sigma_levels``' loc
+_PAIRS = {
+    "s_rho": ("Cs_r", "sigma_r", ("s_rho", "sigma_r", "sc_r"), "rho"),
+    "s_w": ("Cs_w", "sigma_w", ("s_w", "sigma_w", "sc_w"), "w"),
+}
+
+
+def _wanted_levels(levels):
+    """The level dims whose arrays ``levels=`` asks :func:`vertical_params` for."""
+    if levels is True:
+        return ("s_rho", "s_w")
+    if levels is False:
+        return ()
+    try:
+        dim = normalize_scoord(levels) if isinstance(levels, str) else None
+    except ValueError:
+        dim = None
+    if dim is None:
+        raise ValueError(
+            "levels must be True (both pairs of level arrays), 's_rho' (or 'rho'), 's_w' (or 'w'), or False "
+            f"(only hc and Vtransform), not {levels!r}"
+        )
+    return (dim,)
+
+
+def _level_arrays(src, wanted):
+    """The ``Cs``/``sigma`` arrays of the level dims in ``wanted``, checked against the levels of the data."""
+    n_r, n_w = _levels(src, "s_rho"), _levels(src, "s_w")
+    if n_r is not None and n_w is not None and n_w != n_r + 1:
+        raise ValueError(
+            f"'s_rho' has {n_r} levels but 's_w' has {n_w}; 's_w' must have one more level than 's_rho'. "
+            "To subset vertically, select both together, e.g. ds.isel(s_rho=slice(a, b), s_w=slice(a, b + 1))."
+        )
+    if n_r is None and n_w is None:
+        raise ValueError("dataset has no 's_rho' dimension; it is not a 3-D ROMS dataset")
+    if n_r is None and "s_rho" in wanted:
+        raise ValueError(
+            "dataset has an 's_w' dimension but no 's_rho' one, as when one level is selected with an "
+            "integer (ds.isel(s_rho=3) drops the dim). Compute on the full Dataset and select afterwards, "
+            "e.g. xroms.z(ds).isel(s_rho=3)."
+        )
+    n_levels = n_r if n_r is not None else n_w - 1
+    theta_s, theta_b = _scalar(src, "theta_s"), _scalar(src, "theta_b")
+    vstretching = _scalar(src, "Vstretching")
+    vstretching = 4 if vstretching is None else int(vstretching)
+
+    out = {}
+    for dim in wanted:
+        cs_name, sigma_name, sigma_sources, loc = _PAIRS[dim]
+        sigma = _var(src, *sigma_sources)
+        sigma = sigma_levels(n_levels, loc) if sigma is None else _as_level_array(sigma, dim)
+        cs = _var(src, cs_name)
+        if cs is None:
+            cs = _attr(src, cs_name)
+        if cs is None:
+            if theta_s is None or theta_b is None:
+                raise ValueError(f"cannot find {cs_name} (variable or attribute) or theta_s/theta_b to compute it")
+            cs = stretching(sigma, theta_s, theta_b, vstretching)
+        out[cs_name], out[sigma_name] = _as_level_array(cs, dim), sigma
+
+    for name, arr in out.items():
+        dim = arr.dims[0]
+        n_data = _levels(src, dim)
+        # without an s_w dim, the w arrays still need one level more than the data's s_rho
+        n_need = n_data if n_data is not None else n_levels + 1
+        if arr.sizes[dim] != n_need:
+            have = f"{n_data} along {dim!r}" if n_data is not None else f"{n_levels} along 's_rho', so {n_need} interfaces"
+            raise ValueError(
+                f"{name} has {arr.sizes[dim]} levels but the data have {have}. "
+                "If the data were subset vertically, subset the Dataset (not just the variable) "
+                "so the vertical parameters stay matched, or pass them explicitly."
+            )
+    return out
+
+
+def _vtransform_value(value, name, source):
+    """``value`` as the integer 1 or 2, else a ``ValueError`` naming ``source``."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        number = None
+    if number not in (1.0, 2.0):  # also rejects 2.5, which int() would silently turn into 2
+        raise ValueError(f"{name} must be 1 or 2, not {value!r}. Correct {source}.")
+    return int(number)
+
+
+def _vtransform(src, Vtransform, default_Vtransform):
+    """Vtransform: the argument, else what the Dataset states or implies, else ``default_Vtransform``."""
+    if default_Vtransform is not None:
+        default_Vtransform = _vtransform_value(default_Vtransform, "default_Vtransform", "the default_Vtransform= argument")
+    if Vtransform is not None:
+        return _vtransform_value(Vtransform, "Vtransform", "the Vtransform= argument")
+    value = _scalar(src, "Vtransform")
+    if value is not None:
+        return _vtransform_value(value, "Vtransform", "the dataset's 'Vtransform' variable or attribute, or pass Vtransform=")
+    vct = _attr(src, "VertCoordType")
+    if vct is not None:
+        value = {"NEW": 2, "OLD": 1}.get((vct.decode() if isinstance(vct, bytes) else str(vct)).strip().upper())
+        if value is None:
+            raise ValueError(
+                f"cannot determine Vtransform: VertCoordType is {vct!r}, neither 'NEW' (2) nor 'OLD' (1). Set it "
+                "on the Dataset, e.g. ds['Vtransform'] = 1 (or 2), or pass Vtransform=."
+            )
+        return value
+    cs_attr_only = any(_var(src, name) is None and _attr(src, name) is not None for name in ("Cs_r", "Cs_w"))
+    if cs_attr_only or _var(src, "sigma_r") is not None or any(_has_file_topology(s) for s in src):
+        return 2  # UCLA ROMS output / roms-tools grids / REMORA only use Vtransform 2
+    if default_Vtransform is not None:
+        return default_Vtransform
+    raise ValueError(
+        "cannot determine Vtransform (no variable, attribute or VertCoordType gives it). Set it on the "
+        "Dataset, e.g. ds['Vtransform'] = 1 (or 2), or pass Vtransform= (which wins over the Dataset) or "
+        "default_Vtransform= (used only when the Dataset states none)."
+    )
+
+
+def vertical_params(ds, grid=None, *, levels=True, hc=None, Vtransform=None, default_Vtransform=None):
     """Find the s-coordinate parameters of ``ds`` (optionally with ``grid``).
 
     Looks, per item, in variables then global attributes of ``ds`` and then
@@ -383,93 +502,51 @@ def vertical_params(ds, grid=None, *, Vtransform=None):
       then ``sc_r``/``sc_w``; otherwise computed from the number of levels.
     * ``Cs_r``/``Cs_w``: variables, then attributes; otherwise computed from
       ``theta_s``/``theta_b`` with ``Vstretching`` (4 unless stated).
-    * ``hc``: variable or attribute.
+    * ``hc``: the argument, else a variable or attribute.
     * ``Vtransform``: the argument, a variable, an attribute, ``VertCoordType``
       (``"NEW"`` -> 2, ``"OLD"`` -> 1), else 2 for UCLA-style files (stretching
       only in attributes, or roms-tools ``sigma_r`` variables) and REMORA (its
-      own SGRID topology variable; the one :func:`add_cf_attrs` writes does not count).
+      own SGRID topology variable; the one :func:`add_cf_attrs` writes does not
+      count), else ``default_Vtransform``.
+
+    Parameters
+    ----------
+    levels : True, "s_rho", "s_w" or False
+        The level arrays to find: both pairs (True), ``Cs_r``/``sigma_r`` only
+        (``"s_rho"``: all that depths on rho levels need), ``Cs_w``/``sigma_w``
+        only (``"s_w"``), or none (False). With False only ``hc`` and
+        ``Vtransform`` are looked up, so the Dataset may be cut vertically in
+        any way, or be 2-D. Arrays not asked for are None.
+    hc : float, optional
+        Critical depth (m). Wins over the Dataset's.
+    Vtransform : 1 or 2, optional
+        Wins over the Dataset's.
+    default_Vtransform : 1 or 2, optional
+        Used only when nothing in the Dataset states or implies a Vtransform.
 
     Parameters that carry a time dim (as after ``xr.open_mfdataset`` with its
     default ``data_vars="all"``) are read from their first record. Raises
     ``ValueError`` if ``s_w`` does not have one more level than ``s_rho``, if the
-    parameters do not match the levels of the data, or if ``Vtransform`` is not 1 or 2.
+    level arrays asked for do not match the levels of the data, or if
+    ``Vtransform`` is not 1 or 2.
     """
     src = _sources(ds, grid)
-    N = _levels(src, "s_rho")
-    if N is None:
-        raise ValueError("dataset has no 's_rho' dimension; it is not a 3-D ROMS dataset")
-    n_w = _levels(src, "s_w")
-    if n_w is not None and n_w != N + 1:
-        raise ValueError(
-            f"'s_rho' has {N} levels but 's_w' has {n_w}; 's_w' must have one more level than 's_rho'. "
-            "To subset vertically, select both together, e.g. ds.isel(s_rho=slice(a, b), s_w=slice(a, b + 1))."
-        )
-
-    sigma_r = _var(src, "s_rho", "sigma_r", "sc_r")
-    sigma_w = _var(src, "s_w", "sigma_w", "sc_w")
-    sigma_r = sigma_levels(N, "rho") if sigma_r is None else _as_level_array(sigma_r, "s_rho")
-    sigma_w = sigma_levels(N, "w") if sigma_w is None else _as_level_array(sigma_w, "s_w")
-
-    theta_s, theta_b = _scalar(src, "theta_s"), _scalar(src, "theta_b")
-    vstretching = _scalar(src, "Vstretching")
-    vstretching = 4 if vstretching is None else int(vstretching)
-
-    cs_attr_only = False
-    cs = {}
-    for name, sig, dim in (("Cs_r", sigma_r, "s_rho"), ("Cs_w", sigma_w, "s_w")):
-        value = _var(src, name)
-        if value is None:
-            value = _attr(src, name)
-            cs_attr_only = cs_attr_only or value is not None
-        if value is None:
-            if theta_s is None or theta_b is None:
-                raise ValueError(f"cannot find {name} (variable or attribute) or theta_s/theta_b to compute it")
-            value = stretching(sig, theta_s, theta_b, vstretching)
-        cs[name] = _as_level_array(value, dim)
-
-    hc = _scalar(src, "hc")
-    if hc is None:
-        raise ValueError("cannot find the critical depth 'hc' (variable or attribute)")
-
-    vt = Vtransform
-    if vt is None:
-        vt = _scalar(src, "Vtransform")
-    if vt is None:
-        vct = _attr(src, "VertCoordType")
-        if vct is not None:
-            vt = {"NEW": 2, "OLD": 1}.get((vct.decode() if isinstance(vct, bytes) else str(vct)).strip().upper())
-            if vt is None:
-                raise ValueError(
-                    f"cannot determine Vtransform: VertCoordType is {vct!r}, neither 'NEW' (2) nor 'OLD' (1). Set it "
-                    "on the Dataset, e.g. ds['Vtransform'] = 1 (or 2); xroms.z and xroms.vertical_params also take Vtransform=."
-                )
-    if vt is None and (cs_attr_only or _var(src, "sigma_r") is not None or any(_has_file_topology(s) for s in src)):
-        vt = 2  # UCLA ROMS output / roms-tools grids / REMORA only use Vtransform 2
-    if vt is None:
-        raise ValueError(
-            "cannot determine Vtransform (no variable, attribute or VertCoordType gives it). Set it on the "
-            "Dataset, e.g. ds['Vtransform'] = 1 (or 2); xroms.z and xroms.vertical_params also take Vtransform=."
-        )
-    try:
-        number = float(vt)
-    except (TypeError, ValueError):
-        number = None
-    if number not in (1.0, 2.0):  # also rejects 2.5, which int() would silently turn into 2
-        raise ValueError(
-            f"Vtransform must be 1 or 2, not {vt!r}. Correct the dataset's 'Vtransform' variable or attribute, "
-            "or the Vtransform= argument."
-        )
-    vt = int(number)
-
-    for name, arr, dim in (("Cs_r", cs["Cs_r"], "s_rho"), ("Cs_w", cs["Cs_w"], "s_w"), ("sigma_r", sigma_r, "s_rho"), ("sigma_w", sigma_w, "s_w")):
-        n_data = _levels(src, dim)
-        if n_data is not None and arr.sizes[dim] != n_data:
-            raise ValueError(
-                f"{name} has {arr.sizes[dim]} levels but the data have {n_data} along {dim!r}. "
-                "If the data were subset vertically, subset the Dataset (not just the variable) "
-                "so the vertical parameters stay matched, or pass them explicitly."
-            )
-    return VerticalParams(Vtransform=vt, hc=hc, Cs_r=cs["Cs_r"], Cs_w=cs["Cs_w"], sigma_r=sigma_r, sigma_w=sigma_w)
+    wanted = _wanted_levels(levels)
+    arrays = _level_arrays(src, wanted) if wanted else {}
+    if hc is not None:
+        try:
+            value = float(hc)
+        except (TypeError, ValueError):
+            value = np.nan
+        if not np.isfinite(value) or value < 0:
+            raise ValueError(f"hc must be a finite number of metres, 0 or more, not {hc!r}")
+        hc = value
+    else:
+        hc = _scalar(src, "hc")
+        if hc is None:
+            raise ValueError("cannot find the critical depth 'hc' (variable or attribute); pass hc= if you know it")
+    vt = _vtransform(src, Vtransform, default_Vtransform)
+    return VerticalParams(Vtransform=vt, hc=hc, **arrays)
 
 
 def rho0(ds, grid=None, default=1025.0):

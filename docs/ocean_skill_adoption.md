@@ -39,8 +39,9 @@ own env, except for one new failure: a test that calls the removed `xroms.roms_d
   - `zeta=<DataArray>` passes it explicitly.
   - A variable that varies in time, with no free surface to match it, raises an error rather than assuming a flat
     surface.
-- **Vertical parameters** come from the Dataset (variables or attributes), not from a catalog. Put a catalog's
-  `Vtransform`/`hc` on the Dataset, or pass `Vtransform=` to `z`/`vertical_params`.
+- **Vertical parameters** come from the Dataset (variables or attributes). A catalog's go in as keywords: `hc=` and
+  `Vtransform=` win over the Dataset, and `default_Vtransform=` applies only when the Dataset states none. `z`, `dz`,
+  `zslice`, `depth_average` and `vertical_params` take them. Depths on rho levels need only `Cs_r`/`sigma_r`.
 - **Lazy.** Everything stays lazy. Only the dim being operated on is rechunked, and its chunks are restored afterwards.
 - **Coordinates.** Results carry the Dataset's coordinates (lon/lat at the result's position), never its data
   variables. `xroms.merge_grid` makes the grid's lon/lat coordinates. A plain `xr.merge` with a grid file that stores
@@ -56,7 +57,7 @@ own env, except for one new failure: a test that calls the removed `xroms.roms_d
 | `roms.add_interface_coord(std, meta).z_w` | `xroms.z(ds, scoord="s_w")` | bit for bit |
 | the same with `zero_zeta=True` | `xroms.z(ds, zeta=0)` | bit for bit |
 | `roms._s_to_z(sigma, Cs, h, zeta, hc, Vtransform)` | `xroms.compute_depth(h, zeta, hc=, Cs=, sigma=, Vtransform=)` | bit for bit |
-| `roms._vertical_params(ds, meta)` | `xroms.vertical_params(ds)` (`.hc`, `.Vtransform`) | same values |
+| `roms._vertical_params(ds, meta)` | `xroms.vertical_params(ds, levels=False, hc=..., default_Vtransform=...)` (`.hc`, `.Vtransform`) | same values |
 | `roms.surface(std, meta)` | `xroms.surface(var)` | bit for bit |
 | `roms.depth_band(std, meta, low, high)` | `xroms.depth_band_weights(xroms.z(ds, scoord="s_w", zeta=0), low, high)` | bit for bit (xroms keeps every layer, weighted 0 outside the band) |
 | `roms.depth_average(std, meta, low, high)` | `xroms.depth_average(var, ds, shallow=low, deep=high)` | bit for bit over water |

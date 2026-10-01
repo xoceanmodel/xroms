@@ -256,6 +256,9 @@ def zslice(
     method="linear",
     mask_edges=True,
     new_dim="z",
+    hc=None,
+    Vtransform=None,
+    default_Vtransform=None,
 ):
     """Interpolate ``var`` to fixed vertical positions ``depths``.
 
@@ -275,6 +278,9 @@ def zslice(
     reference and sign when ``reference=`` or ``positive=`` is given; otherwise any CF
     ``standard_name``/``positive`` attrs it has are read, with a warning (they may be
     left over from other arithmetic), and with none it is taken at its word.
+
+    ``hc``, ``Vtransform`` and ``default_Vtransform`` are the vertical parameters
+    for depths computed from ``grid``, as in :func:`xroms.z`.
     """
     grid = _check_grid(grid, "zslice")
     var = canonicalize(var)
@@ -294,7 +300,10 @@ def zslice(
         raise ValueError("zslice needs grid= (to compute depths) or z=")
     if z is not None:
         z = _in_requested_labels(z, reference, positive, explicit)
-    zz = z_like(var, grid, zeta=zeta, z=z, reference=reference, positive=positive)
+    zz = z_like(
+        var, grid, zeta=zeta, z=z, reference=reference, positive=positive,
+        hc=hc, Vtransform=Vtransform, default_Vtransform=default_Vtransform,
+    )
     if z is not None:
         zz = label(zz, reference, positive) if "vertical_reference" not in zz.attrs else zz
     out = isoslice(var, depths, zz.rename(new_dim), dim=vposition(var), new_dim=new_dim, method=method, mask_edges=mask_edges)
