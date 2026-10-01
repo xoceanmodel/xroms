@@ -27,6 +27,7 @@ from .conventions import (
     RUTGERS,
     canonicalize,
     convention,
+    free_surface_name,
     horizontal_coords,
     hposition,
     rename_like,
@@ -121,9 +122,10 @@ def _effective_grid(ds, grid):
         if dim in ds.dims and dim not in out.dims:
             # no variable carries the dim (UCLA output keeps Cs_r etc. in attributes), and vertical_params needs its size
             out = out.assign({f"_{dim}_levels": xr.Variable(dim, np.zeros(ds.sizes[dim]))})
-    if "zeta" in ds.variables and "zeta" not in out.variables:
-        _check_footprint(ds["zeta"], out, "this Dataset's zeta")
-        out = out.assign(zeta=ds["zeta"].reset_coords(drop=True))
+    zeta = free_surface_name(ds)
+    if zeta is not None and free_surface_name(out) is None:
+        _check_footprint(ds[zeta], out, "this Dataset's zeta")
+        out = out.assign({zeta: ds[zeta].reset_coords(drop=True)})
     return out
 
 
@@ -488,12 +490,12 @@ class xromsDatasetAccessor:
     @property
     def ug(self):
         """Geostrophic u (m/s) from zeta, on u points."""
-        return self._out(derived.uv_geostrophic(self._obj["zeta"], self._obj["f"], self._obj, which="xi"))
+        return self._out(derived.uv_geostrophic(self._obj[free_surface_name(self._obj) or "zeta"], self._obj["f"], self._obj, which="xi"))
 
     @property
     def vg(self):
         """Geostrophic v (m/s) from zeta, on v points."""
-        return self._out(derived.uv_geostrophic(self._obj["zeta"], self._obj["f"], self._obj, which="eta"))
+        return self._out(derived.uv_geostrophic(self._obj[free_surface_name(self._obj) or "zeta"], self._obj["f"], self._obj, which="eta"))
 
     @property
     def EKE(self):

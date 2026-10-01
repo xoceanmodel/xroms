@@ -827,22 +827,20 @@ class TestLazyInputs:
 class TestOnTheStandardizedDataset:
     """The replacement calls get ocean-skill's standardized Dataset, not the raw one, and xroms reads it directly.
 
-    It differs from the raw output in three ways that matter here: zeta is renamed (sea_surface_height_above_geoid),
-    every rho-point data variable is masked (pm and pn among them), and the grid fields (h, sigma_r, Cs_r, angle,
+    It differs from the raw output in three ways that matter here: zeta is renamed (sea_surface_height_above_geoid,
+    a CF name xroms finds it by), every rho-point data variable is masked (pm and pn among them), and the grid fields (h, sigma_r, Cs_r, angle,
     longitudes) are coordinates, which xroms reads all the same. Each test makes the call on that Dataset.
     """
 
-    def test_z_needs_the_renamed_zeta_passed(self):
+    def test_z_finds_the_renamed_zeta(self):
         ds, meta = osk_inputs()
         std = roms.standardize(ds, meta)
         zeta = std[ROMS_STANDARD_NAMES["zeta"]]
-        same(xroms.z(std, zeta=zeta), std.z_rho, ordered=True)
-        same(xroms.z(std, scoord="s_w", zeta=zeta), roms.add_interface_coord(std, meta).z_w, ordered=True)
-        # zeta is not found under its new name: z itself then takes a flat surface, without saying so ...
-        same(xroms.z(std), roms.add_depth_coord(std, meta, zero_zeta=True).z_rho)
-        # ... while a variable that varies in time has nothing to match a missing zeta to, and is refused
-        with pytest.raises(ValueError, match="zeta"):
-            xroms.zslice(std[TEMP], [-5.0], std)
+        for kwargs in ({}, {"zeta": zeta}):
+            same(xroms.z(std, **kwargs), std.z_rho, ordered=True)
+            same(xroms.z(std, scoord="s_w", **kwargs), roms.add_interface_coord(std, meta).z_w, ordered=True)
+        # a variable that varies in time is matched to it too
+        same(xroms.zslice(std[TEMP], [-5.0], std), xroms.zslice(std[TEMP], [-5.0], std, zeta=zeta))
 
     def test_zslice_with_zeta_or_with_ocean_skills_own_z(self):
         ds, meta = osk_inputs(land=True)

@@ -478,6 +478,33 @@ def rho0(ds, grid=None, default=1025.0):
     return default if value is None else value
 
 
+#: CF names a free surface goes by once a Dataset is renamed to them (ocean-skill renames zeta to the first)
+FREE_SURFACE_NAMES = (
+    "sea_surface_height_above_geoid",
+    "sea_surface_height_above_mean_sea_level",
+    "sea_surface_height",
+    "sea_surface_elevation",
+)
+
+
+def free_surface_name(ds):
+    """Name of ``ds``'s free surface, or None: ``zeta``, else the one rho-point variable
+    named or standard-named as a CF sea surface height (:data:`FREE_SURFACE_NAMES`).
+
+    Raises ``ValueError`` when several variables could be it.
+    """
+    if "zeta" in ds.variables:
+        return "zeta"
+    found = [
+        name
+        for name, var in ds.data_vars.items()
+        if (name in FREE_SURFACE_NAMES or var.attrs.get("standard_name") in FREE_SURFACE_NAMES) and hposition(var) == "rho"
+    ]
+    if len(found) > 1:
+        raise ValueError(f"several variables could be the free surface ({found}); choose one with zeta=<DataArray>")
+    return found[0] if found else None
+
+
 # --- time ---------------------------------------------------------------------
 
 

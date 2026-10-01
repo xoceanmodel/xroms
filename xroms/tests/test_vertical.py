@@ -365,6 +365,28 @@ def test_explicit_zeta_off_rho_points_is_refused():
         xroms.ddxi(ds.temp, ds, zeta=zeta_u)
 
 
+@pytest.mark.parametrize("layout", ["rutgers", "ucla"])
+def test_zeta_renamed_to_its_cf_name_is_still_the_free_surface(layout):
+    # ocean-skill renames zeta to its CF standard name; a variable with that standard_name counts too
+    ds = merged(layout)
+    for renamed in (
+        ds.rename(zeta="sea_surface_height_above_geoid"),
+        ds.rename(zeta="ssh").assign(ssh=ds.zeta.assign_attrs(standard_name="sea_surface_height_above_geoid")),
+    ):
+        xr.testing.assert_identical(xroms.z(renamed, scoord="s_w"), xroms.z(ds, scoord="s_w"))
+        xr.testing.assert_identical(renamed.xroms.z_rho, ds.xroms.z_rho)
+        xr.testing.assert_identical(xroms.ddxi(renamed.temp, renamed), xroms.ddxi(ds.temp, ds))
+        xr.testing.assert_identical(xroms.z(renamed, zeta="mean"), xroms.z(ds, zeta="mean"))
+        # also when the output, which has it, is kept apart from the grid
+        grid = renamed.drop_vars([name for name in renamed.data_vars if renamed[name].ndim > 2 or name in ("ssh", "sea_surface_height_above_geoid")])
+        xr.testing.assert_allclose(C.canonicalize(renamed.xroms.ddz("temp", grid=grid)), C.canonicalize(ds.xroms.ddz("temp")))
+    # it is not guessed when two variables could be it
+    two = ds.rename(zeta="sea_surface_height_above_geoid").assign(ssh=ds.zeta.assign_attrs(standard_name="sea_surface_height"))
+    with pytest.raises(ValueError, match="several variables could be the free surface"):
+        xroms.z(two)
+    xr.testing.assert_identical(xroms.z(two, zeta=two.ssh), xroms.z(ds))
+
+
 def test_to_grid_rejects_an_xgcm_grid_where_hcoord_goes():
     ds = merged("rutgers")
     with pytest.raises(TypeError, match="xgcm grid"):

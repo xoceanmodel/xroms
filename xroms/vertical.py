@@ -27,6 +27,7 @@ from . import _xgcm
 from ._align import _check_grid, GridMismatchError, is_time_varying, level_positions, require, select_like, with_grid_coords
 from .conventions import (
     canonicalize,
+    free_surface_name,
     hposition,
     normalize_hcoord,
     normalize_scoord,
@@ -176,23 +177,27 @@ def _resolve_zeta(grid, zeta, like=None):
             )
         return select_like(zeta, like, name="zeta") if like is not None else zeta
     if zeta is None:
-        if "zeta" not in grid.variables:
+        name = free_surface_name(grid)
+        if name is None:
             if like is not None and is_time_varying(like):
                 raise GridMismatchError(
-                    f"{like.name or 'variable'!r} varies in time but the grid has no 'zeta', so its "
+                    f"{like.name or 'variable'!r} varies in time but the grid has no 'zeta' (nor a CF "
+                    "sea_surface_height_above_geoid), so its "
                     "depths would silently assume a flat free surface. Choose the free surface "
                     "explicitly: zeta=0 (static, resting depths), zeta=<DataArray> (e.g. the output's "
                     "zeta), or merge the output and grid Datasets so the grid has a zeta, e.g. "
                     "xr.merge([out, grid], compat='override')."
                 )
             return 0.0
-        field = grid["zeta"]
+        field = grid[name]
         return select_like(field, like, name="zeta") if like is not None else canonicalize(field)
     if isinstance(zeta, str):
         if zeta != "mean":
             raise ValueError(f"zeta must be None, a number, 'mean', or a DataArray, not {zeta!r}")
-        require(grid, "zeta", purpose="zeta='mean'")
-        field = canonicalize(grid["zeta"])
+        name = free_surface_name(grid)
+        if name is None:
+            require(grid, "zeta", purpose="zeta='mean'")
+        field = canonicalize(grid[name])
         tdim = time_dim(field)
         field = field.mean(tdim) if tdim else field
         return select_like(field, like, name="zeta") if like is not None else field
