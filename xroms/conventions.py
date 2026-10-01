@@ -663,6 +663,10 @@ def decode_time(ds, reference_date=None, time_var=None):
 def add_cf_attrs(ds, *, index_coords=False, sgrid=True):
     """Return a copy of ``ds`` decorated for cf-xarray (metadata only).
 
+    * the longitudes and latitudes (and x/y) at every position as coordinates,
+      with ``standard_name``/``units``, so that every xroms result carries them.
+      UCLA grid files keep them as data variables, which results cannot carry:
+      they would not merge back into ``ds``;
     * ``axis``/``standard_name`` attributes on the coordinates that exist;
     * an SGRID ``grid`` topology variable if none is present (``sgrid=True``),
       marked ``xroms_generated`` so that it is never taken for a REMORA file's own;
@@ -674,16 +678,20 @@ def add_cf_attrs(ds, *, index_coords=False, sgrid=True):
     use ``ds.xroms.xgcm_grid()``.
     """
     ds = ds.copy()
+    position_coords = []
     for pos in HCOORDS:
         for suffix, (std, units) in {"lon": ("longitude", "degrees_east"), "lat": ("latitude", "degrees_north")}.items():
             name = f"{suffix}_{pos}"
             if name in ds.variables:
                 ds[name].attrs.setdefault("standard_name", std)
                 ds[name].attrs.setdefault("units", units)
+                position_coords.append(name)
         for suffix, std in {"x": "projection_x_coordinate", "y": "projection_y_coordinate"}.items():
             name = f"{suffix}_{pos}"
             if name in ds.variables:
                 ds[name].attrs.setdefault("standard_name", std)
+                position_coords.append(name)
+    ds = ds.set_coords([name for name in position_coords if name in ds.data_vars])
     for dim in ("s_rho", "s_w"):
         if dim in ds.coords:
             ds[dim].attrs.setdefault("axis", "Z")

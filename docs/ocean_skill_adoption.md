@@ -43,7 +43,8 @@ own env, except for one new failure: a test that calls the removed `xroms.roms_d
   `Vtransform`/`hc` on the Dataset, or pass `Vtransform=` to `z`/`vertical_params`.
 - **Lazy.** Everything stays lazy. Only the dim being operated on is rechunked, and its chunks are restored afterwards.
 - **Coordinates.** Results carry the Dataset's coordinates (lon/lat at the result's position), never its data
-  variables.
+  variables. A UCLA output merged with its grid holds lon/lat as data variables. `ds = xroms.add_cf_attrs(ds)` makes
+  them coordinates, and from then on every result carries them.
 
 ## Wave 1: the proof of concept
 

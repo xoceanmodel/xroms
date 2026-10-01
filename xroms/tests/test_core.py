@@ -503,6 +503,19 @@ class TestConventions:
         assert "xgcm_grid" in doc and "cf-xarray and xgcm" not in doc
         assert {"X", "Y"} <= set(rutgers.xroms.xgcm_grid().axes)
 
+    def test_add_cf_attrs_makes_lonlat_coordinates(self, ucla, remora):
+        # UCLA's grid keeps lon/lat as data variables; as coordinates, results carry them and still store back
+        out, grid = ucla
+        ds = xr.merge([out, grid.drop_vars("spherical")])
+        dec = C.add_cf_attrs(ds)
+        assert {"lon_rho", "lat_rho"} <= set(dec.coords) and "lon_rho" in ds.data_vars  # the input is untouched
+        assert {"lon_rho", "lat_rho"} <= set(dec.temp.coords) and {"lon_rho", "lat_rho"} <= set(dec.xroms.speed.coords)
+        dec["speed"] = dec.xroms.speed
+        assert {"lon_rho", "lat_rho"} <= set(dec.speed.coords)
+        xr.testing.assert_equal(dec.reset_coords()[list(ds.data_vars)], ds[list(ds.data_vars)])  # values untouched
+        # x/y on a Cartesian grid
+        assert {"x_rho", "y_rho", "x_u", "y_u"} <= set(C.add_cf_attrs(remora).coords)
+
     def test_add_cf_attrs_index_coords_only_when_asked(self, rutgers):
         assert "xi_rho" not in C.add_cf_attrs(rutgers).coords
         lab = C.add_cf_attrs(rutgers, index_coords=True)
