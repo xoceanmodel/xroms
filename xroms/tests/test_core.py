@@ -516,6 +516,21 @@ class TestConventions:
         # x/y on a Cartesian grid
         assert {"x_rho", "y_rho", "x_u", "y_u"} <= set(C.add_cf_attrs(remora).coords)
 
+    def test_add_cf_attrs_coordinates_are_written_on_each_variable(self, ucla, tmp_path):
+        # written out, each variable lists the coordinates at its own position (CF), even where the file's own
+        # coordinates attribute left them out
+        out, grid = ucla
+        ds = xr.merge([out, grid.drop_vars("spherical")])
+        ds["temp"].encoding["coordinates"] = "time"
+        C.add_cf_attrs(ds).to_netcdf(tmp_path / "decorated.nc")
+        assert ds["temp"].encoding["coordinates"] == "time"  # the input is untouched
+        raw = xr.open_dataset(tmp_path / "decorated.nc", decode_coords=False)
+        for name in ("temp", "h"):
+            assert {"lon_rho", "lat_rho"} <= set(raw[name].attrs["coordinates"].split()), name
+        assert not {"lon_rho", "lat_rho"} & set(raw["u"].attrs.get("coordinates", "").split())
+        back = xr.open_dataset(tmp_path / "decorated.nc")
+        assert {"lon_rho", "lat_rho"} <= set(back.coords) and not {"lon_rho", "lat_rho"} & set(back.data_vars)
+
     def test_add_cf_attrs_index_coords_only_when_asked(self, rutgers):
         assert "xi_rho" not in C.add_cf_attrs(rutgers).coords
         lab = C.add_cf_attrs(rutgers, index_coords=True)

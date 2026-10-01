@@ -666,7 +666,9 @@ def add_cf_attrs(ds, *, index_coords=False, sgrid=True):
     * the longitudes and latitudes (and x/y) at every position as coordinates,
       with ``standard_name``/``units``, so that every xroms result carries them.
       UCLA grid files keep them as data variables, which results cannot carry:
-      they would not merge back into ``ds``;
+      they would not merge back into ``ds``. Each variable gets the ones at its
+      own position, and writing ``ds`` lists them in its CF ``coordinates``
+      attribute;
     * ``axis``/``standard_name`` attributes on the coordinates that exist;
     * an SGRID ``grid`` topology variable if none is present (``sgrid=True``),
       marked ``xroms_generated`` so that it is never taken for a REMORA file's own;
@@ -691,7 +693,13 @@ def add_cf_attrs(ds, *, index_coords=False, sgrid=True):
             if name in ds.variables:
                 ds[name].attrs.setdefault("standard_name", std)
                 position_coords.append(name)
-    ds = ds.set_coords([name for name in position_coords if name in ds.data_vars])
+    promoted = [name for name in position_coords if name in ds.data_vars]
+    ds = ds.set_coords(promoted)
+    for var in ds.data_vars.values():
+        listed = var.encoding.get("coordinates")
+        if listed is not None and any(name in var.coords and name not in listed.split() for name in promoted):
+            # the file's own list leaves them out: on writing, xarray lists every coordinate the variable has
+            del var.encoding["coordinates"]
     for dim in ("s_rho", "s_w"):
         if dim in ds.coords:
             ds[dim].attrs.setdefault("axis", "Z")
