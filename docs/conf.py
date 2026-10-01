@@ -41,7 +41,7 @@ import xroms  # isort:skip
 # -- Project information -----------------------------------------------------
 
 project = "xroms"
-copyright = "2020-2024"
+copyright = "2020-2026"
 author = "Rob Hetland, Kristen Thyng, Veronica Ruiz Xomchuk"
 
 release = imversion("xroms")
@@ -57,14 +57,11 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",
-    # "nbsphinx",
-    "recommonmark",
     "sphinx.ext.mathjax",
     "sphinx.ext.autosummary",
     "sphinx.ext.extlinks",
     "sphinx.ext.intersphinx",
     "numpydoc",
-    # "nbsphinx",
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinxcontrib.srclinks",
@@ -76,27 +73,10 @@ extensions = [
 nb_custom_formats = {
     ".md": ["jupytext.reads", {"fmt": "mystnb"}],
 }
-# packages that I don't want to install for docs but package depends on
-# autodoc_mock_imports = [
-#     "cf_xarray",
-#     "cmocean",
-#     "dask",
-#     "jupyter",
-#     "jupyterlab",
-#     "matplotlib",
-#     "netcdf4",
-#     "numpy",
-#     "pip",
-#     "requests",
-#     "xarray",
-#     "xcmocean",
-#     "xesmf",
-#     "xoak",
-# ]
-
-# https://myst-nb.readthedocs.io/en/v0.9.0/use/execute.html
-# jupyter_execute_notebooks = "off"
+# https://myst-nb.readthedocs.io/en/latest/computation/execute.html
 nb_execution_mode = "auto"
+# an example that raises fails the build, rather than showing a traceback in the page
+nb_execution_raise_on_error = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]

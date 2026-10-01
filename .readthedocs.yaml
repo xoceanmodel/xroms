@@ -1,25 +1,27 @@
 version: 2
 
-# Build PDF only
-formats:
-  - pdf
-
 build:
-  os: "ubuntu-20.04"
+  os: "ubuntu-24.04"
   tools:
-    python: "mambaforge-4.10"
-
-# uncomment to build from this exact version of package
-# the downside is the version listed in the docs will be a dev version
-# if uncommenting this, comment out installing pypi version of package in docs/env file
-# python:
-#   install:
-#     - method: pip
-#       path: ./
+    python: "miniforge3-latest"
+  jobs:
+    post_checkout:
+      # setuptools_scm reads the version from git: fetch the full history and the tags
+      - git fetch --unshallow || true
+      - git fetch --tags || true
 
 conda:
-    environment: docs/environment.yml
+  environment: docs/environment.yml
+
+# the docs describe this checkout's xroms, not the latest release
+python:
+  install:
+    - method: pip
+      path: .
 
 sphinx:
   configuration: docs/conf.py
-  # fail_on_warning: true
+
+# a PDF as well as the HTML pages
+formats:
+  - pdf
