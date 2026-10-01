@@ -469,7 +469,11 @@ def depth_average(var, grid, *, shallow=None, deep=None, zeta=None, reference="m
     levels = level_positions(var, "s_rho", w.sizes["s_rho"], grid.indexes.get("s_rho"))
     if levels is not None:
         w = w.isel(s_rho=levels)
-    out = (var * w).sum("s_rho") / w.sum("s_rho")
+    # missing values (land, a missing level) carry no weight; no weight at all (land, a band
+    # below the bottom) gives NaN, divided as NaN so that dask does not warn about 0/0
+    w = w.where(var.notnull(), 0.0)
+    total = w.sum("s_rho")
+    out = (var * w).sum("s_rho") / total.where(total > 0)
     out.attrs = dict(var.attrs)
     out.attrs["long_name"] = f"depth average of {var.attrs.get('long_name', var.name)}"
     return out.rename(var.name)

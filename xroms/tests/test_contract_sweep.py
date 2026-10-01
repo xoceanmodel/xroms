@@ -117,7 +117,6 @@ def test_pure_functions_keep_the_contract_over_land(layout, op):
 
 
 @pytest.mark.parametrize("op_name", ["depth_average", "gridmean_over_z"])
-@pytest.mark.xfail(strict=True, reason="a dask depth average or Z mean over land divides 0 by 0 at compute time and warns (numpy input does not)")
 def test_means_over_land_do_not_warn_when_computed(layout, op_name):
     ds = chunked(S.dataset(layout, land=True))
     mean = xroms.depth_average(ds.temp, ds) if op_name == "depth_average" else xroms.gridmean(ds.temp, ds, "Z")
@@ -186,7 +185,6 @@ def test_water_column(layout, op):
             _agree(got, canonicalize(want).isel(at), f"{op.name} on a column")
 
 
-@pytest.mark.xfail(strict=True, reason="the error reads \"None has no 'X' dimension\": z is unnamed when the averaging onto u points fails")
 def test_column_errors_name_the_array(layout):
     # z at u points averages neighbouring rho points; a column has none, which is an error
     # worth naming the array for

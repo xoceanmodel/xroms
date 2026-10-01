@@ -460,7 +460,8 @@ def gridmean(var, grid, dims, *, zeta=None):
     grid = _check_grid(grid, "gridmean")
     var, weight, reduce = _grid_weights(var, grid, dims, zeta)
     weight = weight.broadcast_like(var).where(var.notnull(), 0.0)
-    out = (var * weight).sum(reduce) / weight.sum(reduce)
+    total = weight.sum(reduce)
+    out = (var * weight).sum(reduce) / total.where(total > 0)
     out.attrs = dict(var.attrs)
     out.attrs["long_name"] = f"{var.attrs.get('long_name', var.name)}, grid mean over {', '.join(reduce)}"
     return order(out.rename(var.name))

@@ -47,10 +47,14 @@ class TestNamingAndCoords:
         assert {"lon_u", "lat_u", "ocean_time", "s_rho"} <= set(out.coords)
         assert "lon_rho" not in out.coords
 
-    def test_ucla_lonlat_data_vars_become_coords(self, ucla):
+    def test_ucla_lonlat_come_along_once_they_are_coords(self, ucla):
+        # UCLA's grid keeps lon/lat as data variables; as coords on the results they would not merge back into ds
         out, grid = ucla
         ds = xr.merge([out, grid.drop_vars("spherical")])
+        assert not {"lon_rho", "lat_rho"} & set(ds.xroms.speed.coords)
+        ds = ds.set_coords(["lon_rho", "lat_rho"])
         assert {"lon_rho", "lat_rho"} <= set(ds.xroms.speed.coords)
+        ds["speed"] = ds.xroms.speed
 
 
 class TestGridFacts:

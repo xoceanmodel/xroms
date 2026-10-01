@@ -320,7 +320,11 @@ def test_accessor_uses_the_files_own_names(case):
     np.testing.assert_allclose(ds.xroms.z_w.values, xroms.z(ds, scoord="s_w").values)
     rho = xroms.density(ds.temp, ds.salt, grid=ds)
     np.testing.assert_allclose(ds.xroms.N2.values, xroms.N2(rho, ds, xroms.rho0(ds)).values, equal_nan=True)
-    # the grid's longitudes and latitudes come along
+    # the grid's longitudes and latitudes come along; the UCLA grid file keeps them as data variables, and they
+    # come along once they are coordinates (as data variables they would not merge back into the Dataset)
+    if case.name == "ucla":
+        assert {"lon_rho", "lat_rho"} <= set(ds.data_vars) and not {"lon_rho", "lat_rho"} & set(ds.xroms.speed.coords)
+        ds = ds.set_coords(["lon_rho", "lat_rho"])
     assert {"lon_rho", "lat_rho"} <= set(ds.xroms.speed.coords)
     assert {"lon_u", "lat_u"} <= set(ds.xroms.ddxi("temp").coords) or case.name == "ucla"  # the UCLA grid file has no u-point lon/lat
 
@@ -431,7 +435,6 @@ def test_romstools_masks_at_u_and_v_points_are_the_files(romstools):
         np.testing.assert_array_equal(derived.values, romstools[f"mask_{pos}"].values)
 
 
-@pytest.mark.xfail(strict=True, reason="depth_average sums NaN as 0: with finite depths (no zeta in this grid file) land columns average to 0.0, not NaN")
 def test_romstools_depth_average_is_nan_over_land(romstools):
     land = romstools.mask_rho == 0
     avg = xroms.depth_average(romstools.temp, romstools)

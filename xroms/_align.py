@@ -253,9 +253,12 @@ def attach_grid_coords(out, grid):
 
     A result that lands somewhere its inputs were not (a derivative on psi
     points, z at u points) loses their coordinates; this puts the grid's own
-    back, matched to the result like any grid field. Coordinates the result
-    already has are kept, and ones that cannot be matched are left out. Tuples
-    of results are handled element by element.
+    back, matched to the result like any grid field. Only the grid's
+    coordinates are attached, never its data variables: a file that keeps
+    lon/lat as data variables (UCLA's grid) would otherwise get results that
+    cannot be stored back in it (``ds.set_coords`` makes them coordinates).
+    Coordinates the result already has are kept, and ones that cannot be
+    matched are left out. Tuples of results are handled element by element.
     """
     if isinstance(out, tuple):
         return tuple(attach_grid_coords(item, grid) for item in out)
@@ -266,7 +269,7 @@ def attach_grid_coords(out, grid):
         return out
     coords = {}
     for name in horizontal_coords(grid, pos):
-        if name is None or name in out.coords:
+        if name is None or name in out.coords or name not in grid.coords:
             continue
         try:
             field = select_like(grid[name], out, name=name)

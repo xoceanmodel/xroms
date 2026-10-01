@@ -106,7 +106,8 @@ def _apply(func, da, axis, padding, fill_value):
     """Run ``grid.<func>(da, axis)`` statelessly and put coords/labels/chunks back."""
     dim, from_center = axis_dim(da, axis)
     if dim is None:
-        raise ValueError(f"{da.name!r} has no {axis!r} dimension; dims are {da.dims}")
+        what = "the array" if da.name is None else repr(da.name)
+        raise ValueError(f"{what} has no {axis!r} dimension; dims are {da.dims}")
     new_dim = target_dim(axis, from_center)
     labels = da[dim].values if dim in da.indexes else None
     new_labels = _new_labels(labels, axis, from_center, dim, da.name)  # raises for strided labels

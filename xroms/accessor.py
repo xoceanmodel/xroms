@@ -194,7 +194,8 @@ class xromsDatasetAccessor:
         pos = hposition(canonicalize(da))
         if pos is not None:
             for name in horizontal_coords(ds, pos):
-                if name is None or name in out.coords or name in coords:
+                # coordinates only: lon/lat kept as data variables (UCLA) would not merge back into ds
+                if name is None or name in out.coords or name in coords or name not in ds.coords:
                     continue
                 var = ds[name]
                 if set(var.dims) <= set(out.dims) and all(ds.sizes[d] == out.sizes[d] for d in var.dims):
@@ -417,9 +418,15 @@ class xromsDatasetAccessor:
 
     def _grid_uv_from_earth(self):
         ds = self._obj
-        east = ds["u_eastward"] if "u_eastward" in ds.variables else ds["east"]
-        north = ds["v_northward"] if "v_northward" in ds.variables else ds["north"]
-        u, v = vector.earth_to_grid(east, north, ds["angle"], hcoord="native")
+        east = next((name for name in ("u_eastward", "east") if name in ds.variables), None)
+        north = next((name for name in ("v_northward", "north") if name in ds.variables), None)
+        if east is None or north is None:
+            missing = " or ".join(repr(name) for name in ("u", "v") if name not in ds.variables)
+            raise KeyError(
+                f"this Dataset has no velocity {missing}, nor both eastward and northward velocities "
+                "(u_eastward and v_northward, or east and north) to rotate onto the grid"
+            )
+        u, v = vector.earth_to_grid(ds[east], ds[north], ds["angle"], hcoord="native")
         return self._out(u), self._out(v)
 
     @property
@@ -496,12 +503,12 @@ class xromsDatasetAccessor:
     @property
     def dudz(self):
         """du/dz (1/s) on u points, w levels."""
-        return self._out(derived.dudz(self._uv()[0], self._obj))
+        return self._out(derived.dudz(self.u, self._obj))
 
     @property
     def dvdz(self):
         """dv/dz (1/s) on v points, w levels."""
-        return self._out(derived.dvdz(self._uv()[1], self._obj))
+        return self._out(derived.dvdz(self.v, self._obj))
 
     @property
     def vertical_shear(self):

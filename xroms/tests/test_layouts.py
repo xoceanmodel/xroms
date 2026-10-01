@@ -58,12 +58,16 @@ def test_accessor_member_matches_its_pure_function(layout, acc, chunks):
         if same is not None:
             combined = ds[same] + g
             assert set(combined.dims) == set(ds[same].dims), f"{acc.name}: combining with {same} gained dims {combined.dims}"
-        # the Dataset's own coordinates for the position come along
+        # the Dataset's own coordinates for the position come along; lon/lat it keeps as data variables (UCLA) do not
         if pos is not None:
             for name in horizontal_coords(ds, pos):
-                if name is not None and set(ds[name].dims) <= set(g.dims):
-                    assert name in g.coords, f"{acc.name}: lacks the coordinate {name}"
-                    np.testing.assert_array_equal(g[name].transpose(*ds[name].dims).values, ds[name].values)
+                if name is None or not set(ds[name].dims) <= set(g.dims):
+                    continue
+                if name not in ds.coords:
+                    assert name not in g.coords, f"{acc.name}: the data variable {name} became a coordinate"
+                    continue
+                assert name in g.coords, f"{acc.name}: lacks the coordinate {name}"
+                np.testing.assert_array_equal(g[name].transpose(*ds[name].dims).values, ds[name].values)
 
 
 def test_accessor_properties_that_are_not_computed(layout):
@@ -80,15 +84,9 @@ def test_accessor_properties_that_are_not_computed(layout):
     xr.testing.assert_identical(ds, before)
 
 
-def test_results_can_be_stored_back_in_the_dataset(layout, request):
+def test_results_can_be_stored_back_in_the_dataset(layout):
+    # UCLA files keep lon_rho/lat_rho as data variables: results do not carry them as coords, which would not merge
     ds = S.dataset(layout)
-    if layout == "ucla":
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                reason="UCLA files keep lon_rho/lat_rho as data variables, results carry them as coords: assign/setitem/merge raise MergeError",
-            )
-        )
     results = {
         # accessor results
         "speed": ds.xroms.speed, "depth": ds.xroms.z_rho, "dtdx": ds.xroms.ddxi("temp"),
@@ -202,7 +200,6 @@ def test_z_without_a_free_surface_is_at_rest(layout):
 
 
 @pytest.mark.parametrize("dropped,member", [("v", "dudz"), ("u", "dvdz")])
-@pytest.mark.xfail(strict=True, reason="ds.xroms.dudz/dvdz ask for both u and v (KeyError 'east') though each needs one component")
 def test_shear_needs_only_its_own_component(layout, dropped, member):
     ds = S.dataset(layout)
     got = getattr(ds.drop_vars(dropped).xroms, member)
@@ -211,7 +208,6 @@ def test_shear_needs_only_its_own_component(layout, dropped, member):
 
 @pytest.mark.parametrize("dropped", ["u", "v"])
 @pytest.mark.parametrize("member", ["speed", "KE", "vort", "convergence", "vertical_shear", "ertel"])
-@pytest.mark.xfail(strict=True, reason="a missing u or v is reported as \"No variable named 'east'\": the accessor falls back on east/north without saying so")
 def test_missing_velocity_names_the_velocity(layout, dropped, member):
     ds = S.dataset(layout).drop_vars(dropped)
     with pytest.raises(KeyError) as err:
@@ -336,7 +332,6 @@ def test_croco_without_any_vertical_transform_raises():
         xroms.vertical_params(_croco_vertcoordtype_only(2, None))
 
 
-@pytest.mark.xfail(strict=True, reason="for VertCoordType='WEIRD' the error claims no VertCoordType gives the transform, and never names the unrecognized value")
 def test_croco_unrecognized_vertcoordtype_is_named_in_the_error():
     with pytest.raises(ValueError) as err:
         xroms.vertical_params(_croco_vertcoordtype_only(2, "WEIRD"))
@@ -375,7 +370,6 @@ def test_depth_average_is_the_gridmean_over_z_where_nothing_is_missing(layout):
         _close(canonicalize(xroms.depth_average(ds.temp, ds, **kwargs)), canonicalize(xroms.gridmean(ds.temp, ds, "Z", **kwargs)), "depth_average vs gridmean", rtol=1e-12)
 
 
-@pytest.mark.xfail(strict=True, reason="depth_average sums NaN as 0: land columns average to 0.0, not NaN, wherever the depths are finite (zeta=0)")
 def test_depth_average_over_land_is_nan_when_depths_are_finite(layout):
     ds = S.dataset(layout, land=True)
     land = canonicalize(ds)["mask_rho"] == 0
@@ -386,7 +380,6 @@ def test_depth_average_over_land_is_nan_when_depths_are_finite(layout):
     assert bool(canonicalize(xroms.gridmean(ds.temp, ds, "Z", zeta=0)).where(land).isnull().where(land, True).all())
 
 
-@pytest.mark.xfail(strict=True, reason="depth_average divides by the thickness of every layer, missing ones included, so a column with a NaN level averages low")
 def test_depth_average_of_a_column_with_a_missing_level_uses_the_valid_levels(layout):
     ds = S.dataset(layout)
     temp = ds.temp.copy(deep=True)

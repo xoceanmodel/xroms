@@ -253,12 +253,16 @@ class TestDepthBand:
     @pytest.mark.parametrize("land", [False, True])
     @pytest.mark.parametrize("low, high", BANDS)
     def test_depth_average(self, low, high, land):
-        # a band that misses a shallow column gives NaN in both (30-60 m); over masked land, where z is finite, both
-        # give 0.0 rather than NaN, because the weighted sum skips the NaNs
+        # a band that misses a shallow column gives NaN in both (30-60 m); over masked land, where z is finite,
+        # ocean-skill gives 0.0 (its weighted sum skips the NaNs) and xroms NaN (no water, no average)
         ds, meta = osk_inputs(zeta=False, land=land)
         averaged = roms.depth_average(roms.standardize(ds, meta), meta, low, high)
+        on_land = ds.mask_rho == 0
         for name, cf in FIELDS.items():
-            same(averaged[cf], xroms.depth_average(ds[name], ds, shallow=low, deep=high, zeta=0), ordered=True)
+            mine = xroms.depth_average(ds[name], ds, shallow=low, deep=high, zeta=0)
+            assert bool(mine.where(on_land).isnull().all())
+            assert bool((averaged[cf].where(on_land).fillna(0.0) == 0.0).all())
+            same(averaged[cf].where(~on_land), mine, ordered=True)
 
     def test_weights_do_not_depend_on_the_sign_of_z_w(self):
         # ocean-skill negates z_w; xroms reads the sign off the labels

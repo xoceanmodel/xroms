@@ -437,7 +437,12 @@ def vertical_params(ds, grid=None, *, Vtransform=None):
     if vt is None:
         vct = _attr(src, "VertCoordType")
         if vct is not None:
-            vt = {"NEW": 2, "OLD": 1}.get(str(vct).strip().upper())
+            vt = {"NEW": 2, "OLD": 1}.get((vct.decode() if isinstance(vct, bytes) else str(vct)).strip().upper())
+            if vt is None:
+                raise ValueError(
+                    f"cannot determine Vtransform: VertCoordType is {vct!r}, neither 'NEW' (2) nor 'OLD' (1). Set it "
+                    "on the Dataset, e.g. ds['Vtransform'] = 1 (or 2); xroms.z and xroms.vertical_params also take Vtransform=."
+                )
     if vt is None and (cs_attr_only or _var(src, "sigma_r") is not None or any(_has_file_topology(s) for s in src)):
         vt = 2  # UCLA ROMS output / roms-tools grids / REMORA only use Vtransform 2
     if vt is None:
