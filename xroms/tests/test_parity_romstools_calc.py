@@ -98,3 +98,19 @@ class TestTimeDecoding:
         expected = ROMSDataset._add_absolute_time(dummy, out)
         decoded = xroms.decode_time(out)
         np.testing.assert_array_equal(decoded.indexes["time"].values, expected.indexes["time"].values.astype("datetime64[ns]"))
+
+
+class TestVerticalRegrid:
+    @pytest.mark.parametrize("mask_edges", [False, True])
+    def test_isoslice_onto_model_depths_is_vertical_regrid(self, rutgers, mask_edges):
+        # a z-level source (a climatology, say) regridded onto the model's s-levels, as roms-tools'
+        # initial conditions do: target depths vary in space, the source depths do not
+        from roms_tools.regrid import VerticalRegrid
+
+        depth = xr.DataArray([0.0, 5.0, 15.0, 30.0, 60.0, 120.0], dims="depth")
+        h = xroms.canonicalize(rutgers.h).reset_coords(drop=True)
+        source = (20.0 - 0.1 * depth + 0.01 * h).rename("temp").transpose("depth", "eta_rho", "xi_rho")
+        target = -xroms.z(rutgers, zeta=0).reset_coords(drop=True)
+        expected = VerticalRegrid(source.to_dataset(), "depth").apply(source, depth, target, mask_edges=mask_edges)
+        out = xroms.isoslice(source, target, depth.broadcast_like(source), dim="depth", new_dim="s_rho", mask_edges=mask_edges)
+        np.testing.assert_allclose(out.values, expected.transpose(*out.dims).values, rtol=1e-13, atol=0)
