@@ -80,6 +80,10 @@ Calls that keep their 0.6 form include the accessor's properties and methods (`d
   is taken at `reference_depth` (default 0: the shallowest level, as before), density uses its increase with depth,
   and a column with no crossing gets the bottom depth (`fill="bottom"`) or NaN (`fill="nan"`).
 - **Density** takes `eos="roms"` (the default, ROMS' own equation of state, as before) or `eos="teos10"` (gsw).
+- **Interpolation to lon/lat points** (`interpll`) gives NaN at points outside the model domain, where 0.6 gave 0
+  (`unmapped_to_nan=False` brings the 0 back).
+- **Grid sums** (`gridsum`) multiply the variable's `units` by a metre for each dimension summed over; 0.6 kept the
+  units of the variable.
 
 ## Naming: canonical dims and the accessor
 
@@ -96,8 +100,9 @@ Rutgers ROMS (and REMORA) files name their u, v and psi dims with aliases (`eta_
 ## Other changes
 
 - **No global options.** 0.6 set xarray's `keep_attrs=True` for the whole session on `import xroms`. 1.0 leaves xarray's
-  options alone, so your own arithmetic now drops attributes as plain xarray does; call
-  `xr.set_options(keep_attrs=True)` yourself if you relied on it. xroms results still carry their own attributes.
+  options alone, so attributes in your own arithmetic follow your xarray's default: recent versions keep them (2026.4
+  does), older ones drop them (2025.7 does). Call `xr.set_options(keep_attrs=True)` yourself if you rely on keeping
+  them. xroms results still carry their own attributes.
 - **Quiet imports.** `import xroms` no longer filters warnings or imports cartopy, xesmf or cf-xarray.
 - **Dependencies.** xgcm is no longer pinned to 0.8.1: 1.0 needs `xgcm>=0.10`, and lists numba, which xgcm's
   `transform` needs. cf-xarray is no longer a dependency, cartopy and pygridgen are no longer used, and pooch and

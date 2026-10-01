@@ -37,7 +37,7 @@ update code written for 0.6.
 * Longitudes: `wrap_longitude`, `straddles` and `lonlat_at`.
 * Vectors: `grid_to_earth` and `earth_to_grid`.
 * Selection: `subset(..., halo=)` and `trim`; `argsel2d`/`sel2d` with `method="geodesic"` (pyproj); `make_regridder`, to
-  reuse xESMF weights in `interpll`.
+  reuse xESMF weights in `interpll` (`interpll(var, regridder=r)`).
 * Density and mixed layer: `eos="teos10"` in `density` and `potential_density` (gsw). `mld` takes `threshold`,
   `reference_depth`, `variable="temperature"`, `fill` and `method`.
 
@@ -50,6 +50,8 @@ update code written for 0.6.
 * `argsel2d`/`sel2d` use the haversine distance.
 * Horizontal derivatives of a single selected s-level raise unless `along_s=True`.
 * `depth_average` and `gridmean` give NaN where there is no water, and weight only the points with data.
+* `interpll` gives NaN outside the model domain (0.6 gave 0), and the `units` of a `gridsum` include the metres summed
+  over.
 
 ### Removed
 Each of these raises an error naming its replacement:
