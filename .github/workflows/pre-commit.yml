@@ -11,6 +11,10 @@ jobs:
     steps:
     - uses: actions/checkout@v5
     - uses: actions/setup-python@v5
+      with:
+        # the pinned hook versions (flake8 3.7.9, black 22.3.0, mypy 0.982) do not run on Python 3.14,
+        # which is what an unpinned setup-python now installs
+        python-version: "3.12"
     - uses: actions/cache@v4
       with:
         path: ~/.cache/pre-commit
