@@ -55,3 +55,24 @@ def test_zslice():
         depths = np.asarray(ds[testvar].cf["vertical"][0, :, 0, 0].values)
         varout = xroms.isoslice(varin, depths, grid, axis="Z")
         assert np.allclose(varout.cf.isel(T=0, Y=0, X=0), varin.cf.isel(T=0, Y=0, X=0))
+
+
+def test_isoslice_iso_values_scalar_and_list():
+    """A scalar or list of iso values is accepted, like an array."""
+    lon0 = float(ds.lon_rho.mean())
+    ref = xroms.isoslice(ds.salt, np.array([lon0]), grid, iso_array=ds.lon_rho, axis="X")
+    for values in [lon0, [lon0]]:
+        out = xroms.isoslice(ds.salt, values, grid, iso_array=ds.lon_rho, axis="X")
+        assert out.dims == ref.dims
+        assert np.allclose(out, ref, equal_nan=True)
+
+
+def test_isoslice_2d_variable():
+    """Variables without a vertical dimension can be sliced too."""
+    lon0 = float(ds.lon_rho.mean())
+    out = xroms.isoslice(ds.h, np.array([lon0]), grid, iso_array=ds.lon_rho, axis="X")
+    assert out.dims == ("eta_rho",)
+    # same as slicing a 3D variable at the surface level through the same line
+    out3d = xroms.isoslice(ds.salt, np.array([lon0]), grid, iso_array=ds.lon_rho, axis="X")
+    assert out.sizes["eta_rho"] == out3d.sizes["eta_rho"]
+    assert np.isfinite(out).any()

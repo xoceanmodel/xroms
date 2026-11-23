@@ -248,3 +248,28 @@ def test_gridsum():
     var1 = (ds.u * ds.dy_u).cf.sum("Y")
     var2 = xroms.gridsum(ds.u, grid, "Y")
     assert np.allclose(var1, var2)
+
+
+def test_order_single_axis():
+    """A variable with only one axis has nothing to reorder."""
+    var = ds.h.isel(xi_rho=0)
+    assert xroms.order(var).dims == var.dims
+
+
+def test_subset_dims_without_coordinates():
+    """Staggered dimensions are subset whether or not they have coordinates, including files
+    that give u and v their own eta_u and xi_v dimensions."""
+    n = 20
+    sizes = {
+        "eta_rho": n, "xi_rho": n,
+        "eta_u": n, "xi_u": n - 1,
+        "eta_v": n - 1, "xi_v": n,
+        "eta_psi": n - 1, "xi_psi": n - 1,
+    }
+    sub = xr.Dataset({f"var_{k}": ((k,), np.arange(v)) for k, v in sizes.items()})
+    out = xroms.subset(sub, X=slice(5, 15), Y=slice(3, 10))
+    # rho: as requested; u/v/psi: one fewer across the staggering
+    assert out.sizes["xi_rho"] == 10 and out.sizes["eta_rho"] == 7
+    assert out.sizes["xi_u"] == 9 and out.sizes["eta_u"] == 7
+    assert out.sizes["xi_v"] == 10 and out.sizes["eta_v"] == 6
+    assert out.sizes["xi_psi"] == 9 and out.sizes["eta_psi"] == 6

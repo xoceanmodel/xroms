@@ -1561,21 +1561,24 @@ def subset(ds, X=None, Y=None):
     >>> xroms.subset(ds, X=slice(20,40), Y=slice(50,100))
     """
 
+    # Check for dimensions, not coordinates: output not yet read in through xroms has
+    # no coordinate variables on its horizontal dimensions. Files that give u and v their
+    # own eta_u and xi_v dimensions have those too; standard ROMS files reuse eta_rho and xi_rho.
     if X is not None:
         assert isinstance(X, slice), "X must be a slice, e.g., slice(50,100)"
-        ds = ds.isel(xi_rho=X, xi_u=slice(X.start, X.stop - 1))
-        if "xi_v" in ds.coords:
-            ds = ds.isel(xi_v=X)
-        if "xi_psi" in ds.coords:
-            ds = ds.isel(xi_psi=slice(X.start, X.stop - 1))
+        ds = ds.isel(xi_rho=X)
+        inner = slice(X.start, X.stop - 1)
+        for dim, indexer in [("xi_u", inner), ("xi_v", X), ("xi_psi", inner)]:
+            if dim in ds.dims:
+                ds = ds.isel({dim: indexer})
 
     if Y is not None:
         assert isinstance(Y, slice), "Y must be a slice, e.g., slice(50,100)"
-        ds = ds.isel(eta_rho=Y, eta_v=slice(Y.start, Y.stop - 1))
-        if "eta_u" in ds.coords:
-            ds = ds.isel(eta_u=Y)
-        if "eta_psi" in ds.coords:
-            ds = ds.isel(eta_psi=slice(Y.start, Y.stop - 1))
+        ds = ds.isel(eta_rho=Y)
+        inner = slice(Y.start, Y.stop - 1)
+        for dim, indexer in [("eta_v", inner), ("eta_u", Y), ("eta_psi", inner)]:
+            if dim in ds.dims:
+                ds = ds.isel({dim: indexer})
 
     return ds
 
@@ -1607,13 +1610,16 @@ def order(var):
     # this looks at the dims on var directly which tends to be more accurate
     # since the DataArray can have extra coordinates included (but dropping
     # can drop too many variables).
-    return var.cf.transpose(
-        *[
-            dim
-            for dim in ["T", "Z", "Y", "X"]
-            if dim in var.cf.axes and var.cf.axes[dim][0] in var.dims
-        ]
-    )
+    axes = [
+        dim
+        for dim in ["T", "Z", "Y", "X"]
+        if dim in var.cf.axes and var.cf.axes[dim][0] in var.dims
+    ]
+    # with fewer than 2 axes there is nothing to reorder (and cf-xarray < the fix for
+    # xarray-contrib/cf-xarray#696 cannot transpose with a single key)
+    if len(axes) < 2:
+        return var
+    return var.cf.transpose(*axes)
     # return var.cf.transpose(
     #     *[
     #         dim
