@@ -273,4 +273,3 @@ def test_subset_dims_without_coordinates():
     assert out.sizes["xi_u"] == 9 and out.sizes["eta_u"] == 7
     assert out.sizes["xi_v"] == 10 and out.sizes["eta_v"] == 6
     assert out.sizes["xi_psi"] == 9 and out.sizes["eta_psi"] == 6
-

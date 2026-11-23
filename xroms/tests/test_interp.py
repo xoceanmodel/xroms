@@ -76,4 +76,3 @@ def test_isoslice_2d_variable():
     out3d = xroms.isoslice(ds.salt, np.array([lon0]), grid, iso_array=ds.lon_rho, axis="X")
     assert out.sizes["eta_rho"] == out3d.sizes["eta_rho"]
     assert np.isfinite(out).any()
-
